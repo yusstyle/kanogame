@@ -52,6 +52,11 @@ export class GameEngine {
   private readonly onPointerLockBound: () => void;
   private readonly onCanvasClickBound: () => void;
   private readonly onContextMenuBound: (event: MouseEvent) => void;
+  private readonly onCanvasPointerDownBound: (event: PointerEvent) => void;
+  private readonly onCanvasPointerMoveBound: (event: PointerEvent) => void;
+  private readonly onCanvasPointerUpBound: (event: PointerEvent) => void;
+  private touchLookPointerId: number | null = null;
+  private readonly touchLookPosition = new THREE.Vector2();
 
   private screen: GameScreen = "menu";
   private mode: GameMode = "on-foot";
@@ -122,8 +127,34 @@ export class GameEngine {
     this.onMouseMoveBound = (event) => this.onMouseMove(event);
     this.onPointerLockBound = () => this.onPointerLockChange();
     this.onCanvasClickBound = () => {
-      if (this.screen === "playing" && document.pointerLockElement !== this.canvas) {
+      if (
+        this.screen === "playing" &&
+        !this.prefersTouchControls() &&
+        document.pointerLockElement !== this.canvas
+      ) {
         this.requestPointerLock();
+      }
+    };
+    this.onCanvasPointerDownBound = (event) => {
+      if (event.pointerType !== "touch" || this.screen !== "playing") return;
+      this.touchLookPointerId = event.pointerId;
+      this.touchLookPosition.set(event.clientX, event.clientY);
+      this.canvas.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    };
+    this.onCanvasPointerMoveBound = (event) => {
+      if (event.pointerType !== "touch" || event.pointerId !== this.touchLookPointerId) return;
+      const deltaX = event.clientX - this.touchLookPosition.x;
+      const deltaY = event.clientY - this.touchLookPosition.y;
+      this.touchLookPosition.set(event.clientX, event.clientY);
+      this.adjustCameraLook(deltaX, deltaY, 0.004, 0.003);
+      event.preventDefault();
+    };
+    this.onCanvasPointerUpBound = (event) => {
+      if (event.pointerId !== this.touchLookPointerId) return;
+      this.touchLookPointerId = null;
+      if (this.canvas.hasPointerCapture(event.pointerId)) {
+        this.canvas.releasePointerCapture(event.pointerId);
       }
     };
     this.onContextMenuBound = (event) => event.preventDefault();
@@ -133,6 +164,10 @@ export class GameEngine {
     window.addEventListener("mousemove", this.onMouseMoveBound);
     document.addEventListener("pointerlockchange", this.onPointerLockBound);
     this.canvas.addEventListener("click", this.onCanvasClickBound);
+    this.canvas.addEventListener("pointerdown", this.onCanvasPointerDownBound);
+    this.canvas.addEventListener("pointermove", this.onCanvasPointerMoveBound);
+    this.canvas.addEventListener("pointerup", this.onCanvasPointerUpBound);
+    this.canvas.addEventListener("pointercancel", this.onCanvasPointerUpBound);
     this.canvas.addEventListener("contextmenu", this.onContextMenuBound);
 
     this.animationFrame = requestAnimationFrame(this.animate);
@@ -177,8 +212,9 @@ export class GameEngine {
       if (document.pointerLockElement === this.canvas) document.exitPointerLock();
     }
     if (screen === "playing") {
-      this.statusMessage =
-        document.pointerLockElement === this.canvas
+      this.statusMessage = this.prefersTouchControls()
+        ? "Use the touch pad to move · drag open space to look"
+        : document.pointerLockElement === this.canvas
           ? null
           : "Click the world to capture the mouse · Esc pauses";
     }
@@ -186,6 +222,7 @@ export class GameEngine {
   }
 
   requestPointerLock() {
+    if (this.prefersTouchControls()) return;
     try {
       const request = this.canvas.requestPointerLock();
       if (request && "catch" in request) {
@@ -198,6 +235,28 @@ export class GameEngine {
       this.statusMessage = "Click inside the world to enable mouse camera control";
       this.pushSnapshot(true);
     }
+  }
+
+  setControlKey(key: string, pressed: boolean) {
+    const normalized = key.toLowerCase();
+    const movementKey = normalizeMovementKey(normalized);
+    if (!pressed) {
+      this.keys.delete(movementKey);
+      return;
+    }
+    if (normalized === "e" && this.screen === "playing") {
+      this.toggleVehicle();
+      return;
+    }
+    if (normalized === "r" && this.screen !== "menu") {
+      this.reset();
+      return;
+    }
+    if (normalized === "escape" && this.screen === "playing") {
+      this.callbacks.onPause();
+      return;
+    }
+    this.keys.add(movementKey);
   }
 
   reset() {
@@ -226,6 +285,10 @@ export class GameEngine {
     window.removeEventListener("mousemove", this.onMouseMoveBound);
     document.removeEventListener("pointerlockchange", this.onPointerLockBound);
     this.canvas.removeEventListener("click", this.onCanvasClickBound);
+    this.canvas.removeEventListener("pointerdown", this.onCanvasPointerDownBound);
+    this.canvas.removeEventListener("pointermove", this.onCanvasPointerMoveBound);
+    this.canvas.removeEventListener("pointerup", this.onCanvasPointerUpBound);
+    this.canvas.removeEventListener("pointercancel", this.onCanvasPointerUpBound);
     this.canvas.removeEventListener("contextmenu", this.onContextMenuBound);
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
     this.renderer.dispose();
@@ -255,18 +318,28 @@ export class GameEngine {
 
   private onMouseMove(event: MouseEvent) {
     if (this.screen !== "playing" || document.pointerLockElement !== this.canvas) return;
-    this.cameraYaw -= event.movementX * 0.00235;
+    this.adjustCameraLook(event.movementX, event.movementY, 0.00235, 0.00185);
+  }
+
+  private adjustCameraLook(deltaX: number, deltaY: number, sensitivityX: number, sensitivityY: number) {
+    this.cameraYaw -= deltaX * sensitivityX;
     this.cameraPitch = THREE.MathUtils.clamp(
-      this.cameraPitch - event.movementY * 0.00185,
+      this.cameraPitch - deltaY * sensitivityY,
       -0.12,
       0.95,
     );
   }
 
+  private prefersTouchControls() {
+    return typeof window.matchMedia === "function" &&
+      window.matchMedia("(pointer: coarse)").matches;
+  }
+
   private onPointerLockChange() {
     if (this.screen !== "playing") return;
-    this.statusMessage =
-      document.pointerLockElement === this.canvas
+    this.statusMessage = this.prefersTouchControls()
+      ? "Use the touch pad to move · drag open space to look"
+      : document.pointerLockElement === this.canvas
         ? null
         : "Click the world to capture the mouse · Esc pauses";
     this.pushSnapshot(true);

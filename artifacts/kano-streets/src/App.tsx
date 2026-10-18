@@ -34,6 +34,10 @@ function App() {
     setScreen("playing");
   }, []);
 
+  const setControlKey = useCallback((key: string, pressed: boolean) => {
+    viewportRef.current?.setControlKey(key, pressed);
+  }, []);
+
   const receiveSnapshot = useCallback((next: GameSnapshot) => {
     setSnapshot((current) => {
       if (
@@ -63,8 +67,10 @@ function App() {
         interactionPrompt={snapshot.interactionPrompt}
         statusMessage={snapshot.statusMessage}
         onStart={start}
+        onPause={pause}
         onResume={resume}
         onReset={reset}
+        onControlKey={setControlKey}
       />
     </main>
   );

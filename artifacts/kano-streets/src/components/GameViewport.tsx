@@ -11,6 +11,7 @@ import type { GameScreen, GameSnapshot } from "../game/types";
 export type GameViewportHandle = {
   requestPointerLock: () => void;
   reset: () => void;
+  setControlKey: (key: string, pressed: boolean) => void;
 };
 
 type GameViewportProps = {
@@ -36,6 +37,7 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
       () => ({
         requestPointerLock: () => engineRef.current?.requestPointerLock(),
         reset: () => engineRef.current?.reset(),
+        setControlKey: (key, pressed) => engineRef.current?.setControlKey(key, pressed),
       }),
       [],
     );

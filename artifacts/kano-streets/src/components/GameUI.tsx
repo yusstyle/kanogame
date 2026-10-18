@@ -1,4 +1,5 @@
 import './GameUI.css';
+import TouchControls from './TouchControls';
 
 export type Screen = 'menu' | 'playing' | 'paused';
 export type Mode = 'on-foot' | 'driving';
@@ -10,8 +11,10 @@ export interface GameUIProps {
   interactionPrompt: string | null;
   statusMessage: string | null;
   onStart: () => void;
+  onPause: () => void;
   onResume: () => void;
   onReset: () => void;
+  onControlKey: (key: string, pressed: boolean) => void;
 }
 
 function BrandMark() {
@@ -35,8 +38,10 @@ export default function GameUI({
   interactionPrompt,
   statusMessage,
   onStart,
+  onPause,
   onResume,
   onReset,
+  onControlKey,
 }: GameUIProps) {
   if (screen === 'menu') {
     return (
@@ -67,6 +72,7 @@ export default function GameUI({
             <div className="ks-control-line"><span className="ks-control-label">JUMP</span><span><Key>SPACE</Key></span></div>
             <div className="ks-control-line"><span className="ks-control-label">RESET</span><span><Key>R</Key></span></div>
           </div>
+          <p className="ks-touch-menu-hint">Touch controls are available on phones.</p>
         </main>
 
         <div className="ks-menu-aside" aria-hidden="true">
@@ -85,6 +91,12 @@ export default function GameUI({
     <div className={`ks-ui ks-gameplay ${screen === 'paused' ? 'is-paused' : ''}`}>
       {screen === 'playing' && (
         <>
+          <TouchControls
+            mode={mode}
+            onControlKey={onControlKey}
+            onPause={onPause}
+            onReset={onReset}
+          />
           <header className="ks-hud-header">
             <div className="ks-hud-brand"><BrandMark /><span>KANO <i>/</i> STREETS</span></div>
             <div className="ks-hud-location"><span className="ks-live-dot" /> NEIGHBORHOOD <span className="ks-location-divider">/</span> FREE ROAM</div>
