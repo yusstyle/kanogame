@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Kano Streets: Open World Prototype"
+description = "A browser-playable third-person 3D exploration and driving prototype set in a compact, Kano-inspired neighborhood, built with original procedural Three.js geometry."
+version = "1.0.0"
+id = "artifacts/kano-streets"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18176
+
+[services.development]
+run = "pnpm --filter @workspace/kano-streets run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/kano-streets", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/kano-streets/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18176"
+BASE_PATH = "/"

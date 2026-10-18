@@ -1,0 +1,1 @@
+- [Game project boundary](kano-game-scope.md) — Keep Kano Streets independent; do not link to, import, or modify the user’s Godot project or repository.
