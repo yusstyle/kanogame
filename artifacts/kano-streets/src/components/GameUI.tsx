@@ -64,7 +64,7 @@ export default function GameUI({
             <span>Enter the neighborhood</span>
             <span className="ks-button-arrow" aria-hidden="true">↗</span>
           </button>
-          <div className="ks-menu-controls">
+          <div className="ks-menu-controls ks-desktop-controls">
             <div className="ks-control-line"><span className="ks-control-label">MOVE</span><span><Key>W</Key><Key>A</Key><Key>S</Key><Key>D</Key> <small>or arrows</small></span></div>
             <div className="ks-control-line"><span className="ks-control-label">LOOK</span><span><Key>MOUSE</Key></span></div>
             <div className="ks-control-line"><span className="ks-control-label">INTERACT</span><span><Key>E</Key></span></div>
@@ -72,7 +72,7 @@ export default function GameUI({
             <div className="ks-control-line"><span className="ks-control-label">JUMP</span><span><Key>SPACE</Key></span></div>
             <div className="ks-control-line"><span className="ks-control-label">RESET</span><span><Key>R</Key></span></div>
           </div>
-          <p className="ks-touch-menu-hint">Touch controls are available on phones.</p>
+          <p className="ks-touch-menu-hint">Use the on-screen pad to move; drag open space to look.</p>
         </main>
 
         <div className="ks-menu-aside" aria-hidden="true">

@@ -205,6 +205,7 @@
 
 @media (pointer: coarse), (max-width: 820px) {
   .ks-touch-controls { display: block; }
+  .ks-desktop-controls { display: none; }
   .ks-touch-menu-hint { display: block; margin: 15px 0 0; color: var(--ks-muted); font-size: 10px; letter-spacing: .04em; }
   .ks-pause-hint, .ks-driving-hint { display: none; }
   .ks-hud-bottom { bottom: max(108px, calc(env(safe-area-inset-bottom) + 105px)); }
