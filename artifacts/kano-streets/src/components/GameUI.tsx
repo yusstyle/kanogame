@@ -3,18 +3,22 @@ import TouchControls from './TouchControls';
 
 export type Screen = 'menu' | 'playing' | 'paused';
 export type Mode = 'on-foot' | 'driving';
+export type GraphicsQuality = 'performance' | 'balanced' | 'quality';
 
 export interface GameUIProps {
   screen: Screen;
   mode: Mode;
+  location: string;
   speedKmh: number;
   interactionPrompt: string | null;
   statusMessage: string | null;
+  graphicsQuality: GraphicsQuality;
   onStart: () => void;
   onPause: () => void;
   onResume: () => void;
   onReset: () => void;
   onControlKey: (key: string, pressed: boolean) => void;
+  onQualityChange: (quality: GraphicsQuality) => void;
 }
 
 function BrandMark() {
@@ -34,14 +38,17 @@ function Key({ children }: { children: string }) {
 export default function GameUI({
   screen,
   mode,
+  location,
   speedKmh,
   interactionPrompt,
   statusMessage,
+  graphicsQuality,
   onStart,
   onPause,
   onResume,
   onReset,
   onControlKey,
+  onQualityChange,
 }: GameUIProps) {
   if (screen === 'menu') {
     return (
@@ -99,7 +106,7 @@ export default function GameUI({
           />
           <header className="ks-hud-header">
             <div className="ks-hud-brand"><BrandMark /><span>KANO <i>/</i> STREETS</span></div>
-            <div className="ks-hud-location"><span className="ks-live-dot" /> NEIGHBORHOOD <span className="ks-location-divider">/</span> FREE ROAM</div>
+            <div className="ks-hud-location"><span className="ks-live-dot" /> {location} <span className="ks-location-divider">/</span> FREE ROAM</div>
             <span className="ks-pause-hint"><Key>ESC</Key><span>PAUSE</span></span>
           </header>
 
@@ -143,6 +150,18 @@ export default function GameUI({
               <span>Back to the streets</span><span className="ks-button-arrow" aria-hidden="true">↗</span>
             </button>
             <button className="ks-reset-button" onClick={onReset}>Start over <span aria-hidden="true">↺</span></button>
+            <button
+              className="ks-quality-toggle"
+              onClick={() => {
+                const order: GraphicsQuality[] = ['performance', 'balanced', 'quality'];
+                onQualityChange(order[(order.indexOf(graphicsQuality) + 1) % order.length]);
+              }}
+              aria-label={`Graphics quality: ${graphicsQuality}. Click to change`}
+            >
+              <span>GRAPHICS QUALITY</span>
+              <strong>{graphicsQuality.toUpperCase()}</strong>
+              <i aria-hidden="true">↻</i>
+            </button>
             <div className="ks-pause-foot"><BrandMark /><span>PROTOTYPE BUILD · KANO, NIGERIA</span></div>
           </section>
         </div>

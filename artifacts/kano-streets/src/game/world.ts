@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createMarketStall, createPlot } from "./buildings";
+import { getDistrict, ROAD_LAYOUT, ROAD_CENTERS, WORLD_BOUNDS, WORLD_EXTENT, type RoadSpec } from "./layout";
 import { makeSignMaterial } from "./materials";
 import type { BuildingKind, Collider, GameMaterials } from "./types";
 
@@ -181,24 +182,24 @@ function makeStreetlight(
   return { x, z, halfX: 0.34, halfZ: 0.34, height: 6.1 };
 }
 
-function addStreetSign(root: THREE.Group, x: number, z: number, label: string, yaw: number) {
+function addStreetSign(root: THREE.Group, colliders: Collider[], x: number, z: number, label: string, yaw: number) {
   const pole = new THREE.Group();
   pole.position.set(x, 0, z);
   pole.rotation.y = yaw;
   root.add(pole);
   addCylinder(pole, new THREE.MeshStandardMaterial({ color: "#545349", roughness: 0.8 }), 0, 1.5, 0, 0.06, 0.06, 3.0);
   addBox(pole, makeSignMaterial(label, "#c5ae82"), 0, 2.56, 0, 1.55, 0.45, 0.1);
+  colliders.push({ x, z, halfX: 0.18, halfZ: 0.18, height: 3 });
 }
 
 function addRoad(
   root: THREE.Group,
   materials: GameMaterials,
-  axis: "x" | "z",
-  center: number,
-  length: number,
-  width: number,
+  road: RoadSpec,
 ) {
+  const { axis, center, width } = road;
   const horizontal = axis === "x";
+  const length = WORLD_EXTENT;
   const roadCenterX = horizontal ? 0 : center;
   const roadCenterZ = horizontal ? center : 0;
   const roadWidth = horizontal ? length : width;
@@ -208,9 +209,12 @@ function addRoad(
   const sidewalkWidth = 3.0;
   const curbHeight = 0.14;
   const roadHalf = width / 2;
-  const intersections: [number, number][] = horizontal
-    ? [[-12.5, 12.5]]
-    : [[-45.5, -26.5], [-12.5, 12.5], [26.5, 45.5]];
+  const intersections = ROAD_LAYOUT
+    .filter((crossing) => crossing.axis !== axis)
+    .map((crossing) => [
+      crossing.center - crossing.width / 2 - sidewalkWidth,
+      crossing.center + crossing.width / 2 + sidewalkWidth,
+    ] as [number, number]);
   const segments: [number, number][] = [];
   let cursor = -length / 2;
   for (const [cutStart, cutEnd] of intersections) {
@@ -229,7 +233,7 @@ function addRoad(
         const sidewalkZ = center + side * (roadHalf + sidewalkWidth / 2);
         const curbZ = center + side * (roadHalf + 0.08);
         addBox(root, materials.sidewalk, midpoint, 0.015, sidewalkZ, segmentLength, 0.14, sidewalkWidth);
-        addBox(root, materials.white, midpoint, curbHeight / 2, curbZ, segmentLength, curbHeight, 0.24, false);
+        addBox(root, materials.curb, midpoint, curbHeight / 2, curbZ, segmentLength, curbHeight, 0.24, false);
         const drainZ = center + side * (roadHalf + 0.35);
         addBox(root, materials.drain, midpoint, 0.025, drainZ, segmentLength, 0.035, 0.24, false);
         for (let mark = start + 2; mark < end; mark += 3.3) {
@@ -239,7 +243,7 @@ function addRoad(
         const sidewalkX = center + side * (roadHalf + sidewalkWidth / 2);
         const curbX = center + side * (roadHalf + 0.08);
         addBox(root, materials.sidewalk, sidewalkX, 0.015, midpoint, sidewalkWidth, 0.14, segmentLength);
-        addBox(root, materials.white, curbX, curbHeight / 2, midpoint, curbHeight, curbHeight, segmentLength, false);
+        addBox(root, materials.curb, curbX, curbHeight / 2, midpoint, curbHeight, curbHeight, segmentLength, false);
         const drainX = center + side * (roadHalf + 0.35);
         addBox(root, materials.drain, drainX, 0.025, midpoint, 0.24, 0.035, segmentLength, false);
         for (let mark = start + 2; mark < end; mark += 3.3) {
@@ -249,8 +253,9 @@ function addRoad(
     }
   }
 
-  const lineMat = materials.cloth;
+  const lineMat = materials.roadMarking;
   for (let offset = -length / 2 + 3; offset < length / 2; offset += 7.5) {
+    if (intersections.some(([start, end]) => offset >= start - 3 && offset <= end + 3)) continue;
     if (horizontal) {
       addBox(root, lineMat, offset, 0.035, center, 3.1, 0.018, 0.11, false);
     } else {
@@ -261,10 +266,74 @@ function addRoad(
   const edgeOffset = width / 2 - 0.72;
   for (const side of [-1, 1]) {
     if (horizontal) {
-      addBox(root, materials.cloth, 0, 0.034, center + side * edgeOffset, length, 0.018, 0.075, false);
+      addBox(root, materials.roadMarking, 0, 0.034, center + side * edgeOffset, length, 0.018, 0.075, false);
     } else {
-      addBox(root, materials.cloth, center + side * edgeOffset, 0.034, 0, 0.075, 0.018, length, false);
+      addBox(root, materials.roadMarking, center + side * edgeOffset, 0.034, 0, 0.075, 0.018, length, false);
     }
+  }
+
+  if (road.arterial && width >= 14) {
+    for (const offset of [-0.18, 0.18]) {
+      if (horizontal) {
+        addBox(root, materials.roadMarking, 0, 0.036, center + offset, length, 0.022, 0.055, false);
+      } else {
+        addBox(root, materials.roadMarking, center + offset, 0.036, 0, 0.055, 0.022, length, false);
+      }
+    }
+  }
+}
+
+function addCrosswalks(root: THREE.Group, materials: GameMaterials) {
+  const horizontalRoads = ROAD_LAYOUT.filter((road) => road.axis === "x");
+  const verticalRoads = ROAD_LAYOUT.filter((road) => road.axis === "z");
+  const material = materials.roadMarking;
+  for (const horizontal of horizontalRoads) {
+    for (const vertical of verticalRoads) {
+      if (!horizontal.arterial && !vertical.arterial) continue;
+      const x = vertical.center;
+      const z = horizontal.center;
+      const horizontalOffset = vertical.width / 2 + 2.5;
+      const verticalOffset = horizontal.width / 2 + 2.5;
+
+      for (const side of [-1, 1]) {
+        const crossingX = x + side * horizontalOffset;
+        const crossingZ = z + side * verticalOffset;
+        for (let stripe = -3; stripe <= 3; stripe += 1) {
+          addBox(root, material, crossingX + stripe * 0.74, 0.04, z, 0.42, 0.025, horizontal.width - 2.2, false);
+          addBox(root, material, x, 0.04, crossingZ + stripe * 0.74, vertical.width - 2.2, 0.025, 0.42, false);
+        }
+      }
+    }
+  }
+}
+
+function addRoadWear(root: THREE.Group, materials: GameMaterials) {
+  // Deterministic, shallow asphalt repairs and scuffs break up the perfect road
+  // planes without obscuring lane markings or creating extra collision shapes.
+  let state = 64123;
+  const random = () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+  const wearGeometry = new THREE.CircleGeometry(1, 9);
+  for (let i = 0; i < 86; i += 1) {
+    const road = ROAD_LAYOUT[Math.floor(random() * ROAD_LAYOUT.length)];
+    const along = (random() - 0.5) * (WORLD_EXTENT - 24);
+    const lateral = (random() - 0.5) * Math.max(1, road.width - 3);
+    if (ROAD_LAYOUT.some((crossing) => crossing.axis !== road.axis &&
+      Math.abs(along - crossing.center) < crossing.width / 2 + 5)) continue;
+
+    const patch = new THREE.Mesh(wearGeometry, i % 4 === 0 ? materials.asphaltPatch : materials.asphalt);
+    patch.rotation.x = -Math.PI / 2;
+    patch.rotation.z = random() * Math.PI;
+    patch.position.set(
+      road.axis === "x" ? along : road.center + lateral,
+      0.028 + random() * 0.002,
+      road.axis === "x" ? road.center + lateral : along,
+    );
+    patch.scale.set(0.45 + random() * 0.8, 0.26 + random() * 0.48, 1);
+    patch.receiveShadow = true;
+    root.add(patch);
   }
 }
 
@@ -292,7 +361,7 @@ function addMarketPlaza(
 
 function addDistantHill(root: THREE.Group, materials: GameMaterials) {
   const hill = new THREE.Mesh(new THREE.IcosahedronGeometry(16, 1), materials.stone);
-  hill.position.set(-82, 1.2, -76);
+  hill.position.set(-163, 1.2, -160);
   hill.scale.set(1.38, 0.32, 0.83);
   hill.castShadow = true;
   hill.receiveShadow = true;
@@ -300,20 +369,21 @@ function addDistantHill(root: THREE.Group, materials: GameMaterials) {
 
   for (let i = 0; i < 3; i += 1) {
     const ridge = new THREE.Mesh(new THREE.IcosahedronGeometry(7 + i, 0), materials.clay);
-    ridge.position.set(-84 + i * 8, 1.2, -78 - i * 2.5);
+    ridge.position.set(-165 + i * 8, 1.2, -164 - i * 2.5);
     ridge.scale.set(1.0, 0.3, 0.62);
     ridge.receiveShadow = true;
     root.add(ridge);
   }
 }
 
-function addMarketWaterTank(root: THREE.Group, materials: GameMaterials, x: number, z: number) {
+function addMarketWaterTank(root: THREE.Group, materials: GameMaterials, colliders: Collider[], x: number, z: number) {
   const tank = new THREE.Group();
   tank.position.set(x, 0, z);
   root.add(tank);
   addCylinder(tank, materials.metal, 0, 1.1, 0, 0.72, 0.72, 2.0);
   addCylinder(tank, materials.metal, 0, 2.15, 0, 0.72, 0.55, 0.12);
   addCylinder(tank, materials.metal, 0, 2.25, 0, 0.16, 0.16, 0.14);
+  colliders.push({ x, z, halfX: 0.78, halfZ: 0.78, height: 2.3 });
 }
 
 function mergeStaticMeshesByCell(root: THREE.Group) {
@@ -396,8 +466,8 @@ export type WorldResult = {
 export function createWorld(materials: GameMaterials): WorldResult {
   const root = new THREE.Group();
   const colliders: Collider[] = [];
-  const bounds = 64;
-  const cityExtent = 130;
+  const bounds = WORLD_BOUNDS;
+  const cityExtent = WORLD_EXTENT;
 
   const sky = new THREE.Mesh(
     new THREE.SphereGeometry(260, 32, 20),
@@ -407,87 +477,114 @@ export function createWorld(materials: GameMaterials): WorldResult {
   root.add(sky);
 
   addPlane(root, materials.ground, 0, 0, cityExtent, cityExtent, 0);
+  ROAD_LAYOUT.forEach((road) => addRoad(root, materials, road));
+  addCrosswalks(root, materials);
+  addRoadWear(root, materials);
 
-  const roads: [ "x" | "z", number, number, number ][] = [
-    ["x", 0, cityExtent, 18],
-    ["x", -36, cityExtent, 12],
-    ["x", 36, cityExtent, 12],
-    ["z", 0, cityExtent, 16],
+  const blockCenters = ROAD_CENTERS.slice(0, -1).map((center, index) =>
+    (center + ROAD_CENTERS[index + 1]) / 2,
+  );
+  const parcelOffsets: [number, number][] = [
+    [-8.25, -9.75],
+    [-8.25, 9.75],
+    [8.25, -9.75],
+    [8.25, 9.75],
   ];
-  roads.forEach(([axis, center, length, width]) => addRoad(root, materials, axis, center, length, width));
-
-  // House plots are compact compounds along the continuous street grid. The
-  // open central corner is kept for shops and a small market court.
-  const xPositions = [-52, -35, -20, 20, 35, 52];
-  const zPositions = [-54, -18, 18, 54];
-  const kinds: BuildingKind[] = ["traditional", "modern", "traditional", "traditional", "modern", "traditional"];
+  const shopNames = [
+    "KASUWA PROVISIONS", "AREWA TEXTILES", "DALA MOTOR PARTS", "MAISHA GRAIN",
+    "SABON GARI STORES", "KANO BOOKS", "NORTH STAR PHARMACY", "TEA & BREAD",
+  ];
   let variant = 0;
-  for (let zi = 0; zi < zPositions.length; zi += 1) {
-    for (let xi = 0; xi < xPositions.length; xi += 1) {
-      const x = xPositions[xi];
-      const z = zPositions[zi];
-      if ((x === -20 || x === 20) && (z === -18 || z === 18)) continue;
-      if (x === -35 && z === 18) continue;
+  for (let zi = 0; zi < blockCenters.length; zi += 1) {
+    for (let xi = 0; xi < blockCenters.length; xi += 1) {
+      const blockX = blockCenters[xi];
+      const blockZ = blockCenters[zi];
+      const district = getDistrict(blockX, blockZ);
 
-      const kind = kinds[(xi + zi * 2) % kinds.length];
-      const plot = createPlot(kind, materials, variant++);
-      const yaw = z > 0 ? Math.PI : 0;
-      plot.root.position.set(x, 0, z);
-      plot.root.rotation.y = yaw;
-      root.add(plot.root);
-      colliders.push(...plot.colliders.map((item) => transformCollider(item, x, z, yaw)));
+      // One block in Sabon Gari is reserved for a walkable open-air market,
+      // rather than filling every parcel with a building.
+      if (xi === 1 && zi === 2) {
+        addMarketPlaza(root, materials, colliders, blockX, blockZ);
+        continue;
+      }
+
+      for (let slot = 0; slot < parcelOffsets.length; slot += 1) {
+        const [offsetX, offsetZ] = parcelOffsets[slot];
+        const x = blockX + offsetX;
+        const z = blockZ + offsetZ;
+        const selector = (xi * 7 + zi * 11 + slot * 5 + variant) % 12;
+        let kind: BuildingKind;
+        switch (district) {
+          case "dala":
+            kind = selector % 5 === 0 ? "modern" : "traditional";
+            break;
+          case "sabon-gari":
+            kind = selector % 4 === 0 ? "commercial" : selector % 3 === 0 ? "shop" : selector % 2 ? "traditional" : "modern";
+            break;
+          case "airport-road":
+            kind = selector % 3 === 0 ? "shop" : selector % 3 === 1 ? "commercial" : "modern";
+            break;
+          case "residential":
+            kind = selector % 3 === 0 ? "traditional" : "modern";
+            break;
+        }
+
+        const sign = shopNames[(variant * 3 + slot) % shopNames.length];
+        const plot = createPlot(kind, materials, variant, sign);
+        const faceAlongZ = (xi + zi + slot) % 2 === 0;
+        const yaw = faceAlongZ
+          ? offsetZ > 0 ? 0 : Math.PI
+          : offsetX > 0 ? Math.PI / 2 : -Math.PI / 2;
+        plot.root.position.set(x, 0, z);
+        plot.root.rotation.y = yaw;
+        root.add(plot.root);
+        colliders.push(...plot.colliders.map((item) => transformCollider(item, x, z, yaw)));
+        variant += 1;
+      }
     }
   }
 
-  const shops = [
-    [-20, -16, 0, "SHAGO"],
-    [20, -16, 0, "KASUWA"],
-    [-20, 16, Math.PI, "SABON GARI"],
-    [20, 16, Math.PI, "TEA & PROVISIONS"],
-  ] as const;
-  shops.forEach(([x, z, yaw, name], index) => {
-    const shop = createPlot("shop", materials, index, name);
-    shop.root.position.set(x, 0, z);
-    shop.root.rotation.y = yaw;
-    root.add(shop.root);
-    colliders.push(...shop.colliders.map((item) => transformCollider(item, x, z, yaw)));
-  });
+  addMarketWaterTank(root, materials, colliders, -43, 44);
 
-  addMarketPlaza(root, materials, colliders, -35, 18);
-  addMarketWaterTank(root, materials, 46, -49);
-  addMarketWaterTank(root, materials, -48, 50);
-
-  const trees = [
-    [-10.1, -55, 0.92, false], [-10.1, -24, 0.85, true], [-10.1, 24, 0.9, false],
-    [-10.1, 55, 0.8, true], [10.1, -55, 0.85, false], [10.1, -24, 0.92, false],
-    [10.1, 24, 0.86, true], [10.1, 55, 0.9, false],
-    [-54, 10.1, 0.9, false], [-24, 10.1, 0.82, true], [24, 10.1, 0.88, false],
-    [54, 10.1, 0.86, true], [-54, -10.1, 0.84, true], [-24, -10.1, 0.9, false],
-    [24, -10.1, 0.84, true], [54, -10.1, 0.92, false],
-    [-54, 30.1, 0.88, false], [-24, 30.1, 0.8, true], [24, 30.1, 0.9, false],
-    [54, 30.1, 0.82, true], [-54, -30.1, 0.9, false], [-24, -30.1, 0.82, true],
-    [24, -30.1, 0.88, false], [54, -30.1, 0.84, true],
-  ] as const;
+  const trees: [number, number, number, boolean][] = [];
+  for (const road of ROAD_LAYOUT.filter((item) => item.arterial)) {
+    for (const side of [-1, 1]) {
+      for (const along of [-90, -30, 30, 90]) {
+        const offset = road.width / 2 + 1.65;
+        trees.push(road.axis === "x"
+          ? [along, road.center + side * offset, 0.82 + ((along + side) % 3) * 0.04, (along + side) % 2 === 0]
+          : [road.center + side * offset, along, 0.82 + ((along + side) % 3) * 0.04, (along + side) % 2 !== 0]);
+      }
+    }
+  }
   trees.forEach(([x, z, scale, palm]) => {
     const collider = makeTree(root, materials, x, z, scale, palm);
     colliders.push(collider);
   });
 
-  const lights = [
-    [-10.8, -48], [-10.8, 0], [-10.8, 48], [10.8, -48], [10.8, 0], [10.8, 48],
-    [-48, 10.8], [0, 10.8], [48, 10.8], [-48, -10.8], [0, -10.8], [48, -10.8],
-    [-48, 30.8], [0, 30.8], [48, 30.8], [-48, -30.8], [0, -30.8], [48, -30.8],
-  ] as const;
-  lights.forEach(([x, z], index) => {
-    const collider = makeStreetlight(root, materials, x, z, index % 2 ? Math.PI / 2 : 0);
+  const lightLocations: [number, number, number][] = [];
+  for (const road of ROAD_LAYOUT.filter((item) => item.arterial)) {
+    for (const along of [-92, -28, 28, 92]) {
+      for (const side of [-1, 1]) {
+        const offset = road.width / 2 + 1.3;
+        lightLocations.push(road.axis === "x"
+          ? [along, road.center + side * offset, 0]
+          : [road.center + side * offset, along, Math.PI / 2]);
+      }
+    }
+  }
+  lightLocations.forEach(([x, z, yaw]) => {
+    const collider = makeStreetlight(root, materials, x, z, yaw);
     colliders.push(collider);
   });
 
-  addStreetSign(root, -9.8, -8.3, "DALA ROAD", 0);
-  addStreetSign(root, 9.4, 8.5, "KASUWA LANE", Math.PI);
+  addStreetSign(root, colliders, -130, -15, "DALA · OLD KANO", 0);
+  addStreetSign(root, colliders, -15, 130, "SABON GARI", Math.PI / 2);
+  addStreetSign(root, colliders, 78, -130, "AIRPORT ROAD", 0);
+  addStreetSign(root, colliders, 130, 15, "RESIDENTIAL QUARTER", -Math.PI / 2);
 
   // Small neighborhood benches and public water points.
-  const benchLocations = [[-8.6, 28], [8.6, -28], [-44, 8.8], [44, -8.8]] as const;
+  const benchLocations = [[-44, 27], [-20, 35], [32, -34], [40, -27]] as const;
   benchLocations.forEach(([x, z], index) => {
     const bench = new THREE.Group();
     bench.position.set(x, 0, z);
@@ -498,16 +595,23 @@ export function createWorld(materials: GameMaterials): WorldResult {
     for (const side of [-0.65, 0.65]) {
       addBox(bench, materials.metal, side, 0.28, 0, 0.1, 0.56, 0.1);
     }
-    colliders.push({ x, z, halfX: 0.58, halfZ: 1.05, height: 1.35 });
+    colliders.push(
+      transformCollider(
+        { x: 0, z: 0, halfX: 0.92, halfZ: 0.34, height: 1.35 },
+        x,
+        z,
+        bench.rotation.y,
+      ),
+    );
   });
 
   addDistantHill(root, materials);
 
-  // Subtle yard dust mounds break up large empty sand planes without blocking
-  // the roads. They are flattened, low-detail procedural terrain meshes.
+  // Low sand shoulders and edge debris soften the map border but stay outside
+  // the connected neighborhood streets and building parcels.
   const moundLocations = [
-    [-59, -59], [59, 59], [-60, 4], [60, -5], [-42, 60], [40, -60],
-    [-3, 60], [4, -60], [-60, 38], [60, -39], [-59, -39], [59, 39],
+    [-130, -130], [130, 130], [-132, 4], [132, -5], [-108, 130], [108, -130],
+    [-4, 130], [4, -130], [-132, 104], [132, -105], [-130, -106], [130, 106],
   ] as const;
   moundLocations.forEach(([x, z], i) => {
     const mound = new THREE.Mesh(

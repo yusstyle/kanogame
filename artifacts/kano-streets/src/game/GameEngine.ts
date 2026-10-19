@@ -1,23 +1,13 @@
 import * as THREE from "three";
 import { createCarModel, createPlayerModel, type CarModel, type PlayerModel } from "./actors";
+import { ColliderIndex } from "./ColliderIndex";
+import { getDistrict, getDistrictLabel, ROAD_LAYOUT } from "./layout";
 import { createMaterials } from "./materials";
 import { createWorld } from "./world";
-import type { Collider, GameMode, GameScreen, GameSnapshot } from "./types";
+import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality } from "./types";
 
-const PLAYER_START = new THREE.Vector3(5.8, 0, 3.35);
-const CAR_START = new THREE.Vector3(4.15, 0, 7.1);
-const ROADS = [
-  { axis: "x", center: 0, width: 18 },
-  { axis: "x", center: -36, width: 12 },
-  { axis: "x", center: 36, width: 12 },
-  { axis: "z", center: 0, width: 16 },
-] as const;
-const SIDEWALK_CROSSINGS: [number, number][] = [
-  [-45.5, -26.5],
-  [-12.5, 12.5],
-  [26.5, 45.5],
-];
-
+const PLAYER_START = new THREE.Vector3(-4, 0, -4);
+const CAR_START = new THREE.Vector3(-2, 0, -8);
 type GameEngineCallbacks = {
   onSnapshot: (snapshot: GameSnapshot) => void;
   onPause: () => void;
@@ -40,11 +30,16 @@ export class GameEngine {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(57, 1, 0.1, 420);
   private readonly world: ReturnType<typeof createWorld>;
+  private readonly colliderIndex: ColliderIndex;
   private readonly materials: ReturnType<typeof createMaterials>;
   private readonly player: PlayerModel;
   private readonly car: CarModel;
   private readonly keys = new Set<string>();
+  private readonly lookMatrix = new THREE.Matrix4();
+  private readonly desiredCameraQuaternion = new THREE.Quaternion();
   private readonly callbacks: GameEngineCallbacks;
+  private sunLight: THREE.DirectionalLight | null = null;
+  private graphicsQuality: GraphicsQuality = "balanced";
   private readonly resizeObserver: ResizeObserver;
   private readonly onKeyDownBound: (event: KeyboardEvent) => void;
   private readonly onKeyUpBound: (event: KeyboardEvent) => void;
@@ -102,8 +97,10 @@ export class GameEngine {
 
     this.materials = createMaterials();
     this.world = createWorld(this.materials);
+    this.colliderIndex = new ColliderIndex(this.world.colliders);
     this.scene.add(this.world.root);
     this.addLighting();
+    this.setGraphicsQuality("balanced");
 
     this.player = createPlayerModel(this.materials);
     this.player.root.position.copy(this.playerPosition);
@@ -190,6 +187,7 @@ export class GameEngine {
     sun.shadow.bias = -0.00036;
     sun.shadow.normalBias = 0.025;
     this.scene.add(sun);
+    this.sunLight = sun;
 
     const bounce = new THREE.DirectionalLight("#b8d1d2", 0.48);
     bounce.position.set(52, 28, 40);
@@ -257,6 +255,27 @@ export class GameEngine {
       return;
     }
     this.keys.add(movementKey);
+  }
+
+  clearControls() {
+    this.keys.clear();
+    this.touchLookPointerId = null;
+  }
+
+  setGraphicsQuality(quality: GraphicsQuality) {
+    if (this.graphicsQuality === quality && this.sunLight) return;
+    this.graphicsQuality = quality;
+    const pixelRatioCap = quality === "performance" ? 1 : quality === "quality" ? 1.65 : 1.25;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, pixelRatioCap));
+    this.renderer.shadowMap.enabled = quality !== "performance";
+    const shadowSize = quality === "quality" ? 2048 : quality === "balanced" ? 1024 : 512;
+    if (this.sunLight) {
+      this.sunLight.shadow.mapSize.set(shadowSize, shadowSize);
+      this.sunLight.shadow.map?.dispose();
+      this.sunLight.shadow.map = null;
+      this.sunLight.shadow.needsUpdate = true;
+    }
+    this.resize();
   }
 
   reset() {
@@ -368,6 +387,7 @@ export class GameEngine {
     const safeExit = candidates.find(
       (candidate) =>
         !this.collides(candidate.x, candidate.z, 0.48) &&
+        !this.overlapsCar(candidate.x, candidate.z, 0.48) &&
         candidate.distanceTo(this.carPosition) > 1.5,
     );
     if (!safeExit) {
@@ -482,7 +502,7 @@ export class GameEngine {
     const previous = this.carPosition.clone();
     this.carPosition.x += Math.sin(this.carYaw) * this.carSpeed * dt;
     this.carPosition.z += Math.cos(this.carYaw) * this.carSpeed * dt;
-    if (this.collides(this.carPosition.x, this.carPosition.z, 1.18)) {
+    if (this.carCollidesAt(this.carPosition.x, this.carPosition.z, this.carYaw)) {
       this.carPosition.copy(previous);
       this.carSpeed = -this.carSpeed * 0.12;
       this.statusMessage = "The car contacted an obstacle";
@@ -526,16 +546,10 @@ export class GameEngine {
     if (Math.abs(x) > bounds - radius || Math.abs(z) > bounds - radius) return true;
 
     if (this.mode === "on-foot" && !skipCar) {
-      const carRadius = 1.26 + radius;
-      if (
-        (x - this.carPosition.x) ** 2 + (z - this.carPosition.z) ** 2 <
-        carRadius ** 2
-      ) {
-        return true;
-      }
+      if (this.overlapsCar(x, z, radius)) return true;
     }
 
-    return this.world.colliders.some((collider: Collider) => {
+    return this.colliderIndex.query(x, z, radius + 0.5).some((collider: Collider) => {
       const closestX = THREE.MathUtils.clamp(
         x,
         collider.x - collider.halfX,
@@ -552,31 +566,51 @@ export class GameEngine {
     });
   }
 
+  private overlapsCar(x: number, z: number, radius: number) {
+    const dx = x - this.carPosition.x;
+    const dz = z - this.carPosition.z;
+    const cosine = Math.cos(this.carYaw);
+    const sine = Math.sin(this.carYaw);
+    const localX = dx * cosine - dz * sine;
+    const localZ = dx * sine + dz * cosine;
+    return Math.abs(localX) < 1.03 + radius && Math.abs(localZ) < 2.12 + radius;
+  }
+
+  private carCollidesAt(x: number, z: number, yaw: number) {
+    const halfWidth = 1.04;
+    const halfLength = 2.12;
+    const cosine = Math.cos(yaw);
+    const sine = Math.sin(yaw);
+    const absCosine = Math.abs(cosine);
+    const absSine = Math.abs(sine);
+    const extentX = halfWidth * absCosine + halfLength * absSine;
+    const extentZ = halfWidth * absSine + halfLength * absCosine;
+    if (Math.abs(x) > this.world.bounds - extentX || Math.abs(z) > this.world.bounds - extentZ) return true;
+
+    const nearby = this.colliderIndex.query(x, z, Math.hypot(halfWidth, halfLength) + 0.6);
+    return nearby.some((collider) => {
+      const dx = x - collider.x;
+      const dz = z - collider.z;
+      if (Math.abs(dx) >= extentX + collider.halfX || Math.abs(dz) >= extentZ + collider.halfZ) return false;
+
+      const localX = dx * cosine - dz * sine;
+      const localZ = dx * sine + dz * cosine;
+      const otherHalfX = collider.halfX * absCosine + collider.halfZ * absSine;
+      const otherHalfZ = collider.halfX * absSine + collider.halfZ * absCosine;
+      return Math.abs(localX) < halfWidth + otherHalfX &&
+        Math.abs(localZ) < halfLength + otherHalfZ;
+    });
+  }
+
   private surfaceHeight(x: number, z: number) {
-    for (const road of ROADS) {
-      if (road.axis === "x" && Math.abs(z - road.center) <= road.width / 2) return 0.018;
-      if (road.axis === "z" && Math.abs(x - road.center) <= road.width / 2) return 0.018;
+    if (Math.abs(x + 31) <= 10.5 && Math.abs(z - 31) <= 9) return 0.045;
+    for (const road of ROAD_LAYOUT) {
+      const lateral = road.axis === "x" ? Math.abs(z - road.center) : Math.abs(x - road.center);
+      if (lateral <= road.width / 2) return 0.018;
     }
-
-    if (Math.abs(x + 35) <= 10.5 && Math.abs(z - 18) <= 9) return 0.045;
-
-    for (const road of ROADS) {
-      if (
-        road.axis === "x" &&
-        Math.abs(z - road.center) > road.width / 2 &&
-        Math.abs(z - road.center) <= road.width / 2 + 3 &&
-        Math.abs(x) > 12.5
-      ) {
-        return 0.085;
-      }
-      if (
-        road.axis === "z" &&
-        Math.abs(x - road.center) > road.width / 2 &&
-        Math.abs(x - road.center) <= road.width / 2 + 3 &&
-        !SIDEWALK_CROSSINGS.some(([start, end]) => z >= start && z <= end)
-      ) {
-        return 0.085;
-      }
+    for (const road of ROAD_LAYOUT) {
+      const lateral = road.axis === "x" ? Math.abs(z - road.center) : Math.abs(x - road.center);
+      if (lateral > road.width / 2 && lateral <= road.width / 2 + 3) return 0.085;
     }
     return 0;
   }
@@ -602,7 +636,7 @@ export class GameEngine {
     for (let step = 2; step <= samples; step += 1) {
       const distanceAlongPath = Math.min(step * 0.45, pathLength);
       const point = target.clone().addScaledVector(path, distanceAlongPath / pathLength);
-      const blocked = this.world.colliders.some((collider: Collider) => {
+      const blocked = this.colliderIndex.query(point.x, point.z, 1.2).some((collider: Collider) => {
         if (point.y > (collider.height ?? 3.5) - 0.2) return false;
         const dx = Math.max(Math.abs(point.x - collider.x) - collider.halfX, 0);
         const dz = Math.max(Math.abs(point.z - collider.z) - collider.halfZ, 0);
@@ -618,13 +652,19 @@ export class GameEngine {
     }
     const smoothing = 1 - Math.exp(-7.2 * dt);
     this.camera.position.lerp(desired, smoothing);
-    this.camera.lookAt(target);
+    this.lookMatrix.lookAt(this.camera.position, target, this.camera.up);
+    this.desiredCameraQuaternion.setFromRotationMatrix(this.lookMatrix);
+    this.camera.quaternion.slerp(this.desiredCameraQuaternion, 1 - Math.exp(-12 * dt));
   }
 
   private updateTransform() {
     this.player.root.position.copy(this.playerPosition);
     this.player.root.rotation.y = this.playerYaw;
-    this.car.root.position.set(this.carPosition.x, 0, this.carPosition.z);
+    this.car.root.position.set(
+      this.carPosition.x,
+      this.surfaceHeight(this.carPosition.x, this.carPosition.z),
+      this.carPosition.z,
+    );
     this.car.root.rotation.y = this.carYaw;
   }
 
@@ -640,8 +680,10 @@ export class GameEngine {
       interactionPrompt = "Enter passenger car";
     }
 
+    const location = this.mode === "driving" ? this.carPosition : this.playerPosition;
     this.callbacks.onSnapshot({
       mode: this.mode,
+      location: getDistrictLabel(getDistrict(location.x, location.z)),
       speedKmh: this.mode === "driving" ? Math.abs(this.carSpeed) * 3.6 : 0,
       interactionPrompt,
       statusMessage: this.statusMessage,

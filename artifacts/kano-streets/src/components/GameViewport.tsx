@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import type { GameEngine } from "../game/GameEngine";
-import type { GameScreen, GameSnapshot } from "../game/types";
+import type { GameScreen, GameSnapshot, GraphicsQuality } from "../game/types";
 
 export type GameViewportHandle = {
   requestPointerLock: () => void;
@@ -16,21 +16,24 @@ export type GameViewportHandle = {
 
 type GameViewportProps = {
   screen: GameScreen;
+  graphicsQuality: GraphicsQuality;
   onSnapshot: (snapshot: GameSnapshot) => void;
   onPause: () => void;
 };
 
 const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
-  function GameViewport({ screen, onSnapshot, onPause }, ref) {
+  function GameViewport({ screen, graphicsQuality, onSnapshot, onPause }, ref) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<GameEngine | null>(null);
     const callbacksRef = useRef({ onSnapshot, onPause });
     const screenRef = useRef(screen);
+    const qualityRef = useRef(graphicsQuality);
     const [gameReady, setGameReady] = useState(false);
     const [webglUnavailable, setWebglUnavailable] = useState(false);
 
     callbacksRef.current = { onSnapshot, onPause };
     screenRef.current = screen;
+    qualityRef.current = graphicsQuality;
 
     useImperativeHandle(
       ref,
@@ -50,6 +53,7 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
       let cancelled = false;
       let localEngine: GameEngine | null = null;
       const handleBlur = () => {
+        localEngine?.clearControls();
         if (document.pointerLockElement === canvas) document.exitPointerLock();
       };
       window.addEventListener("blur", handleBlur);
@@ -64,6 +68,7 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
           });
           localEngine = engine;
           engineRef.current = engine;
+          engine.setGraphicsQuality(qualityRef.current);
           engine.setScreen(screenRef.current);
           setGameReady(true);
         } catch (error) {
@@ -85,6 +90,10 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
     useEffect(() => {
       engineRef.current?.setScreen(screen);
     }, [screen]);
+
+    useEffect(() => {
+      engineRef.current?.setGraphicsQuality(graphicsQuality);
+    }, [graphicsQuality]);
 
     if (webglUnavailable) {
       return (

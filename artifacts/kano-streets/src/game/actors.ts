@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { makeSignMaterial } from "./materials";
 import type { GameMaterials } from "./types";
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
@@ -57,7 +58,17 @@ export function createPlayerModel(materials: GameMaterials): PlayerModel {
   const tunic = new THREE.MeshStandardMaterial({ color: "#55736e", roughness: 0.94 });
   const trousers = new THREE.MeshStandardMaterial({ color: "#483d32", roughness: 0.95 });
   const cap = new THREE.MeshStandardMaterial({ color: "#c0a36e", roughness: 0.95 });
+  const embroidery = new THREE.MeshStandardMaterial({ color: "#d0b277", roughness: 0.88 });
+  const leather = new THREE.MeshStandardMaterial({ color: "#332a23", roughness: 0.92 });
 
+  const tunicHem = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.3, 0.4, 0.76, 14, 1, true),
+    tunic,
+  );
+  tunicHem.position.y = 0.92;
+  tunicHem.castShadow = true;
+  tunicHem.receiveShadow = true;
+  root.add(tunicHem);
   capsule(root, tunic, 0.29, 0.54, 0, 1.1, 0);
   capsule(root, skin, 0.105, 0.3, 0, 1.46, 0);
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.21, 14, 12), skin);
@@ -68,6 +79,13 @@ export function createPlayerModel(materials: GameMaterials): PlayerModel {
   fila.position.set(0, 1.96, -0.01);
   fila.castShadow = true;
   root.add(fila);
+  const filaBand = new THREE.Mesh(
+    new THREE.TorusGeometry(0.205, 0.018, 5, 18),
+    embroidery,
+  );
+  filaBand.position.set(0, 1.925, -0.01);
+  filaBand.rotation.x = Math.PI / 2;
+  root.add(filaBand);
 
   const neckTrim = new THREE.MeshStandardMaterial({ color: "#d0b277", roughness: 0.9 });
   const collar = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.018, 6, 14), neckTrim);
@@ -75,6 +93,17 @@ export function createPlayerModel(materials: GameMaterials): PlayerModel {
   collar.rotation.x = Math.PI / 2;
   root.add(collar);
   addBox(root, neckTrim, 0, 1.11, 0.285, 0.035, 0.32, 0.026, false);
+  const hemBand = new THREE.Mesh(new THREE.CylinderGeometry(0.394, 0.404, 0.055, 14, 1, true), embroidery);
+  hemBand.position.y = 0.56;
+  root.add(hemBand);
+  const waistBand = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.32, 0.075, 14, 1, true), trousers);
+  waistBand.position.y = 0.69;
+  root.add(waistBand);
+  addBox(root, embroidery, 0, 1.14, 0.304, 0.16, 0.43, 0.026, false);
+  for (let i = 0; i < 5; i += 1) {
+    const stitch = addBox(root, embroidery, 0, 1.03 + i * 0.085, 0.324, 0.06, 0.035, 0.02, false);
+    stitch.rotation.z = i % 2 ? Math.PI / 4 : -Math.PI / 4;
+  }
 
   const leftArm = new THREE.Group();
   leftArm.position.set(-0.31, 1.35, 0);
@@ -91,13 +120,15 @@ export function createPlayerModel(materials: GameMaterials): PlayerModel {
   const leftLeg = new THREE.Group();
   leftLeg.position.set(-0.16, 0.72, 0);
   capsule(leftLeg, trousers, 0.11, 0.52, 0, -0.31, 0);
-  addBox(leftLeg, materials.wood, 0, -0.66, 0.08, 0.22, 0.12, 0.36);
+  addBox(leftLeg, leather, 0, -0.66, 0.08, 0.23, 0.12, 0.38);
+  addBox(leftLeg, embroidery, 0, -0.61, 0.16, 0.22, 0.035, 0.12, false);
   root.add(leftLeg);
 
   const rightLeg = new THREE.Group();
   rightLeg.position.set(0.16, 0.72, 0);
   capsule(rightLeg, trousers, 0.11, 0.52, 0, -0.31, 0);
-  addBox(rightLeg, materials.wood, 0, -0.66, 0.08, 0.22, 0.12, 0.36);
+  addBox(rightLeg, leather, 0, -0.66, 0.08, 0.23, 0.12, 0.38);
+  addBox(rightLeg, embroidery, 0, -0.61, 0.16, 0.22, 0.035, 0.12, false);
   root.add(rightLeg);
 
   const eye = new THREE.MeshBasicMaterial({ color: "#201b18" });
@@ -118,15 +149,19 @@ export type CarModel = {
 
 export function createCarModel(materials: GameMaterials): CarModel {
   const root = new THREE.Group();
-  const bodyColor = new THREE.MeshStandardMaterial({
-    color: "#b6a06f",
-    roughness: 0.66,
-    metalness: 0.12,
+  const bodyColor = new THREE.MeshPhysicalMaterial({
+    color: "#a85435",
+    roughness: 0.43,
+    metalness: 0.16,
+    clearcoat: 0.22,
+    clearcoatRoughness: 0.34,
   });
-  const bodyAccent = new THREE.MeshStandardMaterial({
-    color: "#d1bc8e",
-    roughness: 0.64,
+  const bodyAccent = new THREE.MeshPhysicalMaterial({
+    color: "#d4bf9a",
+    roughness: 0.47,
     metalness: 0.12,
+    clearcoat: 0.18,
+    clearcoatRoughness: 0.36,
   });
   const rubber = new THREE.MeshStandardMaterial({ color: "#262827", roughness: 0.97 });
   const rim = new THREE.MeshStandardMaterial({
@@ -146,6 +181,7 @@ export function createCarModel(materials: GameMaterials): CarModel {
     emissiveIntensity: 0.32,
     roughness: 0.44,
   });
+  const licensePlate = makeSignMaterial("KN 247 KNA", "#e0d8c1");
 
   // A complete, original procedural sedan silhouette—not a downloaded or
   // photorealistic model. The proportions and visible mechanical parts are
@@ -186,9 +222,31 @@ export function createCarModel(materials: GameMaterials): CarModel {
   addBox(root, materials.metal, 0, 0.55, -2.05, 1.95, 0.2, 0.16);
   addBox(root, materials.black, 0, 0.77, 2.09, 0.8, 0.26, 0.06);
   addBox(root, materials.trim, 0, 0.81, 2.13, 0.48, 0.12, 0.04);
+  addBox(root, licensePlate, 0, 0.53, 2.16, 0.62, 0.18, 0.035, false);
+  addBox(root, licensePlate, 0, 0.53, -2.12, 0.62, 0.18, 0.035, false);
   for (const x of [-0.68, 0.68]) {
     addBox(root, lamp, x, 0.98, 2.07, 0.45, 0.24, 0.09);
     addBox(root, tailLamp, x, 0.97, -2.04, 0.35, 0.24, 0.09);
+    addBox(root, materials.white, x, 0.67, 2.11, 0.28, 0.08, 0.055, false);
+  }
+
+  for (const side of [-1, 1]) {
+    addBox(root, bodyAccent, side * 0.96, 0.56, 0, 0.13, 0.14, 2.85, false);
+    addBox(root, materials.black, side * 1.005, 0.43, 0, 0.09, 0.13, 2.8, false);
+    for (const z of [-1.3, 1.3]) {
+      const arch = new THREE.Mesh(new THREE.TorusGeometry(0.385, 0.045, 6, 20, Math.PI), bodyAccent);
+      arch.position.set(side * 0.985, 0.42, z);
+      arch.rotation.y = Math.PI / 2;
+      arch.castShadow = true;
+      root.add(arch);
+    }
+  }
+  for (let grille = 0; grille < 7; grille += 1) {
+    addBox(root, materials.metal, -0.29 + grille * 0.096, 0.79, 2.16, 0.035, 0.2, 0.035, false);
+  }
+  for (const side of [-1, 1]) {
+    const wiper = addBox(root, materials.black, side * 0.37, 1.69, 0.97, 0.045, 0.045, 0.76, false);
+    wiper.rotation.x = -0.42;
   }
 
   const wheels: THREE.Group[] = [];

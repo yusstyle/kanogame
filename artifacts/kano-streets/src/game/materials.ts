@@ -54,6 +54,13 @@ function standard(
   });
 }
 
+function relief(texture: THREE.Texture, scale: number) {
+  const bumpMap = texture.clone();
+  bumpMap.colorSpace = THREE.NoColorSpace;
+  bumpMap.needsUpdate = true;
+  return { bumpMap, bumpScale: scale };
+}
+
 function makeSignMaterial(label: string, accent = "#c7a16c") {
   const canvas = document.createElement("canvas");
   canvas.width = 512;
@@ -87,13 +94,16 @@ export function createMaterials(): GameMaterials {
 
   return {
     ground: standard("#c1a16e", 1, earthMap),
-    asphalt: standard("#454644", 0.96, asphaltMap),
-    sidewalk: standard("#b7a88b", 0.92, concreteMap),
-    drain: standard("#373936", 0.94, stoneMap),
-    plaster: standard("#e0c695", 0.93, plasterMap),
-    ochre: standard("#b9905c", 0.96, clayMap),
-    clay: standard("#98734f", 0.98, clayMap),
-    concrete: standard("#aaa396", 0.93, concreteMap),
+    asphalt: standard("#454644", 0.96, asphaltMap, relief(asphaltMap, 0.055)),
+    asphaltPatch: standard("#333331", 0.99, asphaltMap, relief(asphaltMap, 0.07)),
+    sidewalk: standard("#b7a88b", 0.92, concreteMap, relief(concreteMap, 0.035)),
+    curb: standard("#c0b39a", 0.92, concreteMap),
+    roadMarking: standard("#d9c89e", 0.82),
+    drain: standard("#373936", 0.94, stoneMap, relief(stoneMap, 0.04)),
+    plaster: standard("#e0c695", 0.93, plasterMap, relief(plasterMap, 0.055)),
+    ochre: standard("#b9905c", 0.96, clayMap, relief(clayMap, 0.06)),
+    clay: standard("#98734f", 0.98, clayMap, relief(clayMap, 0.075)),
+    concrete: standard("#aaa396", 0.93, concreteMap, relief(concreteMap, 0.05)),
     roof: standard("#766e60", 0.97, concreteMap),
     trim: standard("#e6d4ad", 0.88),
     darkTrim: standard("#584638", 0.93),

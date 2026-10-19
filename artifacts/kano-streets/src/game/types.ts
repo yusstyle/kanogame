@@ -6,7 +6,8 @@ export type Collider = {
   height?: number;
 };
 
-export type BuildingKind = "traditional" | "modern" | "shop";
+export type BuildingKind = "traditional" | "modern" | "shop" | "commercial";
+export type GraphicsQuality = "performance" | "balanced" | "quality";
 
 export type PlotAsset = {
   root: import("three").Group;
@@ -19,6 +20,7 @@ export type GameScreen = "menu" | "playing" | "paused";
 
 export type GameSnapshot = {
   mode: GameMode;
+  location: string;
   speedKmh: number;
   interactionPrompt: string | null;
   statusMessage: string | null;
@@ -27,7 +29,10 @@ export type GameSnapshot = {
 export type GameMaterials = {
   ground: import("three").MeshStandardMaterial;
   asphalt: import("three").MeshStandardMaterial;
+  asphaltPatch: import("three").MeshStandardMaterial;
   sidewalk: import("three").MeshStandardMaterial;
+  curb: import("three").MeshStandardMaterial;
+  roadMarking: import("three").MeshStandardMaterial;
   drain: import("three").MeshStandardMaterial;
   plaster: import("three").MeshStandardMaterial;
   ochre: import("three").MeshStandardMaterial;
