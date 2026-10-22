@@ -289,7 +289,9 @@ function addCrosswalks(root: THREE.Group, materials: GameMaterials) {
   const material = materials.roadMarking;
   for (const horizontal of horizontalRoads) {
     for (const vertical of verticalRoads) {
-      if (!horizontal.arterial && !vertical.arterial) continue;
+      // Reserve zebra crossings for the major-road junctions so secondary
+      // intersections remain visually quiet and the markings stay readable.
+      if (!horizontal.arterial || !vertical.arterial) continue;
       const x = vertical.center;
       const z = horizontal.center;
       const horizontalOffset = vertical.width / 2 + 2.5;
@@ -298,9 +300,9 @@ function addCrosswalks(root: THREE.Group, materials: GameMaterials) {
       for (const side of [-1, 1]) {
         const crossingX = x + side * horizontalOffset;
         const crossingZ = z + side * verticalOffset;
-        for (let stripe = -3; stripe <= 3; stripe += 1) {
-          addBox(root, material, crossingX + stripe * 0.74, 0.04, z, 0.42, 0.025, horizontal.width - 2.2, false);
-          addBox(root, material, x, 0.04, crossingZ + stripe * 0.74, vertical.width - 2.2, 0.025, 0.42, false);
+        for (let stripe = -2; stripe <= 2; stripe += 1) {
+          addBox(root, material, crossingX + stripe * 0.88, 0.04, z, 0.34, 0.025, horizontal.width - 2.2, false);
+          addBox(root, material, x, 0.04, crossingZ + stripe * 0.88, vertical.width - 2.2, 0.025, 0.34, false);
         }
       }
     }

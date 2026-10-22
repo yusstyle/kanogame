@@ -88,14 +88,15 @@ export function createMaterials(): GameMaterials {
   const plasterMap = noiseTexture("#b49a72", "#f0d9a5", 4600, 42, [2, 2]);
   const clayMap = noiseTexture("#a77950", "#e2b27a", 3900, 87, [2, 2]);
   const concreteMap = noiseTexture("#9b958a", "#e2d8c4", 3700, 19, [2, 2]);
-  const asphaltMap = noiseTexture("#343638", "#94908a", 9800, 111, [6, 6]);
+  const asphaltMap = noiseTexture("#55524d", "#aaa499", 8500, 111, [6, 6]);
+  const asphaltPatchMap = noiseTexture("#47433d", "#8a8174", 5200, 29, [1, 1]);
   const earthMap = noiseTexture("#9d8057", "#d1ad70", 9000, 73, [9, 9]);
   const stoneMap = noiseTexture("#847763", "#c6b996", 4200, 31, [2, 2]);
 
   return {
     ground: standard("#c1a16e", 1, earthMap),
-    asphalt: standard("#454644", 0.96, asphaltMap, relief(asphaltMap, 0.055)),
-    asphaltPatch: standard("#333331", 0.99, asphaltMap, relief(asphaltMap, 0.07)),
+    asphalt: standard("#f4f0e8", 0.94, asphaltMap, relief(asphaltMap, 0.035)),
+    asphaltPatch: standard("#ffffff", 0.99, asphaltPatchMap, relief(asphaltPatchMap, 0.05)),
     sidewalk: standard("#b7a88b", 0.92, concreteMap, relief(concreteMap, 0.035)),
     curb: standard("#c0b39a", 0.92, concreteMap),
     roadMarking: standard("#d9c89e", 0.82),

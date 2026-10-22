@@ -138,15 +138,6 @@ test("expanded world preserves walking, collisions, vehicle switching, and quali
     engine.setControlKey("w", true);
     internal.updatePlayer(1 / 30);
     engine.setControlKey("w", false);
-    if (internal.playerPosition.z <= startZ) {
-      console.error("Blocked spawn movement", {
-        start: internal.playerPosition.toArray(),
-        obstacles: internal.world.colliders.filter((item) =>
-          Math.abs(item.x + 4) < item.halfX + 2 &&
-          Math.abs(item.z + 4) < item.halfZ + 2,
-        ),
-      });
-    }
     assert.ok(internal.playerPosition.z > startZ, "W moves the character forward");
 
     const wall = internal.world.colliders[0];

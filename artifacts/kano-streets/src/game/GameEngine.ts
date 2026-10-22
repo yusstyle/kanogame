@@ -78,7 +78,7 @@ export class GameEngine {
     rendererFactory: RendererFactory = (target) =>
       new THREE.WebGLRenderer({
         canvas: target,
-        antialias: false,
+        antialias: true,
         powerPreference: "low-power",
         failIfMajorPerformanceCaveat: false,
       }),
