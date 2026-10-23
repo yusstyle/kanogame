@@ -1,0 +1,249 @@
+KANO STREETS — PHOTOREALISTIC AAA VISUAL OVERHAUL
+
+You are upgrading my existing game, Kano Streets, into a highly realistic, cinematic, open-world African city game inspired by the visual quality, environmental detail, atmosphere, vehicle presentation, and immersive world design of modern AAA games such as Grand Theft Auto V/VI and Call of Duty.
+
+These games are visual quality references only. Do not copy their proprietary assets, maps, characters, code, logos, or other protected content.
+
+1. NON-NEGOTIABLE RULES
+
+- Do NOT restart, replace, or recreate the project.
+- Do NOT delete working systems or rewrite the entire game unnecessarily.
+- First inspect the existing source code, project structure, rendering pipeline, assets, controls, and current errors.
+- Preserve existing walking, driving, entering/exiting vehicles, UI, and working gameplay.
+- Use the existing Three.js + TypeScript architecture.
+- Keep WebGL support as the baseline. Use WebGPU only where supported and tested, with a reliable fallback.
+- Make small, controlled, reversible changes.
+- Fix existing bugs before introducing major new systems.
+- Never claim that a feature works unless you have actually run and tested it.
+- Do not replace real assets with random cubes or primitive placeholders and call the result realistic.
+- Never invent asset filenames, sources, licenses, or completed features.
+
+2. FIRST: AUDIT THE CURRENT GAME
+
+Before changing code:
+
+1. Inspect the complete project structure and package dependencies.
+2. Identify the renderer, scene, camera, lighting, materials, world generation, player, vehicle, physics/collision, and UI systems.
+3. Run the current game and record existing errors.
+4. Identify the biggest reasons the current visuals look artificial.
+5. Check existing models, textures, animation systems, and asset licences.
+6. Establish a working baseline before modifying anything.
+
+Return a short audit containing:
+
+- Existing systems that work.
+- Existing bugs and console errors.
+- Current rendering limitations.
+- Missing assets that prevent realistic visuals.
+- The first three improvements with the highest visual impact.
+
+Do not begin a full rewrite.
+
+3. VISUAL TARGET — CINEMATIC REALISM
+
+Make the game feel like a real, photographed Northern Nigerian city rather than a low-poly game or generic procedural environment.
+
+Rendering and lighting
+
+Inspect and improve the existing renderer using the best compatible options:
+
+- Physically based rendering materials with correct roughness, metalness, and normal maps.
+- High-quality colour management and filmic tone mapping.
+- Realistic daylight, sun angle, sky illumination, and exposure.
+- Soft, contact-rich shadows with sensible performance limits.
+- Screen-space ambient occlusion or another compatible ambient-occlusion technique.
+- Carefully controlled bloom for bright lights only.
+- Atmospheric perspective and distance fog.
+- Realistic sky gradients and cloud presentation.
+- Reflections on glass, vehicle paint, and suitable wet surfaces.
+- Subtle colour grading with natural skin, sand, concrete, vegetation, and asphalt tones.
+- Improved image quality through appropriate antialiasing and rendering resolution.
+
+Do not simply enable every post-processing effect. Profile the result, prevent excessive blur and glow, and choose effects that genuinely improve realism.
+
+If volumetric fog, global illumination, or real-time reflections are too expensive or unsupported, use tested alternatives rather than pretending full implementations exist.
+
+Materials and surface detail
+
+Roads and buildings must not look like flat, untextured geometry.
+
+Improve:
+
+- Asphalt with believable aggregate, patches, cracks, repairs, tyre marks, and dirt.
+- Concrete with subtle weathering, stains, roughness variation, and edge wear.
+- Walls with realistic plaster, paint variation, dust, and local wear.
+- Glass with believable reflections and transparency.
+- Metal gates, railings, roofing, and shop shutters.
+- Sidewalks, kerbs, gutters, drainage, and road markings.
+- Sand, soil, gravel, and roadside debris where appropriate.
+
+Use properly licensed texture maps, including albedo, normal, roughness, and ambient-occlusion maps where available. Avoid obvious repeated texture patterns and incorrect material scale.
+
+4. MAKE KANO LOOK AUTHENTIC
+
+Build a visually rich world inspired by real Kano, Northern Nigeria. Do not turn it into a generic American city or an imaginary Dubai.
+
+Create distinct environments inspired by:
+
+- Sabon Gari commercial streets.
+- Airport Road and major urban roads.
+- Traditional Hausa residential compounds.
+- Modern residential estates.
+- Busy markets and roadside shops.
+- Older neighbourhood streets.
+- Fuel stations, restaurants, workshops, schools, and bus stops.
+- Mosques and other recognisable local architectural forms.
+- Outer-city roads and semi-rural surroundings.
+
+Use varied building footprints, heights, rooflines, setbacks, courtyards, gates, balconies, shopfronts, signage, and road widths.
+
+Add authentic visual details such as Hausa-inspired compound entrances, locally appropriate architectural decoration, market stalls, water tanks, overhead cables where suitable, drainage, roadside kiosks, and locally plausible street furniture.
+
+Use genuine reference photography or properly licensed models wherever possible. Treat the districts as inspired recreations, not verified exact replicas unless accurate reference data is available.
+
+Every district should have a recognisable visual identity. Avoid repeating the same building model and rotating it to fill the whole map.
+
+5. VEHICLES — AAA PRESENTATION
+
+Upgrade the existing vehicles without breaking their controls.
+
+Priorities:
+
+- Detailed, properly proportioned vehicle models.
+- Realistic tyres, rims, wheel arches, windows, mirrors, grille, and headlights.
+- PBR paint and glass materials.
+- Working headlight, brake-light, and indicator effects where implemented.
+- Visible wheel rotation and steering.
+- Suspension movement and convincing contact with the road.
+- Smooth acceleration, braking, and steering.
+- Improved chase camera, camera smoothing, and sensible field of view.
+- Better vehicle shadows and road contact.
+- Multiple believable paint colours.
+- Interior detail and dashboard improvements appropriate to the camera view.
+
+Do not claim realistic suspension or vehicle physics unless the implementation has been tested. If a system is currently basic, improve it incrementally.
+
+6. PLAYER AND ANIMATION
+
+Improve the existing character using a properly licensed animated 3D model where available.
+
+Implement or improve:
+
+- Natural idle, walking, running, turning, and stopping.
+- Correct foot placement and reduced foot sliding.
+- Smooth transitions between movement states.
+- Believable camera height and motion.
+- Contextual interaction prompts.
+- Footsteps that match movement and surface type where practical.
+
+Do not replace a working character with an incompatible model. Preserve the existing movement and interaction systems.
+
+7. A LIVING CITY
+
+Add detail gradually, based on performance and available assets:
+
+- Pedestrians using appropriate walking animations.
+- Vehicles with believable movement and traffic behaviour.
+- Parked cars in sensible locations.
+- Market activity and roadside vendors.
+- Ambient sounds from traffic, footsteps, markets, and the environment.
+- Birds or other suitable background life.
+- Streetlights and illuminated buildings at night.
+- Time-of-day changes only if they can be implemented without breaking existing lighting or performance.
+
+Avoid spawning crowds or traffic directly into roads, buildings, or the player. Use collision checks, sensible spawn areas, and distance-based activation.
+
+8. REAL 3D ASSETS — NOT FAKE REALISM
+
+Prioritise quality over the raw number of assets.
+
+Create or source a coherent set of detailed GLB/GLTF models for buildings, vehicles, street furniture, pedestrians, and vegetation.
+
+For every external asset, maintain an asset manifest with:
+
+- Asset ID and filename.
+- Original source URL.
+- Author or creator.
+- Exact licence.
+- Attribution requirements.
+- Modifications made.
+- Intended use in the game.
+
+Use assets only when their licences permit the intended use. Do not claim that an asset is licensed without checking its source.
+
+Use suitable optimisation tools and preserve texture quality. If an important asset is unavailable, identify it as missing and recommend a replacement; do not invent a model and claim it is a genuine sourced asset.
+
+9. OPEN-WORLD SCALE AND PERFORMANCE
+
+Preserve the existing world and improve its streaming architecture incrementally.
+
+Use:
+
+- InstancedMesh for genuinely repeated objects.
+- Level of detail for distant objects.
+- Chunk-based loading and unloading.
+- Frustum culling and sensible draw-call reduction.
+- Texture compression and caching.
+- Appropriate shadow distances and resolutions.
+- Distance-based pedestrian and traffic simulation.
+- Asynchronous loading with visible fallbacks.
+- Memory management when chunks are removed.
+- Collision and physics only where needed.
+
+Do not load every district, texture, pedestrian, and vehicle at full detail simultaneously.
+
+Target smooth, playable performance on ordinary gaming laptops, with adjustable graphics settings. Measure actual frame rates and memory use on available hardware. Do not guarantee a specific frame rate without testing.
+
+10. REQUIRED MILESTONES
+
+Complete one milestone at a time.
+
+Milestone A — Baseline and rendering
+Audit the project, fix errors, improve lighting, tone mapping, sky, and materials.
+
+Milestone B — Surface and building realism
+Upgrade roads, walls, compound gates, shopfronts, windows, and street details.
+
+Milestone C — Vehicle realism
+Improve vehicle models, materials, lighting, camera, and movement without breaking controls.
+
+Milestone D — Player and animation
+Improve the character model, animation transitions, camera, and interactions.
+
+Milestone E — City atmosphere
+Improve traffic, pedestrians, ambient audio, night lighting, and environmental activity.
+
+Milestone F — Performance and verification
+Profile the game, optimise the most expensive systems, test loading and gameplay, and fix regressions.
+
+Do not attempt every milestone in a single uncontrolled rewrite.
+
+11. TESTING AND REPORTING
+
+After each milestone:
+
+1. Run the game using the actual project commands.
+2. Check the browser console and terminal output.
+3. Test walking, driving, vehicle entry/exit, camera controls, collisions, and existing UI.
+4. Check that models and textures load correctly.
+5. Check for broken asset paths, missing files, and shader errors.
+6. Measure performance where tooling permits.
+7. Fix regressions before moving forward.
+
+At the end of each milestone, report:
+
+- Files changed.
+- Features actually implemented.
+- Tests actually performed and their results.
+- Remaining bugs.
+- Assets added and their verified licences.
+- Performance measurements, if collected.
+- Features that remain incomplete.
+
+Clearly distinguish implemented, tested, partially implemented, and planned work.
+
+FINAL OBJECTIVE
+
+Transform the existing Kano Streets prototype into a visually ambitious, cinematic, highly detailed open-world experience inspired by modern AAA game presentation, while remaining an original Kano-centred game built with Three.js.
+
+Prioritise visible realism, coherent art direction, authentic Kano details, and stable gameplay over feature count. Do not restart the project. Inspect first, improve incrementally, and verify every milestone.

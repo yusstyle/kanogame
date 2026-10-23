@@ -1,0 +1,107 @@
+KANO STREETS — MILESTONE G: REAL 3D ASSET UPGRADE
+
+Continue upgrading the existing Kano Streets project. Do not restart it or replace its working systems.
+
+The previous milestone expanded the city, improved procedural architecture, roads, collision checks, controls, and graphics settings. The TypeScript check, production build, and reported gameplay tests passed.
+
+The game still looks stylized because its main buildings, sedan, and character use procedural geometry. The objective now is to improve the actual 3D assets, starting with the assets most visible to the player.
+
+STEP 1 — INSPECT BEFORE CHANGING
+
+Inspect the current project and identify:
+
+The exact scene and asset-loading files.
+
+The current sedan model or geometry.
+
+The most prominent buildings and street props.
+
+The existing material, lighting, collision, and graphics-setting systems.
+
+The correct asset directory and model-loading dependencies.
+
+Do not assume filenames or architecture. Verify them from the repository.
+
+STEP 2 — SOURCE REALISTIC ASSETS
+
+Find suitable, high-quality GLB/GLTF models for:
+
+A realistic, properly proportioned sedan.
+
+Detailed Northern Nigerian or architecturally compatible buildings.
+
+Hausa-inspired compound gates and entrances.
+
+Shops, market stalls, street furniture, and road props.
+
+Prefer assets with suitable geometry, textures, PBR materials, and sensible polygon counts.
+
+Verify the actual source and licence of every external asset. Record its creator, source URL, licence, attribution requirements, filename, and modifications in the asset manifest.
+
+Do not invent assets or claim that an asset was downloaded, licensed, or integrated unless that actually happened.
+
+If a suitable authentic Kano model is unavailable, use a verified licensed model as a base and adapt it carefully. Clearly distinguish an inspired recreation from a historically or geographically verified model.
+
+STEP 3 — INTEGRATE WITHOUT BREAKING GAMEPLAY
+
+Integrate only a small number of high-impact assets first.
+
+For the sedan:
+
+Preserve the existing vehicle controller and input mappings.
+
+Preserve enter/exit interactions and camera handoff.
+
+Preserve collision behaviour and the displayed speed.
+
+Align the model's origin, forward direction, wheels, ground contact, and bounding box correctly.
+
+Avoid duplicate cars or invisible collision shapes.
+
+For buildings:
+
+Preserve road clearance, player spawn, and walkable routes.
+
+Add appropriate collision proxies rather than expensive per-triangle collision for every object.
+
+Ensure doors, roads, and existing interactions remain usable.
+
+If an asset cannot be integrated safely, keep the existing model and report the blocker instead of breaking the game.
+
+STEP 4 — VISUAL QUALITY
+
+Use suitable PBR textures and correct material scale. Improve normal maps, roughness, weathering, window reflections, vehicle paint, wheel detail, and contact shadows where supported.
+
+Do not rely on bloom or colour grading to disguise low-quality models.
+
+Keep the existing Performance, Balanced, and Quality settings working. Avoid loading every high-resolution asset at once.
+
+STEP 5 — VERIFY
+
+Run the actual project checks and production build.
+
+Then test the game in a browser:
+
+Walk around the upgraded buildings.
+
+Enter and exit the upgraded sedan.
+
+Accelerate, steer, brake, and reverse where supported.
+
+Check the driving camera.
+
+Check collision and ground contact.
+
+Check Performance and Quality settings.
+
+Inspect console errors and missing textures.
+
+Confirm that the previous UI still works.
+
+Report which tests were actually performed. Do not claim Windows performance has been tested unless a Windows build was run on real hardware.
+
+Complete this milestone before adding pedestrians, traffic systems, or additional districts.
+
+SUCCESS CRITERION
+
+The player should immediately notice a meaningful improvement in the quality of the main buildings and driving vehicle. Preserve the existing game, use verified assets, and prioritise visual quality over asset quantity.
