@@ -12,6 +12,7 @@ export type GraphicsQuality = "performance" | "balanced" | "quality";
 export type PlotAsset = {
   root: import("three").Group;
   colliders: Collider[];
+  gateSlot?: import("three").Group;
 };
 
 export type GameMode = "on-foot" | "driving";

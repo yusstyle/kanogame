@@ -4,6 +4,42 @@ import type { BuildingKind, Collider, GameMaterials, PlotAsset } from "./types";
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
 const roundCylinder = new THREE.CylinderGeometry(1, 1, 1, 12);
+const texturedBoxGeometryCache = new Map<string, THREE.BufferGeometry>();
+
+function getTexturedBoxGeometry(width: number, height: number, depth: number, tileSize: number) {
+  const key = [width, height, depth, tileSize].map((value) => value.toFixed(3)).join(":");
+  const cached = texturedBoxGeometryCache.get(key);
+  if (cached) return cached;
+
+  const geometry = unitBox.clone();
+  const index = geometry.index;
+  const uv = geometry.getAttribute("uv");
+  if (!index) return geometry;
+
+  const faceSizes: [number, number][] = [
+    [depth, height],
+    [depth, height],
+    [depth, width],
+    [depth, width],
+    [width, height],
+    [width, height],
+  ];
+  geometry.groups.forEach((group, face) => {
+    const [faceWidth, faceHeight] = faceSizes[face];
+    const repeatU = faceWidth / tileSize;
+    const repeatV = faceHeight / tileSize;
+    const visited = new Set<number>();
+    for (let offset = group.start; offset < group.start + group.count; offset += 1) {
+      const vertex = index.getX(offset);
+      if (visited.has(vertex)) continue;
+      visited.add(vertex);
+      uv.setXY(vertex, uv.getX(vertex) * repeatU, uv.getY(vertex) * repeatV);
+    }
+  });
+  uv.needsUpdate = true;
+  texturedBoxGeometryCache.set(key, geometry);
+  return geometry;
+}
 
 function addArchFrame(
   root: THREE.Group,
@@ -54,7 +90,11 @@ function box(
   depth: number,
   castShadow = true,
 ) {
-  const mesh = new THREE.Mesh(unitBox, material);
+  const tileSize = material.userData.textureTileSize;
+  const geometry = typeof tileSize === "number"
+    ? getTexturedBoxGeometry(width, height, depth, tileSize)
+    : unitBox;
+  const mesh = new THREE.Mesh(geometry, material);
   mesh.position.set(x, y, z);
   mesh.scale.set(width, height, depth);
   mesh.castShadow = castShadow;
@@ -89,7 +129,7 @@ function addCourtyard(
   colliders: Collider[],
   modern = false,
   variant = 0,
-) {
+): THREE.Group {
   const height = modern ? 1.62 + (variant % 2) * 0.13 : 1.78 + (variant % 3) * 0.07;
   const sideMaterial = modern
     ? variant % 2 ? materials.concrete : materials.plaster
@@ -115,17 +155,25 @@ function addCourtyard(
   }
 
   addArchFrame(root, modern ? materials.concrete : materials.trim, 0, 0, 7.03, 3.25, 2.55, 2.05, 2.06, 0.28);
-  box(root, materials.metal, 0, 0.86, 7.14, 1.82, 1.62, 0.14);
+  const gateSlot = new THREE.Group();
+  gateSlot.name = "compound-gate-asset-slot";
+  gateSlot.position.set(0, 0, 7.14);
+  const proceduralGate = new THREE.Group();
+  proceduralGate.name = "procedural-gate-fallback";
+  gateSlot.add(proceduralGate);
+  root.add(gateSlot);
+
+  box(proceduralGate, materials.metal, 0, 0.86, 0, 1.82, 1.62, 0.14);
   for (let i = 0; i < 11; i += 1) {
     const x = -0.82 + i * 0.164;
-    box(root, i % 2 ? materials.trim : materials.ochre, x, 0.84, 7.23, 0.045, 1.48, 0.09);
+    box(proceduralGate, i % 2 ? materials.trim : materials.ochre, x, 0.84, 0.09, 0.045, 1.48, 0.09);
   }
-  box(root, materials.trim, 0, 1.55, 7.24, 1.88, 0.08, 0.11);
+  box(proceduralGate, materials.trim, 0, 1.55, 0.1, 1.88, 0.08, 0.11);
   for (const x of [-0.48, 0, 0.48]) {
-    const stud = box(root, materials.ochre, x, 1.79, 7.26, 0.13, 0.13, 0.08);
+    const stud = box(proceduralGate, materials.ochre, x, 1.79, 0.12, 0.13, 0.13, 0.08);
     stud.rotation.z = Math.PI / 4;
   }
-  box(root, materials.darkTrim, 0, 0.04, 7.15, 2.1, 0.12, 0.68, false);
+  box(proceduralGate, materials.darkTrim, 0, 0.04, 0.01, 2.1, 0.12, 0.68, false);
 
   colliders.push(
     { x: -6.75, z: 0, halfX: 0.32, halfZ: 7.22, height },
@@ -137,6 +185,7 @@ function addCourtyard(
     { x: 1.45, z: 7.04, halfX: 0.38, halfZ: 0.42, height: 2.95 },
     { x: 0, z: 7.14, halfX: 0.96, halfZ: 0.24, height: 1.8 },
   );
+  return gateSlot;
 }
 
 function addWindow(
@@ -372,9 +421,10 @@ export function createPlot(
 ): PlotAsset {
   const root = new THREE.Group();
   const colliders: Collider[] = [];
+  let gateSlot: THREE.Group | undefined;
 
   if (kind !== "shop" && kind !== "commercial") {
-    addCourtyard(root, materials, colliders, kind === "modern", variant);
+    gateSlot = addCourtyard(root, materials, colliders, kind === "modern", variant);
   }
 
   if (kind === "traditional") {
@@ -387,7 +437,7 @@ export function createPlot(
     addCommercialBuilding(root, materials, colliders, sign, variant);
   }
 
-  return { root, colliders };
+  return { root, colliders, gateSlot };
 }
 
 export function createMarketStall(materials: GameMaterials, variant = 0): PlotAsset {

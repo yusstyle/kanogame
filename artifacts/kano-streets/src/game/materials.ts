@@ -93,6 +93,9 @@ export function createMaterials(): GameMaterials {
   const earthMap = noiseTexture("#9d8057", "#d1ad70", 9000, 73, [9, 9]);
   const stoneMap = noiseTexture("#847763", "#c6b996", 4200, 31, [2, 2]);
 
+  const plaster = standard("#e0c695", 0.93, plasterMap, relief(plasterMap, 0.055));
+  plaster.userData.textureTileSize = 1.8;
+
   return {
     ground: standard("#c1a16e", 1, earthMap),
     asphalt: standard("#f4f0e8", 0.94, asphaltMap, relief(asphaltMap, 0.035)),
@@ -101,7 +104,7 @@ export function createMaterials(): GameMaterials {
     curb: standard("#c0b39a", 0.92, concreteMap),
     roadMarking: standard("#d9c89e", 0.82),
     drain: standard("#373936", 0.94, stoneMap, relief(stoneMap, 0.04)),
-    plaster: standard("#e0c695", 0.93, plasterMap, relief(plasterMap, 0.055)),
+    plaster,
     ochre: standard("#b9905c", 0.96, clayMap, relief(clayMap, 0.06)),
     clay: standard("#98734f", 0.98, clayMap, relief(clayMap, 0.075)),
     concrete: standard("#aaa396", 0.93, concreteMap, relief(concreteMap, 0.05)),

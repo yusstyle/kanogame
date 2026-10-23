@@ -145,6 +145,8 @@ export type CarModel = {
   root: THREE.Group;
   wheels: THREE.Group[];
   frontWheels: THREE.Group[];
+  proceduralBody: THREE.Group;
+  wheelRig: "procedural" | "asset";
 };
 
 export function createCarModel(materials: GameMaterials): CarModel {
@@ -249,6 +251,13 @@ export function createCarModel(materials: GameMaterials): CarModel {
     wiper.rotation.x = -0.42;
   }
 
+  const proceduralBody = new THREE.Group();
+  proceduralBody.name = "procedural-sedan-body-fallback";
+  while (root.children.length > 0) {
+    proceduralBody.add(root.children[0]);
+  }
+  root.add(proceduralBody);
+
   const wheels: THREE.Group[] = [];
   const frontWheels: THREE.Group[] = [];
   for (const x of [-0.91, 0.91]) {
@@ -286,12 +295,12 @@ export function createCarModel(materials: GameMaterials): CarModel {
   }
 
   // A dark interior, dashboard and headrests remain visible through the glass.
-  addBox(root, materials.black, 0, 1.03, -0.08, 1.52, 0.17, 1.5);
+  addBox(proceduralBody, materials.black, 0, 1.03, -0.08, 1.52, 0.17, 1.5);
   for (const x of [-0.43, 0.43]) {
-    addBox(root, materials.wood, x, 1.18, -0.02, 0.55, 0.34, 0.61);
-    addBox(root, materials.black, x, 1.49, -0.12, 0.36, 0.36, 0.12);
+    addBox(proceduralBody, materials.wood, x, 1.18, -0.02, 0.55, 0.34, 0.61);
+    addBox(proceduralBody, materials.black, x, 1.49, -0.12, 0.36, 0.36, 0.12);
   }
-  addBox(root, materials.black, 0, 1.2, 0.68, 1.52, 0.18, 0.28);
+  addBox(proceduralBody, materials.black, 0, 1.2, 0.68, 1.52, 0.18, 0.28);
 
-  return { root, wheels, frontWheels };
+  return { root, wheels, frontWheels, proceduralBody, wheelRig: "procedural" };
 }
