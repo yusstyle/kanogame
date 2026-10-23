@@ -50,15 +50,43 @@ export type PlayerModel = {
   rightArm: THREE.Group;
   leftLeg: THREE.Group;
   rightLeg: THREE.Group;
+  head?: THREE.Mesh;
 };
 
-export function createPlayerModel(materials: GameMaterials): PlayerModel {
+export type PedestrianOptions = {
+  skinColor?: string;
+  tunicColor?: string;
+  trousersColor?: string;
+  capColor?: string;
+  embroideryColor?: string;
+  hasCap?: boolean;
+};
+
+export function createPedestrianModel(
+  materials: GameMaterials,
+  options: PedestrianOptions = {},
+): PlayerModel {
   const root = new THREE.Group();
-  const skin = new THREE.MeshStandardMaterial({ color: "#754c35", roughness: 0.88 });
-  const tunic = new THREE.MeshStandardMaterial({ color: "#55736e", roughness: 0.94 });
-  const trousers = new THREE.MeshStandardMaterial({ color: "#483d32", roughness: 0.95 });
-  const cap = new THREE.MeshStandardMaterial({ color: "#c0a36e", roughness: 0.95 });
-  const embroidery = new THREE.MeshStandardMaterial({ color: "#d0b277", roughness: 0.88 });
+  const skin = new THREE.MeshStandardMaterial({
+    color: options.skinColor || "#754c35",
+    roughness: 0.88,
+  });
+  const tunic = new THREE.MeshStandardMaterial({
+    color: options.tunicColor || "#55736e",
+    roughness: 0.94,
+  });
+  const trousers = new THREE.MeshStandardMaterial({
+    color: options.trousersColor || "#483d32",
+    roughness: 0.95,
+  });
+  const cap = new THREE.MeshStandardMaterial({
+    color: options.capColor || "#c0a36e",
+    roughness: 0.95,
+  });
+  const embroidery = new THREE.MeshStandardMaterial({
+    color: options.embroideryColor || "#d0b277",
+    roughness: 0.88,
+  });
   const leather = new THREE.MeshStandardMaterial({ color: "#332a23", roughness: 0.92 });
 
   const tunicHem = new THREE.Mesh(
@@ -75,19 +103,25 @@ export function createPlayerModel(materials: GameMaterials): PlayerModel {
   head.position.set(0, 1.77, 0);
   head.castShadow = true;
   root.add(head);
-  const fila = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.1, 12), cap);
-  fila.position.set(0, 1.96, -0.01);
-  fila.castShadow = true;
-  root.add(fila);
-  const filaBand = new THREE.Mesh(
-    new THREE.TorusGeometry(0.205, 0.018, 5, 18),
-    embroidery,
-  );
-  filaBand.position.set(0, 1.925, -0.01);
-  filaBand.rotation.x = Math.PI / 2;
-  root.add(filaBand);
 
-  const neckTrim = new THREE.MeshStandardMaterial({ color: "#d0b277", roughness: 0.9 });
+  if (options.hasCap !== false) {
+    const fila = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.1, 12), cap);
+    fila.position.set(0, 1.96, -0.01);
+    fila.castShadow = true;
+    root.add(fila);
+    const filaBand = new THREE.Mesh(
+      new THREE.TorusGeometry(0.205, 0.018, 5, 18),
+      embroidery,
+    );
+    filaBand.position.set(0, 1.925, -0.01);
+    filaBand.rotation.x = Math.PI / 2;
+    root.add(filaBand);
+  }
+
+  const neckTrim = new THREE.MeshStandardMaterial({
+    color: options.embroideryColor || "#d0b277",
+    roughness: 0.9,
+  });
   const collar = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.018, 6, 14), neckTrim);
   collar.position.set(0, 1.48, 0);
   collar.rotation.x = Math.PI / 2;
@@ -138,7 +172,18 @@ export function createPlayerModel(materials: GameMaterials): PlayerModel {
     root.add(point);
   }
 
-  return { root, leftArm, rightArm, leftLeg, rightLeg };
+  return { root, leftArm, rightArm, leftLeg, rightLeg, head };
+}
+
+export function createPlayerModel(materials: GameMaterials): PlayerModel {
+  return createPedestrianModel(materials, {
+    skinColor: "#754c35",
+    tunicColor: "#55736e",
+    trousersColor: "#483d32",
+    capColor: "#c0a36e",
+    embroideryColor: "#d0b277",
+    hasCap: true,
+  });
 }
 
 export type CarModel = {
@@ -158,17 +203,22 @@ export type KekeModel = {
   rearWheels: THREE.Mesh[];
 };
 
-export function createCarModel(materials: GameMaterials): CarModel {
+export function createCarModel(
+  materials: GameMaterials,
+  bodyColorHex = "#a85435",
+  bodyAccentHex = "#d4bf9a",
+  plateText = "KN 247 KNA",
+): CarModel {
   const root = new THREE.Group();
   const bodyColor = new THREE.MeshPhysicalMaterial({
-    color: "#a85435",
+    color: bodyColorHex,
     roughness: 0.43,
     metalness: 0.16,
     clearcoat: 0.22,
     clearcoatRoughness: 0.34,
   });
   const bodyAccent = new THREE.MeshPhysicalMaterial({
-    color: "#d4bf9a",
+    color: bodyAccentHex,
     roughness: 0.47,
     metalness: 0.12,
     clearcoat: 0.18,
@@ -192,7 +242,7 @@ export function createCarModel(materials: GameMaterials): CarModel {
     emissiveIntensity: 0.32,
     roughness: 0.44,
   });
-  const licensePlate = makeSignMaterial("KN 247 KNA", "#e0d8c1");
+  const licensePlate = makeSignMaterial(plateText, "#e0d8c1");
 
   // A complete, original procedural sedan silhouette—not a downloaded or
   // photorealistic model. The proportions and visible mechanical parts are
@@ -324,12 +374,18 @@ export function createCarModel(materials: GameMaterials): CarModel {
   return { root, wheels, frontWheels, proceduralBody, wheelRig: "procedural", attachGLTFBody };
 }
 
-export function createKekeModel(materials: GameMaterials): KekeModel {
+export function createKekeModel(
+  materials: GameMaterials,
+  plateText = "KMC 318 KAN",
+  stripeColorHex?: string,
+): KekeModel {
   const root = new THREE.Group();
   root.name = "keke-napep-root";
 
   const yellow = materials.kekeYellow;
-  const green = materials.kekeGreen;
+  const green = stripeColorHex
+    ? new THREE.MeshStandardMaterial({ color: stripeColorHex, roughness: 0.88 })
+    : materials.kekeGreen;
   const black = materials.black;
   const metal = materials.metal;
   const rubber = new THREE.MeshStandardMaterial({ color: "#222423", roughness: 0.96 });
@@ -346,7 +402,7 @@ export function createKekeModel(materials: GameMaterials): KekeModel {
     emissiveIntensity: 0.4,
     roughness: 0.4,
   });
-  const licensePlate = makeSignMaterial("KMC 318 KAN", "#e5aa24");
+  const licensePlate = makeSignMaterial(plateText, "#e5aa24");
 
   // 1. Lower Chassis & Floor
   addBox(root, black, 0, 0.24, 0, 1.28, 0.14, 2.55);

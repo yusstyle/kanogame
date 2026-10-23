@@ -126,3 +126,4 @@ export function loadTexture(url: string, isColor = false, repeat: [number, numbe
     return null;
   }
 }
+

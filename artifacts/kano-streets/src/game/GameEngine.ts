@@ -11,6 +11,9 @@ import { loadGLTFModel } from "./assetManifest";
 import { ColliderIndex } from "./ColliderIndex";
 import { getDistrict, getDistrictLabel, ROAD_LAYOUT } from "./layout";
 import { createMaterials } from "./materials";
+import { buildNavigationNetwork, type NavigationNetwork } from "./navigation";
+import { PedestrianSystem } from "./PedestrianSystem";
+import { TrafficSystem } from "./TrafficSystem";
 import { createWorld } from "./world";
 import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, VehicleType } from "./types";
 
@@ -44,6 +47,9 @@ export class GameEngine {
   private readonly player: PlayerModel;
   private readonly car: CarModel;
   private readonly keke: KekeModel;
+  private readonly navigation: NavigationNetwork;
+  private readonly trafficSystem: TrafficSystem;
+  private readonly pedestrianSystem: PedestrianSystem;
   private readonly keys = new Set<string>();
   private readonly lookMatrix = new THREE.Matrix4();
   private readonly desiredCameraQuaternion = new THREE.Quaternion();
@@ -115,6 +121,23 @@ export class GameEngine {
     this.colliderIndex = new ColliderIndex(this.world.colliders);
     this.scene.add(this.world.root);
     this.addLighting();
+
+    this.navigation = buildNavigationNetwork();
+    this.trafficSystem = new TrafficSystem(
+      this.scene,
+      this.materials,
+      this.navigation,
+      this.colliderIndex,
+      (x, z) => this.surfaceHeight(x, z),
+    );
+    this.pedestrianSystem = new PedestrianSystem(
+      this.scene,
+      this.materials,
+      this.navigation,
+      this.colliderIndex,
+      (x, z) => this.surfaceHeight(x, z),
+    );
+
     this.setGraphicsQuality("balanced");
 
     this.player = createPlayerModel(this.materials);
@@ -317,6 +340,8 @@ export class GameEngine {
   setGraphicsQuality(quality: GraphicsQuality) {
     if (this.graphicsQuality === quality && this.sunLight) return;
     this.graphicsQuality = quality;
+    this.trafficSystem?.setQuality(quality);
+    this.pedestrianSystem?.setQuality(quality);
     const pixelRatioCap = quality === "performance" ? 1 : quality === "quality" ? 1.65 : 1.25;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, pixelRatioCap));
     this.renderer.shadowMap.enabled = quality !== "performance";
@@ -369,6 +394,8 @@ export class GameEngine {
     this.canvas.removeEventListener("pointercancel", this.onCanvasPointerUpBound);
     this.canvas.removeEventListener("contextmenu", this.onContextMenuBound);
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
+    this.trafficSystem.dispose();
+    this.pedestrianSystem.dispose();
     this.renderer.dispose();
   }
 
@@ -514,8 +541,15 @@ export class GameEngine {
     const dt = Math.min(this.lastFrameAt === 0 ? 1 / 60 : now - this.lastFrameAt, 0.04);
     this.lastFrameAt = now;
     if (this.screen === "playing") {
-      if (this.mode === "on-foot") this.updatePlayer(dt);
+      if (this.mode === "on-foot") this.updatePlayer(dt, now);
       else this.updateCar(dt);
+
+      const activeVehPos = this.mode === "driving"
+        ? (this.activeVehicle === "keke" ? this.kekePosition : this.carPosition)
+        : null;
+
+      this.trafficSystem.update(dt, this.playerPosition, activeVehPos);
+      this.pedestrianSystem.update(dt, this.playerPosition, activeVehPos);
     }
     this.updateCamera(dt);
     this.renderer.render(this.scene, this.camera);
@@ -523,7 +557,7 @@ export class GameEngine {
     this.animationFrame = requestAnimationFrame(this.animate);
   };
 
-  private updatePlayer(dt: number) {
+  private updatePlayer(dt: number, now = performance.now() / 1000) {
     const forward = (this.keys.has("w") ? 1 : 0) - (this.keys.has("s") ? 1 : 0);
     const sideways = (this.keys.has("d") ? 1 : 0) - (this.keys.has("a") ? 1 : 0);
     const movement = new THREE.Vector2(sideways, forward);
@@ -567,13 +601,39 @@ export class GameEngine {
       this.walkPhase += dt * (this.keys.has("shift") ? 12.4 : 8.3);
     }
 
-    const swing = isWalking && this.playerGrounded ? Math.sin(this.walkPhase) * 0.54 : 0;
-    this.player.leftArm.rotation.x = THREE.MathUtils.damp(this.player.leftArm.rotation.x, -swing, 9, dt);
-    this.player.rightArm.rotation.x = THREE.MathUtils.damp(this.player.rightArm.rotation.x, swing, 9, dt);
-    this.player.leftLeg.rotation.x = THREE.MathUtils.damp(this.player.leftLeg.rotation.x, swing, 9, dt);
-    this.player.rightLeg.rotation.x = THREE.MathUtils.damp(this.player.rightLeg.rotation.x, -swing, 9, dt);
+    const isRunning = this.keys.has("shift") && isWalking;
+    const swingMagnitude = isRunning ? 0.68 : 0.46;
+    const swing = isWalking && this.playerGrounded ? Math.sin(this.walkPhase) * swingMagnitude : 0;
+    const idleBreath = !isWalking && this.playerGrounded ? Math.sin(now * 2.2) * 0.04 : 0;
+    const idleSway = !isWalking && this.playerGrounded ? Math.sin(now * 1.1) * 0.015 : 0;
 
-    this.player.root.position.copy(this.playerPosition);
+    if (this.playerGrounded) {
+      this.player.leftArm.rotation.x = THREE.MathUtils.damp(this.player.leftArm.rotation.x, -swing + idleBreath, 9, dt);
+      this.player.rightArm.rotation.x = THREE.MathUtils.damp(this.player.rightArm.rotation.x, swing - idleBreath, 9, dt);
+      this.player.leftLeg.rotation.x = THREE.MathUtils.damp(this.player.leftLeg.rotation.x, swing, 9, dt);
+      this.player.rightLeg.rotation.x = THREE.MathUtils.damp(this.player.rightLeg.rotation.x, -swing, 9, dt);
+      this.player.leftArm.rotation.z = THREE.MathUtils.damp(this.player.leftArm.rotation.z, idleSway, 7, dt);
+      this.player.rightArm.rotation.z = THREE.MathUtils.damp(this.player.rightArm.rotation.z, -idleSway, 7, dt);
+    } else {
+      this.player.leftArm.rotation.x = THREE.MathUtils.damp(this.player.leftArm.rotation.x, 0.4, 7, dt);
+      this.player.rightArm.rotation.x = THREE.MathUtils.damp(this.player.rightArm.rotation.x, 0.4, 7, dt);
+      this.player.leftArm.rotation.z = THREE.MathUtils.damp(this.player.leftArm.rotation.z, -0.35, 7, dt);
+      this.player.rightArm.rotation.z = THREE.MathUtils.damp(this.player.rightArm.rotation.z, 0.35, 7, dt);
+      this.player.leftLeg.rotation.x = THREE.MathUtils.damp(this.player.leftLeg.rotation.x, -0.3, 7, dt);
+      this.player.rightLeg.rotation.x = THREE.MathUtils.damp(this.player.rightLeg.rotation.x, -0.15, 7, dt);
+    }
+
+    if (this.player.head) {
+      const headTurn = !isWalking ? Math.sin(now * 0.7) * 0.16 : 0;
+      this.player.head.rotation.y = THREE.MathUtils.damp(this.player.head.rotation.y, headTurn, 5, dt);
+    }
+
+    const verticalBounce = isWalking && this.playerGrounded ? Math.abs(Math.sin(this.walkPhase * 2)) * 0.035 : 0;
+    this.player.root.position.set(
+      this.playerPosition.x,
+      this.playerPosition.y + verticalBounce,
+      this.playerPosition.z,
+    );
     this.player.root.rotation.y = this.playerYaw;
   }
 

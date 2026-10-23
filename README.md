@@ -85,9 +85,9 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 # Typecheck across the entire monorepo
 pnpm run typecheck
 
-# Run GameEngine unit tests
+# Run all game unit tests
 cd artifacts/kano-streets
-..\..\scripts\node_modules\.bin\tsx.cmd --test src/game/GameEngine.test.ts
+..\..\scripts\node_modules\.bin\tsx.cmd --test src/game/*.test.ts
 
 # Production build
 pnpm --filter @workspace/kano-streets run build
@@ -109,6 +109,24 @@ pnpm --filter @workspace/kano-streets run build
   - **Dala Friday Mosque**: Sahelian-arched entrance, emerald dome with brass finial, and towering minaret.
   - **Roadside Infrastructure**: Diesel backup generators with exhaust pipes and elevated black GeePee water storage tanks on steel scaffolding.
   - **Atmospheric Lighting**: Warm Sahelian sun (`#ffeed2`) and dusty midday atmospheric fog (`#d2bf9b`).
+
+---
+
+## Milestone H: Living Kano (Pedestrians, Traffic AI & Dynamic World)
+
+- **Pedestrian System & Street Life (`PedestrianSystem.ts`)**:
+  - **Sabon Gari Market Vendors**: Stationed vendors behind fruit and textile market stalls with animated breathing, gestures, and customer-facing idle postures.
+  - **Sidewalk Pedestrians**: Walkers dynamically navigating sidewalks along block corridors, crossing lanes, and pausing to browse or look around.
+  - **Kano Visual Diversity**: Varied attire (indigo-dyed kaftans, white babariga, ochre robes, terracotta clay, charcoal, sage), fila caps, skin tones, and non-clipping spawn safety.
+- **Traffic AI Simulation (`TrafficSystem.ts`)**:
+  - **Autonomous Road Network Navigation (`navigation.ts`)**: Right-hand driving along multi-lane avenues and streets, intersection decision making (straight, left, right), and boundary turnaround loops.
+  - **Mixed AI Fleet**: Autonomous Sedans (with varied body/accent colors and Nigerian plates) and Keke Napeps.
+  - **Intelligent Driving Behaviors**: Smooth waypoint steering, speed modulation, intersection deceleration, following distance maintenance, player vehicle avoidance, emergency braking, and stuck recovery logic.
+- **Enhanced Procedural Animation & Kinematics**:
+  - **Player Kinematics**: Walking vertical bounce ($0.035\text{m}$), running sprint arm extensions, idle breathing and weight shifts, head sway, and in-air jump poses.
+  - **NPC Animation**: Procedural arm/leg swings, subtle vertical bobbing, and conversational head gestures.
+- **Performance & Distance Culling**:
+  - Distance-based LOD (>85m throttles animations), spatial collision queries via `ColliderIndex`, and graphics quality tiering (`Performance`: 4 traffic / 8 crowd; `Balanced`: 6 traffic / 14 crowd; `Quality`: 8 traffic / 20 crowd with full dynamic shadows).
 
 ---
 
