@@ -388,6 +388,103 @@ function addMarketWaterTank(root: THREE.Group, materials: GameMaterials, collide
   colliders.push({ x, z, halfX: 0.78, halfZ: 0.78, height: 2.3 });
 }
 
+function addMosque(
+  root: THREE.Group,
+  materials: GameMaterials,
+  colliders: Collider[],
+  x: number,
+  z: number,
+) {
+  const mosque = new THREE.Group();
+  mosque.position.set(x, 0, z);
+  root.add(mosque);
+
+  const hallWidth = 14.5;
+  const hallHeight = 7.0;
+  const hallDepth = 13.5;
+  addBox(mosque, materials.white, 0, hallHeight / 2, 0, hallWidth, hallHeight, hallDepth);
+  addBox(mosque, materials.ochre, 0, hallHeight + 0.18, 0, hallWidth + 0.4, 0.36, hallDepth + 0.4);
+
+  for (let px = -hallWidth / 2 + 1.2; px <= hallWidth / 2 - 0.5; px += 2.2) {
+    for (const pz of [-hallDepth / 2, hallDepth / 2]) {
+      const finial = addBox(mosque, materials.ochre, px, hallHeight + 0.65, pz, 0.35, 0.65, 0.35);
+      finial.rotation.z = Math.PI / 4;
+    }
+  }
+
+  const domeMat = new THREE.MeshStandardMaterial({ color: "#1e6b36", roughness: 0.36, metalness: 0.15 });
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(3.6, 20, 16, 0, Math.PI * 2, 0, Math.PI / 2), domeMat);
+  dome.position.set(0, hallHeight + 0.36, 0);
+  dome.castShadow = true;
+  mosque.add(dome);
+
+  addCylinder(mosque, materials.metal, 0, hallHeight + 4.3, 0, 0.1, 0.05, 1.4);
+  const crescent = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.05, 6, 16, Math.PI * 1.5), materials.metal);
+  crescent.position.set(0, hallHeight + 5.1, 0);
+  crescent.rotation.y = Math.PI / 2;
+  mosque.add(crescent);
+
+  const minaretX = hallWidth / 2 + 1.8;
+  const minaretZ = hallDepth / 2 - 1.8;
+  const minaretHeight = 16.5;
+  addCylinder(mosque, materials.white, minaretX, minaretHeight / 2, minaretZ, 1.35, 1.1, minaretHeight);
+  addCylinder(mosque, materials.ochre, minaretX, minaretHeight - 2.8, minaretZ, 1.7, 1.7, 0.4);
+  addCylinder(mosque, materials.metal, minaretX, minaretHeight - 2.4, minaretZ, 1.65, 1.65, 0.7);
+  const miniDome = new THREE.Mesh(new THREE.SphereGeometry(1.25, 14, 12, 0, Math.PI * 2, 0, Math.PI / 2), domeMat);
+  miniDome.position.set(minaretX, minaretHeight + 0.2, minaretZ);
+  miniDome.castShadow = true;
+  mosque.add(miniDome);
+  addCylinder(mosque, materials.metal, minaretX, minaretHeight + 1.8, minaretZ, 0.06, 0.03, 1.0);
+
+  const frontZ = hallDepth / 2 + 0.15;
+  for (const ax of [-3.8, 0, 3.8]) {
+    addBox(mosque, materials.ochre, ax, 1.8, frontZ, 2.4, 3.6, 0.3);
+    addBox(mosque, materials.wood, ax, 1.55, frontZ + 0.05, 1.6, 3.1, 0.12);
+  }
+
+  const mosqueSign = makeSignMaterial("MASALLACIN JUMA'A · DALA", "#1e6b36");
+  addBox(mosque, mosqueSign, 0, 4.8, frontZ + 0.18, 9.2, 0.82, 0.12);
+
+  colliders.push(
+    { x, z, halfX: hallWidth / 2 + 0.5, halfZ: hallDepth / 2 + 0.5, height: hallHeight + 5 },
+    { x: x + minaretX, z: z + minaretZ, halfX: 1.5, halfZ: 1.5, height: minaretHeight + 2 },
+  );
+}
+
+function addKanoRoadsideProps(
+  root: THREE.Group,
+  materials: GameMaterials,
+  colliders: Collider[],
+  x: number,
+  z: number,
+  yaw = 0,
+) {
+  const group = new THREE.Group();
+  group.position.set(x, 0, z);
+  group.rotation.y = yaw;
+  root.add(group);
+
+  // Diesel Generator (mota wuta)
+  addBox(group, new THREE.MeshStandardMaterial({ color: "#2d5236", roughness: 0.6 }), 0, 0.65, 0, 1.45, 1.1, 0.88);
+  addCylinder(group, materials.metal, 0.45, 1.65, 0.25, 0.06, 0.06, 0.9);
+
+  // Overhead GeePee Water Tank on Scaffolding
+  const tankX = 2.4;
+  for (const sx of [-0.65, 0.65]) {
+    for (const sz of [-0.65, 0.65]) {
+      addCylinder(group, materials.metal, tankX + sx, 1.6, sz, 0.045, 0.045, 3.2);
+    }
+  }
+  addBox(group, materials.metal, tankX, 3.25, 0, 1.55, 0.12, 1.55);
+  const waterTankMat = new THREE.MeshStandardMaterial({ color: "#182026", roughness: 0.4, metalness: 0.2 });
+  addCylinder(group, waterTankMat, tankX, 4.25, 0, 0.72, 0.7, 1.85);
+
+  colliders.push(
+    { x, z, halfX: 0.8, halfZ: 0.6, height: 1.8 },
+    { x: x + tankX, z, halfX: 0.85, halfZ: 0.85, height: 5.2 },
+  );
+}
+
 function mergeStaticMeshesByCell(root: THREE.Group) {
   root.updateMatrixWorld(true);
   const buckets = new Map<
@@ -404,6 +501,7 @@ function mergeStaticMeshesByCell(root: THREE.Group) {
 
   root.traverse((object) => {
     if (!(object instanceof THREE.Mesh)) return;
+    if (object.userData.noMerge) return;
     const material = object.material;
     if (Array.isArray(material) || material.transparent || material.depthWrite === false) return;
     if (material instanceof THREE.MeshBasicMaterial) return;
@@ -463,11 +561,13 @@ export type WorldResult = {
   root: THREE.Group;
   colliders: Collider[];
   bounds: number;
+  gateSlots: THREE.Group[];
 };
 
 export function createWorld(materials: GameMaterials): WorldResult {
   const root = new THREE.Group();
   const colliders: Collider[] = [];
+  const gateSlots: THREE.Group[] = [];
   const bounds = WORLD_BOUNDS;
   const cityExtent = WORLD_EXTENT;
 
@@ -503,10 +603,15 @@ export function createWorld(materials: GameMaterials): WorldResult {
       const blockZ = blockCenters[zi];
       const district = getDistrict(blockX, blockZ);
 
-      // One block in Sabon Gari is reserved for a walkable open-air market,
-      // rather than filling every parcel with a building.
+      // Open-air market plaza in Sabon Gari
       if (xi === 1 && zi === 2) {
         addMarketPlaza(root, materials, colliders, blockX, blockZ);
+        continue;
+      }
+
+      // Community Friday Mosque in Dala / Old Kano
+      if (xi === 1 && zi === 1) {
+        addMosque(root, materials, colliders, blockX, blockZ);
         continue;
       }
 
@@ -533,6 +638,9 @@ export function createWorld(materials: GameMaterials): WorldResult {
 
         const sign = shopNames[(variant * 3 + slot) % shopNames.length];
         const plot = createPlot(kind, materials, variant, sign);
+        if (plot.gateSlot) {
+          gateSlots.push(plot.gateSlot);
+        }
         const faceAlongZ = (xi + zi + slot) % 2 === 0;
         const yaw = faceAlongZ
           ? offsetZ > 0 ? 0 : Math.PI
@@ -547,6 +655,8 @@ export function createWorld(materials: GameMaterials): WorldResult {
   }
 
   addMarketWaterTank(root, materials, colliders, -43, 44);
+  addKanoRoadsideProps(root, materials, colliders, -16, 26, Math.PI / 2);
+  addKanoRoadsideProps(root, materials, colliders, 18, -22, 0);
 
   const trees: [number, number, number, boolean][] = [];
   for (const road of ROAD_LAYOUT.filter((item) => item.arterial)) {
@@ -628,5 +738,5 @@ export function createWorld(materials: GameMaterials): WorldResult {
 
   mergeStaticMeshesByCell(root);
 
-  return { root, colliders, bounds };
+  return { root, colliders, bounds, gateSlots };
 }

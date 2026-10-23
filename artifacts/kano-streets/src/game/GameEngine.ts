@@ -1,13 +1,22 @@
 import * as THREE from "three";
-import { createCarModel, createPlayerModel, type CarModel, type PlayerModel } from "./actors";
+import {
+  createCarModel,
+  createKekeModel,
+  createPlayerModel,
+  type CarModel,
+  type KekeModel,
+  type PlayerModel,
+} from "./actors";
+import { loadGLTFModel } from "./assetManifest";
 import { ColliderIndex } from "./ColliderIndex";
 import { getDistrict, getDistrictLabel, ROAD_LAYOUT } from "./layout";
 import { createMaterials } from "./materials";
 import { createWorld } from "./world";
-import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality } from "./types";
+import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, VehicleType } from "./types";
 
 const PLAYER_START = new THREE.Vector3(-4, 0, -4);
 const CAR_START = new THREE.Vector3(-2, 0, -8);
+const KEKE_START = new THREE.Vector3(6, 0, -8);
 type GameEngineCallbacks = {
   onSnapshot: (snapshot: GameSnapshot) => void;
   onPause: () => void;
@@ -34,6 +43,7 @@ export class GameEngine {
   private readonly materials: ReturnType<typeof createMaterials>;
   private readonly player: PlayerModel;
   private readonly car: CarModel;
+  private readonly keke: KekeModel;
   private readonly keys = new Set<string>();
   private readonly lookMatrix = new THREE.Matrix4();
   private readonly desiredCameraQuaternion = new THREE.Quaternion();
@@ -55,6 +65,7 @@ export class GameEngine {
 
   private screen: GameScreen = "menu";
   private mode: GameMode = "on-foot";
+  private activeVehicle: VehicleType = "sedan";
   private running = true;
   private animationFrame = 0;
   private lastFrameAt = 0;
@@ -69,6 +80,10 @@ export class GameEngine {
   private carPosition = CAR_START.clone();
   private carYaw = 0;
   private carSpeed = 0;
+  private kekePosition = KEKE_START.clone();
+  private kekeYaw = 0;
+  private kekeSpeed = 0;
+  private kekeWheelSpin = 0;
   private walkPhase = 0;
   private wheelSpin = 0;
 
@@ -92,8 +107,8 @@ export class GameEngine {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    this.scene.background = new THREE.Color("#d9c49e");
-    this.scene.fog = new THREE.FogExp2("#c9b794", 0.0049);
+    this.scene.background = new THREE.Color("#dfcfb0");
+    this.scene.fog = new THREE.FogExp2("#d2bf9b", 0.0046);
 
     this.materials = createMaterials();
     this.world = createWorld(this.materials);
@@ -113,6 +128,16 @@ export class GameEngine {
       CAR_START.z,
     );
     this.scene.add(this.car.root);
+
+    this.keke = createKekeModel(this.materials);
+    this.keke.root.position.set(
+      KEKE_START.x,
+      this.surfaceHeight(KEKE_START.x, KEKE_START.z),
+      KEKE_START.z,
+    );
+    this.scene.add(this.keke.root);
+
+    void this.loadAssets();
 
     this.camera.position.set(0, 3.8, -6.8);
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -171,10 +196,10 @@ export class GameEngine {
   }
 
   private addLighting() {
-    const hemi = new THREE.HemisphereLight("#e8f1e8", "#765c3e", 1.85);
+    const hemi = new THREE.HemisphereLight("#edf4ea", "#886f4a", 1.75);
     this.scene.add(hemi);
 
-    const sun = new THREE.DirectionalLight("#ffe7b5", 2.7);
+    const sun = new THREE.DirectionalLight("#ffeed2", 2.65);
     sun.position.set(-44, 62, -34);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
@@ -189,9 +214,36 @@ export class GameEngine {
     this.scene.add(sun);
     this.sunLight = sun;
 
-    const bounce = new THREE.DirectionalLight("#b8d1d2", 0.48);
+    const bounce = new THREE.DirectionalLight("#c7dbe0", 0.52);
     bounce.position.set(52, 28, 40);
     this.scene.add(bounce);
+  }
+
+  private async loadAssets() {
+    // 1. Asynchronously load the 3D GLTF/GLB Sedan Model
+    try {
+      const sedanGLTF = await loadGLTFModel("/assets/graphite-four-door-sedan.glb");
+      if (sedanGLTF && this.running) {
+        this.car.attachGLTFBody(sedanGLTF);
+      }
+    } catch (e) {
+      console.warn("[Asset] Failed to load sedan GLB model, procedural fallback active:", e);
+    }
+
+    // 2. Asynchronously load the 3D GLTF Iron Gate Model
+    try {
+      const gateGLTF = await loadGLTFModel("/assets/large_iron_gate/large_iron_gate_1k.gltf");
+      if (gateGLTF && this.running && this.world.gateSlots) {
+        for (const slot of this.world.gateSlots) {
+          const clone = gateGLTF.clone(true);
+          clone.scale.set(0.69, 0.70, 0.70);
+          slot.clear();
+          slot.add(clone);
+        }
+      }
+    } catch (e) {
+      console.warn("[Asset] Failed to load iron gate GLTF model, procedural fallback active:", e);
+    }
   }
 
   private resize() {
@@ -280,15 +332,22 @@ export class GameEngine {
 
   reset() {
     this.mode = "on-foot";
+    this.activeVehicle = "sedan";
     this.playerPosition.copy(PLAYER_START);
     this.playerVerticalVelocity = 0;
     this.playerGrounded = true;
     this.playerYaw = 0;
+    this.cameraYaw = 0;
+    this.cameraPitch = 0.29;
     this.carPosition.copy(CAR_START);
     this.carYaw = 0;
     this.carSpeed = 0;
+    this.kekePosition.copy(KEKE_START);
+    this.kekeYaw = 0;
+    this.kekeSpeed = 0;
     this.player.root.visible = true;
     this.car.root.visible = true;
+    this.keke.root.visible = true;
     this.keys.clear();
     this.statusMessage = "Returned to the starting junction";
     this.updateTransform();
@@ -366,15 +425,57 @@ export class GameEngine {
 
   private toggleVehicle() {
     if (this.mode === "on-foot") {
-      if (this.playerPosition.distanceTo(this.carPosition) > 4.7) {
-        this.statusMessage = "Move closer to the passenger car";
+      const distCar = this.playerPosition.distanceTo(this.carPosition);
+      const distKeke = this.playerPosition.distanceTo(this.kekePosition);
+      if (distCar <= 4.7 && distCar <= distKeke) {
+        this.activeVehicle = "sedan";
+        this.mode = "driving";
+        this.carSpeed = 0;
+        this.player.root.visible = false;
+        this.statusMessage = "You are driving the Sedan";
         this.pushSnapshot(true);
         return;
       }
-      this.mode = "driving";
-      this.carSpeed = 0;
-      this.player.root.visible = false;
-      this.statusMessage = "You are driving";
+      if (distKeke <= 4.7) {
+        this.activeVehicle = "keke";
+        this.mode = "driving";
+        this.kekeSpeed = 0;
+        this.player.root.visible = false;
+        this.statusMessage = "You are riding the Keke Napep";
+        this.pushSnapshot(true);
+        return;
+      }
+      this.statusMessage = "Move closer to a vehicle";
+      this.pushSnapshot(true);
+      return;
+    }
+
+    if (this.activeVehicle === "keke") {
+      const right = new THREE.Vector3(Math.cos(this.kekeYaw), 0, -Math.sin(this.kekeYaw));
+      const candidates = [
+        this.kekePosition.clone().addScaledVector(right, 1.45),
+        this.kekePosition.clone().addScaledVector(right, -1.45),
+      ];
+      const safeExit = candidates.find(
+        (candidate) =>
+          !this.collides(candidate.x, candidate.z, 0.45) &&
+          !this.overlapsKeke(candidate.x, candidate.z, 0.45) &&
+          !this.overlapsCar(candidate.x, candidate.z, 0.45) &&
+          candidate.distanceTo(this.kekePosition) > 1.2,
+      );
+      if (!safeExit) {
+        this.statusMessage = "There is not enough clear space to exit here";
+        this.pushSnapshot(true);
+        return;
+      }
+
+      this.playerPosition.copy(safeExit);
+      this.playerYaw = this.kekeYaw;
+      this.kekeSpeed = 0;
+      this.mode = "on-foot";
+      this.player.root.visible = true;
+      this.statusMessage = "Exited safely";
+      this.updateTransform();
       this.pushSnapshot(true);
       return;
     }
@@ -388,6 +489,7 @@ export class GameEngine {
       (candidate) =>
         !this.collides(candidate.x, candidate.z, 0.48) &&
         !this.overlapsCar(candidate.x, candidate.z, 0.48) &&
+        !this.overlapsKeke(candidate.x, candidate.z, 0.48) &&
         candidate.distanceTo(this.carPosition) > 1.5,
     );
     if (!safeExit) {
@@ -476,6 +578,14 @@ export class GameEngine {
   }
 
   private updateCar(dt: number) {
+    if (this.activeVehicle === "keke") {
+      this.updateKeke(dt);
+    } else {
+      this.updateSedan(dt);
+    }
+  }
+
+  private updateSedan(dt: number) {
     const throttle = this.keys.has("w");
     const braking = this.keys.has("s") || this.keys.has(" ");
     const steer =
@@ -510,8 +620,8 @@ export class GameEngine {
 
     this.wheelSpin += (this.carSpeed * dt) / 0.36;
     this.car.wheels.forEach((wheel) => {
-      wheel.children[0].rotation.x = this.wheelSpin;
-      wheel.children[1].rotation.x = this.wheelSpin;
+      if (wheel.children[0]) wheel.children[0].rotation.x = this.wheelSpin;
+      if (wheel.children[1]) wheel.children[1].rotation.x = this.wheelSpin;
     });
     const steeringAngle = steer * 0.36 * steeringFactor;
     this.car.frontWheels.forEach((wheel) => {
@@ -523,6 +633,56 @@ export class GameEngine {
       this.carPosition.z,
     );
     this.car.root.rotation.y = this.carYaw;
+  }
+
+  private updateKeke(dt: number) {
+    const throttle = this.keys.has("w");
+    const braking = this.keys.has("s") || this.keys.has(" ");
+    const steer =
+      (this.keys.has("d") ? 1 : 0) - (this.keys.has("a") ? 1 : 0);
+    const accel = 8.6;
+    const brakeAccel = 16.5;
+    const reverseAccel = 4.2;
+
+    if (throttle) {
+      this.kekeSpeed += (this.kekeSpeed < 0 ? brakeAccel : accel) * dt;
+    } else if (braking) {
+      this.kekeSpeed -= (this.kekeSpeed > 0 ? brakeAccel : reverseAccel) * dt;
+    } else {
+      this.kekeSpeed *= Math.exp(-0.85 * dt);
+      if (Math.abs(this.kekeSpeed) < 0.03) this.kekeSpeed = 0;
+    }
+
+    // Kano commercial tricycle top speed: ~48 km/h
+    this.kekeSpeed = THREE.MathUtils.clamp(this.kekeSpeed, -4.5, 13.5);
+    const steeringFactor = THREE.MathUtils.clamp(Math.abs(this.kekeSpeed) / 2.5, 0, 1);
+    this.kekeYaw +=
+      steer * 1.35 * steeringFactor * dt * (this.kekeSpeed >= 0 ? 1 : -1);
+    this.kekeYaw = THREE.MathUtils.euclideanModulo(this.kekeYaw + Math.PI, Math.PI * 2) - Math.PI;
+
+    const previous = this.kekePosition.clone();
+    this.kekePosition.x += Math.sin(this.kekeYaw) * this.kekeSpeed * dt;
+    this.kekePosition.z += Math.cos(this.kekeYaw) * this.kekeSpeed * dt;
+    if (this.kekeCollidesAt(this.kekePosition.x, this.kekePosition.z, this.kekeYaw)) {
+      this.kekePosition.copy(previous);
+      this.kekeSpeed = -this.kekeSpeed * 0.15;
+      this.statusMessage = "The Keke Napep contacted an obstacle";
+    }
+
+    this.kekeWheelSpin += (this.kekeSpeed * dt) / 0.28;
+    this.keke.frontWheel.rotation.x = this.kekeWheelSpin;
+    this.keke.rearWheels.forEach((wheel) => {
+      wheel.rotation.x = this.kekeWheelSpin;
+    });
+
+    const steeringAngle = steer * 0.48 * steeringFactor;
+    this.keke.frontFork.rotation.y = steeringAngle;
+    this.keke.root.position.set(
+      this.kekePosition.x,
+      this.surfaceHeight(this.kekePosition.x, this.kekePosition.z),
+      this.kekePosition.z,
+    );
+    this.keke.root.rotation.y = this.kekeYaw;
   }
 
   private moveCircle(position: THREE.Vector3, dx: number, dz: number, radius: number) {
@@ -541,12 +701,12 @@ export class GameEngine {
     if (!this.collides(position.x, nextZ, radius)) position.z = nextZ;
   }
 
-  private collides(x: number, z: number, radius: number, skipCar = false) {
+  private collides(x: number, z: number, radius: number, skipVehicle = false) {
     const bounds = this.world.bounds;
     if (Math.abs(x) > bounds - radius || Math.abs(z) > bounds - radius) return true;
 
-    if (this.mode === "on-foot" && !skipCar) {
-      if (this.overlapsCar(x, z, radius)) return true;
+    if (this.mode === "on-foot" && !skipVehicle) {
+      if (this.overlapsCar(x, z, radius) || this.overlapsKeke(x, z, radius)) return true;
     }
 
     return this.colliderIndex.query(x, z, radius + 0.5).some((collider: Collider) => {
@@ -576,6 +736,44 @@ export class GameEngine {
     return Math.abs(localX) < 1.03 + radius && Math.abs(localZ) < 2.12 + radius;
   }
 
+  private overlapsKeke(x: number, z: number, radius: number) {
+    const dx = x - this.kekePosition.x;
+    const dz = z - this.kekePosition.z;
+    const cosine = Math.cos(this.kekeYaw);
+    const sine = Math.sin(this.kekeYaw);
+    const localX = dx * cosine - dz * sine;
+    const localZ = dx * sine + dz * cosine;
+    return Math.abs(localX) < 0.68 + radius && Math.abs(localZ) < 1.35 + radius;
+  }
+
+  private kekeCollidesAt(x: number, z: number, yaw: number) {
+    const halfWidth = 0.68;
+    const halfLength = 1.35;
+    const cosine = Math.cos(yaw);
+    const sine = Math.sin(yaw);
+    const absCosine = Math.abs(cosine);
+    const absSine = Math.abs(sine);
+    const extentX = halfWidth * absCosine + halfLength * absSine;
+    const extentZ = halfWidth * absSine + halfLength * absCosine;
+    if (Math.abs(x) > this.world.bounds - extentX || Math.abs(z) > this.world.bounds - extentZ) return true;
+
+    if (this.overlapsCar(x, z, 0.45)) return true;
+
+    const nearby = this.colliderIndex.query(x, z, Math.hypot(halfWidth, halfLength) + 0.6);
+    return nearby.some((collider) => {
+      const dx = x - collider.x;
+      const dz = z - collider.z;
+      if (Math.abs(dx) >= extentX + collider.halfX || Math.abs(dz) >= extentZ + collider.halfZ) return false;
+
+      const localX = dx * cosine - dz * sine;
+      const localZ = dx * sine + dz * cosine;
+      const otherHalfX = collider.halfX * absCosine + collider.halfZ * absSine;
+      const otherHalfZ = collider.halfX * absSine + collider.halfZ * absCosine;
+      return Math.abs(localX) < halfWidth + otherHalfX &&
+        Math.abs(localZ) < halfLength + otherHalfZ;
+    });
+  }
+
   private carCollidesAt(x: number, z: number, yaw: number) {
     const halfWidth = 1.04;
     const halfLength = 2.12;
@@ -586,6 +784,8 @@ export class GameEngine {
     const extentX = halfWidth * absCosine + halfLength * absSine;
     const extentZ = halfWidth * absSine + halfLength * absCosine;
     if (Math.abs(x) > this.world.bounds - extentX || Math.abs(z) > this.world.bounds - extentZ) return true;
+
+    if (this.overlapsKeke(x, z, 0.45)) return true;
 
     const nearby = this.colliderIndex.query(x, z, Math.hypot(halfWidth, halfLength) + 0.6);
     return nearby.some((collider) => {
@@ -617,11 +817,13 @@ export class GameEngine {
 
   private updateCamera(dt: number) {
     const isDriving = this.mode === "driving";
+    const vehiclePos = this.activeVehicle === "keke" ? this.kekePosition : this.carPosition;
+    const vehicleYaw = this.activeVehicle === "keke" ? this.kekeYaw : this.carYaw;
     const target = isDriving
-      ? new THREE.Vector3(this.carPosition.x, 1.0, this.carPosition.z)
+      ? new THREE.Vector3(vehiclePos.x, 1.0, vehiclePos.z)
       : new THREE.Vector3(this.playerPosition.x, this.playerPosition.y + 1.25, this.playerPosition.z);
-    const distance = isDriving ? 8.3 : 6.35;
-    const followYaw = isDriving ? this.carYaw + this.cameraYaw : this.cameraYaw;
+    const distance = isDriving ? (this.activeVehicle === "keke" ? 5.8 : 8.3) : 6.35;
+    const followYaw = isDriving ? vehicleYaw + this.cameraYaw : this.cameraYaw;
     const heightPitch = this.cameraPitch;
     const direction = new THREE.Vector3(
       -Math.sin(followYaw) * Math.cos(heightPitch),
@@ -666,6 +868,12 @@ export class GameEngine {
       this.carPosition.z,
     );
     this.car.root.rotation.y = this.carYaw;
+    this.keke.root.position.set(
+      this.kekePosition.x,
+      this.surfaceHeight(this.kekePosition.x, this.kekePosition.z),
+      this.kekePosition.z,
+    );
+    this.keke.root.rotation.y = this.kekeYaw;
   }
 
   private pushSnapshot(force: boolean) {
@@ -675,16 +883,29 @@ export class GameEngine {
 
     let interactionPrompt: string | null = null;
     if (this.mode === "driving") {
-      interactionPrompt = "Exit passenger car";
-    } else if (this.playerPosition.distanceTo(this.carPosition) <= 4.7) {
-      interactionPrompt = "Enter passenger car";
+      interactionPrompt = this.activeVehicle === "keke" ? "Exit Keke Napep" : "Exit passenger car";
+    } else {
+      const distCar = this.playerPosition.distanceTo(this.carPosition);
+      const distKeke = this.playerPosition.distanceTo(this.kekePosition);
+      if (distCar <= 4.7 && distCar <= distKeke) {
+        interactionPrompt = "Drive Sedan";
+      } else if (distKeke <= 4.7) {
+        interactionPrompt = "Ride Keke Napep";
+      }
     }
 
-    const location = this.mode === "driving" ? this.carPosition : this.playerPosition;
+    const location = this.mode === "driving"
+      ? (this.activeVehicle === "keke" ? this.kekePosition : this.carPosition)
+      : this.playerPosition;
+    const currentSpeed = this.mode === "driving"
+      ? (this.activeVehicle === "keke" ? Math.abs(this.kekeSpeed) * 3.6 : Math.abs(this.carSpeed) * 3.6)
+      : 0;
+
     this.callbacks.onSnapshot({
       mode: this.mode,
+      vehicleType: this.activeVehicle,
       location: getDistrictLabel(getDistrict(location.x, location.z)),
-      speedKmh: this.mode === "driving" ? Math.abs(this.carSpeed) * 3.6 : 0,
+      speedKmh: currentSpeed,
       interactionPrompt,
       statusMessage: this.statusMessage,
     });

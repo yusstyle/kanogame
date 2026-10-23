@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { loadTexture } from "./assetManifest";
 import type { GameMaterials } from "./types";
 
 function seededRandom(seed: number) {
@@ -93,8 +94,30 @@ export function createMaterials(): GameMaterials {
   const earthMap = noiseTexture("#9d8057", "#d1ad70", 9000, 73, [9, 9]);
   const stoneMap = noiseTexture("#847763", "#c6b996", 4200, 31, [2, 2]);
 
-  const plaster = standard("#e0c695", 0.93, plasterMap, relief(plasterMap, 0.055));
+  // PBR Texture Maps (Poly Haven CC0 Worn Plaster Wall 1k)
+  const plasterDiff = loadTexture("/assets/worn_plaster_wall/worn_plaster_wall_diff_1k.jpg", true, [2.4, 2.4]);
+  const plasterNor = loadTexture("/assets/worn_plaster_wall/worn_plaster_wall_nor_gl_1k.jpg", false, [2.4, 2.4]);
+  const plasterRough = loadTexture("/assets/worn_plaster_wall/worn_plaster_wall_rough_1k.jpg", false, [2.4, 2.4]);
+
+  const plaster = standard("#e0c695", 0.93, plasterDiff || plasterMap, relief(plasterMap, 0.055));
+  if (plasterNor) {
+    plaster.normalMap = plasterNor;
+    plaster.normalScale = new THREE.Vector2(0.7, 0.7);
+  }
+  if (plasterRough) {
+    plaster.roughnessMap = plasterRough;
+  }
   plaster.userData.textureTileSize = 1.8;
+
+  const compoundWall = standard("#d8c092", 0.94, plasterDiff || plasterMap);
+  if (plasterNor) {
+    compoundWall.normalMap = plasterNor;
+    compoundWall.normalScale = new THREE.Vector2(0.85, 0.85);
+  }
+  if (plasterRough) {
+    compoundWall.roughnessMap = plasterRough;
+  }
+  compoundWall.userData.textureTileSize = 2.4;
 
   return {
     ground: standard("#c1a16e", 1, earthMap),
@@ -105,6 +128,7 @@ export function createMaterials(): GameMaterials {
     roadMarking: standard("#d9c89e", 0.82),
     drain: standard("#373936", 0.94, stoneMap, relief(stoneMap, 0.04)),
     plaster,
+    compoundWall,
     ochre: standard("#b9905c", 0.96, clayMap, relief(clayMap, 0.06)),
     clay: standard("#98734f", 0.98, clayMap, relief(clayMap, 0.075)),
     concrete: standard("#aaa396", 0.93, concreteMap, relief(concreteMap, 0.05)),
@@ -126,6 +150,8 @@ export function createMaterials(): GameMaterials {
     stone: standard("#9c8d71", 1, stoneMap),
     white: standard("#e4dcc8", 0.84),
     black: standard("#282b2a", 0.72),
+    kekeYellow: standard("#e2aa28", 0.38, undefined, { metalness: 0.12, roughness: 0.38 }),
+    kekeGreen: standard("#22753a", 0.44, undefined, { metalness: 0.1, roughness: 0.44 }),
   };
 }
 

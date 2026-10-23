@@ -1,5 +1,6 @@
 import './GameUI.css';
 import TouchControls from './TouchControls';
+import type { VehicleType } from '../game/types';
 
 export type Screen = 'menu' | 'playing' | 'paused';
 export type Mode = 'on-foot' | 'driving';
@@ -8,6 +9,7 @@ export type GraphicsQuality = 'performance' | 'balanced' | 'quality';
 export interface GameUIProps {
   screen: Screen;
   mode: Mode;
+  vehicleType?: VehicleType | null;
   location: string;
   speedKmh: number;
   interactionPrompt: string | null;
@@ -38,6 +40,7 @@ function Key({ children }: { children: string }) {
 export default function GameUI({
   screen,
   mode,
+  vehicleType,
   location,
   speedKmh,
   interactionPrompt,
@@ -111,8 +114,8 @@ export default function GameUI({
           </header>
 
           <div className="ks-mode-chip" aria-live="polite">
-            <span className={`ks-mode-symbol ${mode}`} aria-hidden="true">{mode === 'driving' ? 'D' : '·'}</span>
-            <span className="ks-mode-copy"><small>YOU ARE</small><strong>{mode === 'driving' ? 'DRIVING' : 'ON FOOT'}</strong></span>
+            <span className={`ks-mode-symbol ${mode}`} aria-hidden="true">{mode === 'driving' ? (vehicleType === 'keke' ? 'K' : 'D') : '·'}</span>
+            <span className="ks-mode-copy"><small>YOU ARE</small><strong>{mode === 'driving' ? (vehicleType === 'keke' ? 'RIDING KEKE' : 'DRIVING SEDAN') : 'ON FOOT'}</strong></span>
             {mode === 'driving' && (
               <span className="ks-speed"><strong>{Math.max(0, Math.round(speedKmh))}</strong><small>KM/H</small></span>
             )}

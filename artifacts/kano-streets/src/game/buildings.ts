@@ -132,8 +132,8 @@ function addCourtyard(
 ): THREE.Group {
   const height = modern ? 1.62 + (variant % 2) * 0.13 : 1.78 + (variant % 3) * 0.07;
   const sideMaterial = modern
-    ? variant % 2 ? materials.concrete : materials.plaster
-    : variant % 3 === 0 ? materials.ochre : materials.clay;
+    ? variant % 2 ? materials.concrete : materials.compoundWall
+    : variant % 3 === 0 ? materials.compoundWall : materials.clay;
 
   box(root, sideMaterial, -6.75, height / 2, 0, 0.42, height, 14.4);
   box(root, sideMaterial, 6.75, height / 2, 0, 0.42, height, 14.4);
@@ -157,9 +157,11 @@ function addCourtyard(
   addArchFrame(root, modern ? materials.concrete : materials.trim, 0, 0, 7.03, 3.25, 2.55, 2.05, 2.06, 0.28);
   const gateSlot = new THREE.Group();
   gateSlot.name = "compound-gate-asset-slot";
+  gateSlot.userData.noMerge = true;
   gateSlot.position.set(0, 0, 7.14);
   const proceduralGate = new THREE.Group();
   proceduralGate.name = "procedural-gate-fallback";
+  proceduralGate.userData.noMerge = true;
   gateSlot.add(proceduralGate);
   root.add(gateSlot);
 
@@ -174,6 +176,7 @@ function addCourtyard(
     stud.rotation.z = Math.PI / 4;
   }
   box(proceduralGate, materials.darkTrim, 0, 0.04, 0.01, 2.1, 0.12, 0.68, false);
+  proceduralGate.traverse((c) => { c.userData.noMerge = true; });
 
   colliders.push(
     { x: -6.75, z: 0, halfX: 0.32, halfZ: 7.22, height },

@@ -16,11 +16,13 @@ export type PlotAsset = {
 };
 
 export type GameMode = "on-foot" | "driving";
+export type VehicleType = "sedan" | "keke";
 
 export type GameScreen = "menu" | "playing" | "paused";
 
 export type GameSnapshot = {
   mode: GameMode;
+  vehicleType?: VehicleType | null;
   location: string;
   speedKmh: number;
   interactionPrompt: string | null;
@@ -36,6 +38,7 @@ export type GameMaterials = {
   roadMarking: import("three").MeshStandardMaterial;
   drain: import("three").MeshStandardMaterial;
   plaster: import("three").MeshStandardMaterial;
+  compoundWall: import("three").MeshStandardMaterial;
   ochre: import("three").MeshStandardMaterial;
   clay: import("three").MeshStandardMaterial;
   concrete: import("three").MeshStandardMaterial;
@@ -54,4 +57,6 @@ export type GameMaterials = {
   stone: import("three").MeshStandardMaterial;
   white: import("three").MeshStandardMaterial;
   black: import("three").MeshStandardMaterial;
+  kekeYellow: import("three").MeshStandardMaterial;
+  kekeGreen: import("three").MeshStandardMaterial;
 };

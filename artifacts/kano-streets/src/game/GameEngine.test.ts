@@ -159,11 +159,40 @@ test("expanded world preserves walking, collisions, vehicle switching, and quali
     engine.setControlKey("e", true);
     assert.equal(internal.mode, "on-foot", "E exits safely");
 
+    // Test Keke Napep interaction and driving
+    const kekeInternal = engine as unknown as {
+      playerPosition: THREE.Vector3;
+      kekePosition: THREE.Vector3;
+      kekeSpeed: number;
+      kekeYaw: number;
+      activeVehicle: string;
+      mode: string;
+      updateKeke: (dt: number) => void;
+      updatePlayer: (dt: number) => void;
+    };
+    kekeInternal.playerPosition.copy(kekeInternal.kekePosition).add(new THREE.Vector3(0, 0, 2.0));
+    engine.setControlKey("e", true);
+    assert.equal(kekeInternal.mode, "driving", "E enters the nearby keke");
+    assert.equal(kekeInternal.activeVehicle, "keke", "Active vehicle is keke");
+    engine.setControlKey("e", false);
+    engine.setControlKey("w", true);
+    kekeInternal.updateKeke(0.12);
+    engine.setControlKey("w", false);
+    assert.ok(kekeInternal.kekeSpeed > 0, "the keke accelerates");
+    const oldKekeYaw = kekeInternal.kekeYaw;
+    engine.setControlKey("a", true);
+    kekeInternal.updateKeke(0.12);
+    engine.setControlKey("a", false);
+    assert.notEqual(kekeInternal.kekeYaw, oldKekeYaw, "the keke steers while moving");
+    engine.setControlKey("e", true);
+    assert.equal(kekeInternal.mode, "on-foot", "E exits keke safely back to on-foot");
+
     engine.setGraphicsQuality("performance");
     assert.equal(browser.renderer.pixelRatio, 1);
     engine.setGraphicsQuality("quality");
     assert.equal(browser.renderer.pixelRatio, 1.5);
-    assert.equal(snapshots.at(-1)?.location, "DALA · OLD KANO");
+    assert.ok(snapshots.some((s) => s.location === "DALA · OLD KANO"), "recorded Dala district snapshot");
+    assert.ok(snapshots.some((s) => s.location === "AIRPORT ROAD"), "recorded Airport Road district snapshot");
   } finally {
     engine.dispose();
   }

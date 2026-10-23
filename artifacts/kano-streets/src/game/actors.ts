@@ -146,7 +146,16 @@ export type CarModel = {
   wheels: THREE.Group[];
   frontWheels: THREE.Group[];
   proceduralBody: THREE.Group;
+  gltfBody?: THREE.Group;
   wheelRig: "procedural" | "asset";
+  attachGLTFBody: (gltf: THREE.Group) => void;
+};
+
+export type KekeModel = {
+  root: THREE.Group;
+  frontFork: THREE.Group;
+  frontWheel: THREE.Mesh;
+  rearWheels: THREE.Mesh[];
 };
 
 export function createCarModel(materials: GameMaterials): CarModel {
@@ -302,5 +311,135 @@ export function createCarModel(materials: GameMaterials): CarModel {
   }
   addBox(proceduralBody, materials.black, 0, 1.2, 0.68, 1.52, 0.18, 0.28);
 
-  return { root, wheels, frontWheels, proceduralBody, wheelRig: "procedural" };
+  const attachGLTFBody = (gltf: THREE.Group) => {
+    proceduralBody.visible = false;
+    wheels.forEach((pivot) => {
+      pivot.visible = false;
+    });
+    gltf.rotation.y = Math.PI / 2;
+    gltf.position.set(0, 0.31, 0);
+    root.add(gltf);
+  };
+
+  return { root, wheels, frontWheels, proceduralBody, wheelRig: "procedural", attachGLTFBody };
+}
+
+export function createKekeModel(materials: GameMaterials): KekeModel {
+  const root = new THREE.Group();
+  root.name = "keke-napep-root";
+
+  const yellow = materials.kekeYellow;
+  const green = materials.kekeGreen;
+  const black = materials.black;
+  const metal = materials.metal;
+  const rubber = new THREE.MeshStandardMaterial({ color: "#222423", roughness: 0.96 });
+  const rim = new THREE.MeshStandardMaterial({ color: "#8a867b", roughness: 0.45, metalness: 0.5 });
+  const lamp = new THREE.MeshStandardMaterial({
+    color: "#fff3cf",
+    emissive: "#a4884c",
+    emissiveIntensity: 0.75,
+    roughness: 0.28,
+  });
+  const tailLamp = new THREE.MeshStandardMaterial({
+    color: "#89271e",
+    emissive: "#5b140e",
+    emissiveIntensity: 0.4,
+    roughness: 0.4,
+  });
+  const licensePlate = makeSignMaterial("KMC 318 KAN", "#e5aa24");
+
+  // 1. Lower Chassis & Floor
+  addBox(root, black, 0, 0.24, 0, 1.28, 0.14, 2.55);
+
+  // 2. Yellow & Green Main Bodywork (Kano commercial tricycle livery)
+  addBox(root, yellow, 0, 0.55, 0.98, 0.88, 0.52, 0.72);
+  addBox(root, green, 0, 0.56, 1.345, 0.86, 0.14, 0.04);
+  addBox(root, lamp, 0, 0.62, 1.35, 0.32, 0.22, 0.06);
+
+  // Rear passenger cabin side panels with green stripe
+  for (const side of [-1, 1]) {
+    addBox(root, yellow, side * 0.62, 0.56, -0.22, 0.08, 0.54, 1.88);
+    addBox(root, green, side * 0.625, 0.64, -0.22, 0.08, 0.12, 1.88);
+    addBox(root, black, side * 0.63, 0.42, -0.72, 0.14, 0.24, 0.68);
+  }
+  // Rear back panel & bumper
+  addBox(root, yellow, 0, 0.62, -1.14, 1.28, 0.66, 0.08);
+  addBox(root, green, 0, 0.72, -1.145, 1.26, 0.14, 0.04);
+  addBox(root, black, 0, 0.32, -1.2, 1.32, 0.12, 0.08);
+  addBox(root, licensePlate, 0, 0.52, -1.19, 0.56, 0.16, 0.03, false);
+  addBox(root, tailLamp, -0.52, 0.62, -1.185, 0.16, 0.12, 0.04);
+  addBox(root, tailLamp, 0.52, 0.62, -1.185, 0.16, 0.12, 0.04);
+
+  // 3. Cabin Tubular Frame & Roll-cage
+  for (const side of [-1, 1]) {
+    const frontPillar = addBox(root, black, side * 0.42, 1.15, 0.76, 0.05, 0.78, 0.05);
+    frontPillar.rotation.x = -0.28;
+    addBox(root, black, side * 0.58, 1.18, 0.12, 0.05, 0.82, 0.05);
+    addBox(root, black, side * 0.58, 1.18, -1.1, 0.05, 0.82, 0.05);
+    addBox(root, black, side * 0.52, 1.62, -0.2, 0.05, 0.05, 1.95);
+  }
+
+  // 4. Windshield & Canvas Roof Canopy
+  const windshield = addBox(root, materials.glass, 0, 1.18, 0.82, 0.82, 0.64, 0.04, false);
+  windshield.rotation.x = -0.28;
+  addBox(root, black, 0, 1.12, 0.85, 0.03, 0.34, 0.03, false);
+
+  addBox(root, materials.darkTrim, 0, 1.66, -0.18, 1.24, 0.08, 2.05);
+  addBox(root, materials.cloth, 0, 1.69, -0.18, 1.18, 0.05, 1.95);
+
+  // 5. Seating & Handlebars
+  addBox(root, black, 0, 0.56, 0.28, 0.48, 0.22, 0.38);
+  addBox(root, black, 0, 0.54, -0.74, 1.14, 0.25, 0.46);
+  addBox(root, black, 0, 0.82, -0.98, 1.14, 0.34, 0.14);
+
+  const handlebarStem = addBox(root, metal, 0, 0.82, 0.84, 0.045, 0.34, 0.045);
+  handlebarStem.rotation.x = -0.24;
+  addBox(root, metal, 0, 0.96, 0.82, 0.58, 0.04, 0.04);
+  addBox(root, black, -0.26, 0.96, 0.82, 0.08, 0.055, 0.055);
+  addBox(root, black, 0.26, 0.96, 0.82, 0.08, 0.055, 0.055);
+
+  // 6. Steerable Front Fork & Wheel
+  const frontFork = new THREE.Group();
+  frontFork.position.set(0, 0.28, 1.12);
+  root.add(frontFork);
+
+  const frontWheel = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.16, 16), rubber);
+  frontWheel.rotation.z = Math.PI / 2;
+  frontWheel.castShadow = true;
+  frontWheel.receiveShadow = true;
+  frontFork.add(frontWheel);
+
+  const frontHub = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.17, 12), rim);
+  frontHub.rotation.z = Math.PI / 2;
+  frontFork.add(frontHub);
+
+  const frontGuard = addBox(frontFork, black, 0, 0.22, 0.02, 0.22, 0.12, 0.38);
+  frontGuard.rotation.x = -0.22;
+
+  // 7. Dual Rear Wheels
+  const rearWheels: THREE.Mesh[] = [];
+  for (const side of [-1, 1]) {
+    const rearWheelGroup = new THREE.Group();
+    rearWheelGroup.position.set(side * 0.58, 0.28, -0.72);
+    root.add(rearWheelGroup);
+
+    const rWheel = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.16, 16), rubber);
+    rWheel.rotation.z = Math.PI / 2;
+    rWheel.castShadow = true;
+    rWheel.receiveShadow = true;
+    rearWheelGroup.add(rWheel);
+
+    const rHub = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.17, 12), rim);
+    rHub.rotation.z = Math.PI / 2;
+    rearWheelGroup.add(rHub);
+
+    rearWheels.push(rWheel);
+  }
+
+  return {
+    root,
+    frontFork,
+    frontWheel,
+    rearWheels,
+  };
 }

@@ -9,6 +9,7 @@ const INITIAL_SNAPSHOT: GameSnapshot = {
   speedKmh: 0,
   interactionPrompt: null,
   statusMessage: null,
+  vehicleType: null,
 };
 
 function App() {
@@ -47,7 +48,8 @@ function App() {
         current.location === next.location &&
         current.speedKmh === next.speedKmh &&
         current.interactionPrompt === next.interactionPrompt &&
-        current.statusMessage === next.statusMessage
+        current.statusMessage === next.statusMessage &&
+        current.vehicleType === next.vehicleType
       ) {
         return current;
       }
@@ -67,6 +69,7 @@ function App() {
       <GameUI
         screen={screen}
         mode={snapshot.mode}
+        vehicleType={snapshot.vehicleType}
         location={snapshot.location}
         speedKmh={snapshot.speedKmh}
         interactionPrompt={snapshot.interactionPrompt}
