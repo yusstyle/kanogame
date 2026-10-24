@@ -72,6 +72,15 @@ export type PlayerModel = {
   leftLeg: THREE.Group;
   rightLeg: THREE.Group;
   head?: THREE.Mesh;
+  proceduralBody: THREE.Group;
+  riggedCharacter?: THREE.Group;
+  currentActionName?: "idle" | "walk" | "run" | "drive";
+  attachRiggedCharacter: (
+    characterGroup: THREE.Group,
+    animations: Record<string, THREE.AnimationClip>,
+  ) => void;
+  playAction: (name: "idle" | "walk" | "run" | "drive", crossFadeDuration?: number) => void;
+  updateAnimation: (dt: number) => void;
 };
 
 export type PedestrianOptions = {
@@ -88,6 +97,10 @@ export function createPedestrianModel(
   options: PedestrianOptions = {},
 ): PlayerModel {
   const root = new THREE.Group();
+  const proceduralBody = new THREE.Group();
+  proceduralBody.name = "procedural-body";
+  root.add(proceduralBody);
+
   const skin = new THREE.MeshStandardMaterial({
     color: options.skinColor || "#754c35",
     roughness: 0.88,
@@ -117,26 +130,26 @@ export function createPedestrianModel(
   tunicHem.position.y = 0.92;
   tunicHem.castShadow = true;
   tunicHem.receiveShadow = true;
-  root.add(tunicHem);
-  capsule(root, tunic, 0.29, 0.54, 0, 1.1, 0);
-  capsule(root, skin, 0.105, 0.3, 0, 1.46, 0);
+  proceduralBody.add(tunicHem);
+  capsule(proceduralBody, tunic, 0.29, 0.54, 0, 1.1, 0);
+  capsule(proceduralBody, skin, 0.105, 0.3, 0, 1.46, 0);
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.21, 14, 12), skin);
   head.position.set(0, 1.77, 0);
   head.castShadow = true;
-  root.add(head);
+  proceduralBody.add(head);
 
   if (options.hasCap !== false) {
     const fila = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.1, 12), cap);
     fila.position.set(0, 1.96, -0.01);
     fila.castShadow = true;
-    root.add(fila);
+    proceduralBody.add(fila);
     const filaBand = new THREE.Mesh(
       new THREE.TorusGeometry(0.205, 0.018, 5, 18),
       embroidery,
     );
     filaBand.position.set(0, 1.925, -0.01);
     filaBand.rotation.x = Math.PI / 2;
-    root.add(filaBand);
+    proceduralBody.add(filaBand);
   }
 
   const neckTrim = new THREE.MeshStandardMaterial({
@@ -146,17 +159,17 @@ export function createPedestrianModel(
   const collar = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.018, 6, 14), neckTrim);
   collar.position.set(0, 1.48, 0);
   collar.rotation.x = Math.PI / 2;
-  root.add(collar);
-  addBox(root, neckTrim, 0, 1.11, 0.285, 0.035, 0.32, 0.026, false);
+  proceduralBody.add(collar);
+  addBox(proceduralBody, neckTrim, 0, 1.11, 0.285, 0.035, 0.32, 0.026, false);
   const hemBand = new THREE.Mesh(new THREE.CylinderGeometry(0.394, 0.404, 0.055, 14, 1, true), embroidery);
   hemBand.position.y = 0.56;
-  root.add(hemBand);
+  proceduralBody.add(hemBand);
   const waistBand = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.32, 0.075, 14, 1, true), trousers);
   waistBand.position.y = 0.69;
-  root.add(waistBand);
-  addBox(root, embroidery, 0, 1.14, 0.304, 0.16, 0.43, 0.026, false);
+  proceduralBody.add(waistBand);
+  addBox(proceduralBody, embroidery, 0, 1.14, 0.304, 0.16, 0.43, 0.026, false);
   for (let i = 0; i < 5; i += 1) {
-    const stitch = addBox(root, embroidery, 0, 1.03 + i * 0.085, 0.324, 0.06, 0.035, 0.02, false);
+    const stitch = addBox(proceduralBody, embroidery, 0, 1.03 + i * 0.085, 0.324, 0.06, 0.035, 0.02, false);
     stitch.rotation.z = i % 2 ? Math.PI / 4 : -Math.PI / 4;
   }
 
@@ -164,36 +177,105 @@ export function createPedestrianModel(
   leftArm.position.set(-0.31, 1.35, 0);
   capsule(leftArm, tunic, 0.105, 0.38, 0, -0.2, 0);
   capsule(leftArm, skin, 0.085, 0.18, 0, -0.48, 0);
-  root.add(leftArm);
+  proceduralBody.add(leftArm);
 
   const rightArm = new THREE.Group();
   rightArm.position.set(0.31, 1.35, 0);
   capsule(rightArm, tunic, 0.105, 0.38, 0, -0.2, 0);
   capsule(rightArm, skin, 0.085, 0.18, 0, -0.48, 0);
-  root.add(rightArm);
+  proceduralBody.add(rightArm);
 
   const leftLeg = new THREE.Group();
   leftLeg.position.set(-0.16, 0.72, 0);
   capsule(leftLeg, trousers, 0.11, 0.52, 0, -0.31, 0);
   addBox(leftLeg, leather, 0, -0.66, 0.08, 0.23, 0.12, 0.38);
   addBox(leftLeg, embroidery, 0, -0.61, 0.16, 0.22, 0.035, 0.12, false);
-  root.add(leftLeg);
+  proceduralBody.add(leftLeg);
 
   const rightLeg = new THREE.Group();
   rightLeg.position.set(0.16, 0.72, 0);
   capsule(rightLeg, trousers, 0.11, 0.52, 0, -0.31, 0);
   addBox(rightLeg, leather, 0, -0.66, 0.08, 0.23, 0.12, 0.38);
   addBox(rightLeg, embroidery, 0, -0.61, 0.16, 0.22, 0.035, 0.12, false);
-  root.add(rightLeg);
+  proceduralBody.add(rightLeg);
 
   const eye = new THREE.MeshBasicMaterial({ color: "#201b18" });
   for (const x of [-0.075, 0.075]) {
     const point = new THREE.Mesh(new THREE.SphereGeometry(0.022, 7, 6), eye);
     point.position.set(x, 1.8, 0.193);
-    root.add(point);
+    proceduralBody.add(point);
   }
 
-  return { root, leftArm, rightArm, leftLeg, rightLeg, head };
+  let mixer: THREE.AnimationMixer | null = null;
+  const actions: Partial<Record<"idle" | "walk" | "run" | "drive", THREE.AnimationAction>> = {};
+  let currentAction: THREE.AnimationAction | null = null;
+  let currentActionName: "idle" | "walk" | "run" | "drive" = "idle";
+
+  const model: PlayerModel = {
+    root,
+    leftArm,
+    rightArm,
+    leftLeg,
+    rightLeg,
+    head,
+    proceduralBody,
+    currentActionName: "idle",
+    playAction: (name: "idle" | "walk" | "run" | "drive", crossFadeDuration = 0.2) => {
+      if (!mixer || currentActionName === name) return;
+      const nextAction = actions[name];
+      if (!nextAction) return;
+
+      nextAction.reset();
+      nextAction.enabled = true;
+      if (currentAction && currentAction !== nextAction) {
+        nextAction.crossFadeFrom(currentAction, crossFadeDuration, true);
+      }
+      nextAction.play();
+      currentAction = nextAction;
+      currentActionName = name;
+      model.currentActionName = name;
+    },
+    updateAnimation: (dt: number) => {
+      if (mixer) {
+        mixer.update(dt);
+      }
+    },
+    attachRiggedCharacter: (
+      characterGroup: THREE.Group,
+      animations: Record<string, THREE.AnimationClip>,
+    ) => {
+      proceduralBody.visible = false;
+      model.riggedCharacter = characterGroup;
+
+      characterGroup.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+
+      root.add(characterGroup);
+
+      mixer = new THREE.AnimationMixer(characterGroup);
+      for (const [clipName, clip] of Object.entries(animations)) {
+        if (["idle", "walk", "run", "drive"].includes(clipName)) {
+          const action = mixer.clipAction(clip);
+          action.setEffectiveTimeScale(1);
+          action.setEffectiveWeight(1);
+          actions[clipName as "idle" | "walk" | "run" | "drive"] = action;
+        }
+      }
+
+      if (actions.idle) {
+        actions.idle.play();
+        currentAction = actions.idle;
+        currentActionName = "idle";
+        model.currentActionName = "idle";
+      }
+    },
+  };
+
+  return model;
 }
 
 export function createPlayerModel(materials: GameMaterials): PlayerModel {

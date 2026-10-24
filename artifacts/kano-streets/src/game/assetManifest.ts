@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 
 export interface AssetRecord {
   id: string;
@@ -13,6 +15,36 @@ export interface AssetRecord {
 }
 
 export const ASSET_MANIFEST: Record<string, AssetRecord> = {
+  humanoidCharacterMale: {
+    id: "black-m-1-casual",
+    name: "Realistic African Adult Male Human Character (Rigged)",
+    creator: "Google Research & University of Central Florida (VALID Avatar Project) / c-frame",
+    sourceUrl: "https://github.com/c-frame/valid-avatars-glb",
+    license: "CC BY 4.0 / MIT",
+    attribution: "VALID: Validated Avatar Library for Inclusion and Diversity (Google / UCF)",
+    path: "/assets/characters/Black_M_1_Casual.glb",
+    modifications: "Optimized glTF 2.0 binary with Meshopt compression and WebP PBR textures. Wired with standard 84-joint humanoid skeleton (Hips, Spine, Shoulders, Limbs, Head) and ARKit-compatible facial blend shapes.",
+  },
+  humanoidCharacterFemale: {
+    id: "black-f-1-casual",
+    name: "Realistic African Adult Female Human Character (Rigged)",
+    creator: "Google Research & University of Central Florida (VALID Avatar Project) / c-frame",
+    sourceUrl: "https://github.com/c-frame/valid-avatars-glb",
+    license: "CC BY 4.0 / MIT",
+    attribution: "VALID: Validated Avatar Library for Inclusion and Diversity (Google / UCF)",
+    path: "/assets/characters/Black_F_1_Casual.glb",
+    modifications: "Optimized glTF 2.0 binary with Meshopt compression and WebP PBR textures. Wired with standard 84-joint humanoid skeleton.",
+  },
+  humanoidAnimations: {
+    id: "humanoid-animations",
+    name: "Humanoid Skeletal Locomotion Mocap Animations (Idle, Walk, Run, Drive)",
+    creator: "Mixamo / Networked-A-Frame / Antigravity",
+    sourceUrl: "https://github.com/networked-aframe/naf-valid-avatars",
+    license: "CC0 / Royalty Free / MIT Compatible",
+    attribution: "Locomotion mocap clips retargeted to VALID humanoid rig",
+    path: "/assets/characters/humanoid_animations.json",
+    modifications: "Retargeted 84 humanoid bone rotations, Z-axis forward removal for in-place locomotion, synchronized run clip, and driver seated pose.",
+  },
   sedan: {
     id: "graphite-four-door-sedan",
     name: "Graphite Four-Door Sedan",
@@ -57,6 +89,83 @@ export const ASSET_MANIFEST: Record<string, AssetRecord> = {
 
 const gltfCache = new Map<string, THREE.Group>();
 const gltfLoaderInstance = typeof window !== "undefined" ? new GLTFLoader() : null;
+
+if (gltfLoaderInstance) {
+  gltfLoaderInstance.setMeshoptDecoder(MeshoptDecoder);
+}
+
+export interface LoadedHumanoidCharacter {
+  characterRoot: THREE.Group;
+  animations: Record<string, THREE.AnimationClip>;
+}
+
+const humanoidModelCache = new Map<string, THREE.Group>();
+let humanoidAnimationsCache: Record<string, THREE.AnimationClip> | null = null;
+
+export async function loadHumanoidAnimations(
+  path = "/assets/characters/humanoid_animations.json",
+): Promise<Record<string, THREE.AnimationClip> | null> {
+  if (typeof window === "undefined") return null;
+  if (humanoidAnimationsCache) return humanoidAnimationsCache;
+
+  try {
+    const res = await fetch(path);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as Record<string, unknown>;
+    const clips: Record<string, THREE.AnimationClip> = {};
+    for (const [name, clipJson] of Object.entries(data)) {
+      clips[name] = THREE.AnimationClip.parse(
+        clipJson as Parameters<typeof THREE.AnimationClip.parse>[0],
+      );
+    }
+    humanoidAnimationsCache = clips;
+    return clips;
+  } catch (e) {
+    console.warn(`[AssetLoader] Could not load humanoid animations from "${path}":`, e);
+    return null;
+  }
+}
+
+export async function loadHumanoidCharacter(
+  modelPath = "/assets/characters/Black_M_1_Casual.glb",
+  animationsPath = "/assets/characters/humanoid_animations.json",
+): Promise<LoadedHumanoidCharacter | null> {
+  if (!gltfLoaderInstance || typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    let baseModel = humanoidModelCache.get(modelPath);
+    if (!baseModel) {
+      const gltf = await gltfLoaderInstance.loadAsync(modelPath);
+      baseModel = gltf.scene;
+      baseModel.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          if (child.material) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach((mat) => {
+              mat.depthWrite = true;
+            });
+          }
+        }
+      });
+      humanoidModelCache.set(modelPath, baseModel);
+    }
+
+    const characterRoot = cloneSkeleton(baseModel) as THREE.Group;
+    const animations = await loadHumanoidAnimations(animationsPath);
+
+    return {
+      characterRoot,
+      animations: animations || {},
+    };
+  } catch (error) {
+    console.warn(`[AssetLoader] Could not load humanoid character from "${modelPath}":`, error);
+    return null;
+  }
+}
 
 /**
  * Loads a GLTF/GLB asset asynchronously.

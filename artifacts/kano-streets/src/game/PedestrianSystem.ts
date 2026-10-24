@@ -4,6 +4,8 @@ import {
   type PedestrianOptions,
   type PlayerModel,
 } from "./actors";
+import { loadHumanoidCharacter } from "./assetManifest";
+import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import type { ColliderIndex } from "./ColliderIndex";
 import type { NavigationNetwork, PedestrianWaypoint } from "./navigation";
 import type { GameMaterials, GraphicsQuality } from "./types";
@@ -128,6 +130,27 @@ export class PedestrianSystem {
           }
         }
       }
+    }
+  }
+
+  public async upgradeWithRealisticAvatars() {
+    try {
+      const [maleChar, femaleChar] = await Promise.all([
+        loadHumanoidCharacter("/assets/characters/Black_M_1_Casual.glb"),
+        loadHumanoidCharacter("/assets/characters/Black_F_1_Casual.glb"),
+      ]);
+
+      if (!maleChar && !femaleChar) return;
+
+      this.pedestrians.forEach((p, idx) => {
+        const sourceChar = idx % 2 === 0 ? maleChar || femaleChar : femaleChar || maleChar;
+        if (sourceChar) {
+          const clonedRoot = cloneSkeleton(sourceChar.characterRoot) as THREE.Group;
+          p.model.attachRiggedCharacter(clonedRoot, sourceChar.animations);
+        }
+      });
+    } catch (e) {
+      console.warn("[PedestrianSystem] Realistic avatars upgrade skipped:", e);
     }
   }
 
@@ -330,6 +353,18 @@ export class PedestrianSystem {
 
     // 4. Procedural walk animation
     const isMoving = p.speed > 0.15;
+    if (p.model.riggedCharacter) {
+      if (isMoving) {
+        p.model.playAction("walk", 0.2);
+      } else {
+        p.model.playAction("idle", 0.25);
+      }
+      p.model.updateAnimation(dt);
+      p.model.root.position.set(p.position.x, p.position.y, p.position.z);
+      p.model.root.rotation.y = p.yaw;
+      return;
+    }
+
     if (isMoving) {
       p.walkPhase += dt * (p.speed * 4.2);
     }
@@ -353,6 +388,14 @@ export class PedestrianSystem {
   }
 
   private animateVendor(p: Pedestrian, dt: number) {
+    if (p.model.riggedCharacter) {
+      p.model.playAction("idle", 0.25);
+      p.model.updateAnimation(dt);
+      p.model.root.position.copy(p.position);
+      p.model.root.rotation.y = p.yaw;
+      return;
+    }
+
     // Subtle breathing & occasional greeting gesture
     const breath = Math.sin(this.time * 1.6 + p.lookSeed) * 0.035;
     p.model.leftArm.rotation.x = THREE.MathUtils.damp(p.model.leftArm.rotation.x, breath, 4, dt);

@@ -7,7 +7,7 @@ import {
   type KekeModel,
   type PlayerModel,
 } from "./actors";
-import { loadGLTFModel } from "./assetManifest";
+import { loadGLTFModel, loadHumanoidCharacter } from "./assetManifest";
 import { ColliderIndex } from "./ColliderIndex";
 import { getDistrict, getDistrictLabel, ROAD_LAYOUT } from "./layout";
 import { createMaterials } from "./materials";
@@ -277,6 +277,22 @@ export class GameEngine {
     } catch (e) {
       console.warn("[Asset] Failed to load iron gate GLTF model, procedural fallback active:", e);
     }
+
+    // 3. Asynchronously load the Photorealistic Rigged Human Character
+    try {
+      const humanoid = await loadHumanoidCharacter(
+        "/assets/characters/Black_M_1_Casual.glb",
+        "/assets/characters/humanoid_animations.json",
+      );
+      if (humanoid && this.running) {
+        this.player.attachRiggedCharacter(humanoid.characterRoot, humanoid.animations);
+      }
+      if (this.running) {
+        await this.pedestrianSystem.upgradeWithRealisticAvatars();
+      }
+    } catch (e) {
+      console.warn("[Asset] Failed to load realistic humanoid character, procedural fallback active:", e);
+    }
   }
 
   private resize() {
@@ -468,6 +484,7 @@ export class GameEngine {
         this.activeVehicle = "sedan";
         this.mode = "driving";
         this.carSpeed = 0;
+        this.player.playAction("drive", 0.1);
         this.player.root.visible = false;
         this.statusMessage = "You are driving the Sedan";
         this.pushSnapshot(true);
@@ -477,6 +494,7 @@ export class GameEngine {
         this.activeVehicle = "keke";
         this.mode = "driving";
         this.kekeSpeed = 0;
+        this.player.playAction("drive", 0.1);
         this.player.root.visible = false;
         this.statusMessage = "You are riding the Keke Napep";
         this.pushSnapshot(true);
@@ -510,6 +528,7 @@ export class GameEngine {
       this.playerYaw = this.kekeYaw;
       this.kekeSpeed = 0;
       this.mode = "on-foot";
+      this.player.playAction("idle", 0.2);
       this.player.root.visible = true;
       this.statusMessage = "Exited safely";
       this.updateTransform();
@@ -539,6 +558,7 @@ export class GameEngine {
     this.playerYaw = this.carYaw;
     this.carSpeed = 0;
     this.mode = "on-foot";
+    this.player.playAction("idle", 0.2);
     this.player.root.visible = true;
     this.statusMessage = "Exited safely";
     this.updateTransform();
@@ -639,7 +659,23 @@ export class GameEngine {
       this.player.head.rotation.y = THREE.MathUtils.damp(this.player.head.rotation.y, headTurn, 5, dt);
     }
 
-    const verticalBounce = isWalking && this.playerGrounded ? Math.abs(Math.sin(this.walkPhase * 2)) * 0.035 : 0;
+    if (this.player.riggedCharacter) {
+      if (isWalking) {
+        if (isRunning) {
+          this.player.playAction("run", 0.15);
+        } else {
+          this.player.playAction("walk", 0.15);
+        }
+      } else {
+        this.player.playAction("idle", 0.25);
+      }
+      this.player.updateAnimation(dt);
+    }
+
+    const verticalBounce =
+      !this.player.riggedCharacter && isWalking && this.playerGrounded
+        ? Math.abs(Math.sin(this.walkPhase * 2)) * 0.035
+        : 0;
     this.player.root.position.set(
       this.playerPosition.x,
       this.playerPosition.y + verticalBounce,
