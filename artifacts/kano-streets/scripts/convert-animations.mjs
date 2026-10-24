@@ -5,33 +5,24 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 
 const charactersDir = path.resolve('public/assets/characters');
 
-function getBones(skeleton) {
-  return Array.isArray(skeleton) ? skeleton : skeleton.bones;
-}
-
-function getBoneByName(name, bones) {
-  for (let i = 0; i < bones.length; i++) {
-    if (name === bones[i].name) return bones[i];
-  }
-  return null;
-}
-
 function retargetClip(clip, newName, validJointNames, options = {}) {
   const positionMultiplier = options.positionMultiplier ?? 0.01;
-  const positionOffset = options.positionOffset ?? 0;
-  const removeHipsForwardAnimation = options.removeHipsForwardAnimation ?? false;
-  const ignoreBones = new Set(options.ignoreBones ?? []);
+  const inPlace = options.inPlace ?? false;
 
   const tracks = [];
   const validJointSet = new Set(validJointNames);
 
+  // FBX Mixamo models have a "Reference" node rotated by -90 deg around X.
+  // When retargeting to glTF (which does not have the Reference parent node),
+  // we must transform Hips position and quaternion by this parent rotation.
+  const refQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+
   for (const track of clip.tracks) {
-    // FBX track names are usually "mixamorig:Hips.quaternion" or "Hips.quaternion" or "mixamorig_Hips.quaternion"
     const dotIdx = track.name.lastIndexOf('.');
     let boneName = track.name.substring(0, dotIdx);
     const prop = track.name.substring(dotIdx + 1);
 
-    // Strip namespaces like "mixamorig:" or "mixamorig" or "mixamorig_"
+    // Strip namespaces
     boneName = boneName.replace(/^mixamorig[:_]?/i, '');
     boneName = boneName.replace(/^Armature[:_]?/i, '');
     boneName = boneName.replace(/^Reference[:_]?/i, '');
@@ -39,31 +30,35 @@ function retargetClip(clip, newName, validJointNames, options = {}) {
     if (!validJointSet.has(boneName)) {
       continue;
     }
-    if (ignoreBones.has(boneName)) {
-      continue;
-    }
 
-    if (track instanceof THREE.VectorKeyframeTrack && prop === 'position' && boneName === 'Hips') {
+    if (boneName === 'Hips' && prop === 'position' && track instanceof THREE.VectorKeyframeTrack) {
       const times = new Float32Array(track.times);
       const values = new Float32Array(track.values.length);
-      for (let i = 0; i < track.values.length; i++) {
-        let v = track.values[i] * positionMultiplier;
-        // In Mixamo/FBX, Z is forward or Y is forward depending on coordinate system
-        // Let's check removeHipsForwardAnimation
-        if (removeHipsForwardAnimation && i % 3 === 2) {
-          // Keep root in place along Z for in-place locomotion
-          v = 0;
-        }
-        if (positionOffset !== 0 && i % 3 === 1) {
-          v += positionOffset;
-        }
-        values[i] = v;
+      const v = new THREE.Vector3();
+      for (let i = 0; i < track.values.length; i += 3) {
+        v.set(track.values[i], track.values[i + 1], track.values[i + 2]).multiplyScalar(positionMultiplier);
+        v.applyQuaternion(refQuat);
+
+        values[i] = v.x;
+        values[i + 1] = v.y;
+        values[i + 2] = inPlace ? 0 : v.z;
       }
-      tracks.push(new THREE.VectorKeyframeTrack(`${boneName}.${prop}`, times, values));
-    } else if (track instanceof THREE.QuaternionKeyframeTrack && prop === 'quaternion') {
+      tracks.push(new THREE.VectorKeyframeTrack(`Hips.position`, times, values));
+    } else if (boneName === 'Hips' && prop === 'quaternion' && track instanceof THREE.QuaternionKeyframeTrack) {
       const times = new Float32Array(track.times);
-      const values = new Float32Array(track.values);
-      tracks.push(new THREE.QuaternionKeyframeTrack(`${boneName}.${prop}`, times, values));
+      const values = new Float32Array(track.values.length);
+      const q = new THREE.Quaternion();
+      for (let i = 0; i < track.values.length; i += 4) {
+        q.set(track.values[i], track.values[i + 1], track.values[i + 2], track.values[i + 3]);
+        q.premultiply(refQuat);
+        values[i] = q.x;
+        values[i + 1] = q.y;
+        values[i + 2] = q.z;
+        values[i + 3] = q.w;
+      }
+      tracks.push(new THREE.QuaternionKeyframeTrack(`Hips.quaternion`, times, values));
+    } else if (prop === 'quaternion' && track instanceof THREE.QuaternionKeyframeTrack) {
+      tracks.push(new THREE.QuaternionKeyframeTrack(`${boneName}.${prop}`, track.times, track.values));
     }
   }
 
@@ -71,14 +66,12 @@ function retargetClip(clip, newName, validJointNames, options = {}) {
 }
 
 async function main() {
-  // Read Black_M_1_Casual.glb to get exact joint names
   const glbBuf = fs.readFileSync(path.join(charactersDir, 'Black_M_1_Casual.glb'));
   const jsonChunkLen = glbBuf.readUInt32LE(12);
   const gltf = JSON.parse(glbBuf.toString('utf8', 20, 20 + jsonChunkLen));
   const jointIndices = gltf.skins[0].joints;
   const jointNames = jointIndices.map(idx => gltf.nodes[idx].name);
   console.log(`Found ${jointNames.length} joints in Black_M_1_Casual.glb`);
-  console.log('Joints sample:', jointNames.slice(0, 15));
 
   const fbxLoader = new FBXLoader();
 
@@ -86,17 +79,17 @@ async function main() {
     {
       file: 'BreathingIdle.fbx',
       clipName: 'idle',
-      options: { positionMultiplier: 0.01, positionOffset: 0 }
+      options: { positionMultiplier: 0.01, inPlace: true }
     },
     {
       file: 'Walking.fbx',
       clipName: 'walk',
-      options: { positionMultiplier: 0.01, positionOffset: 0, removeHipsForwardAnimation: true }
+      options: { positionMultiplier: 0.01, inPlace: true }
     },
     {
       file: 'SittingIdle_man.fbx',
       clipName: 'drive',
-      options: { positionMultiplier: 0.01, positionOffset: 0 }
+      options: { positionMultiplier: 0.01, inPlace: true }
     }
   ];
 
@@ -112,24 +105,23 @@ async function main() {
       continue;
     }
     const sourceClip = obj.animations[0];
-    console.log(`Loaded ${def.file}: duration=${sourceClip.duration.toFixed(2)}s, tracks=${sourceClip.tracks.length}`);
     const retargeted = retargetClip(sourceClip, def.clipName, jointNames, def.options);
-    console.log(`Retargeted to "${def.clipName}": tracks=${retargeted.tracks.length}`);
+    console.log(`Retargeted "${def.file}" -> "${def.clipName}": duration=${retargeted.duration.toFixed(2)}s, tracks=${retargeted.tracks.length}`);
     exportedClips[def.clipName] = THREE.AnimationClip.toJSON(retargeted);
   }
 
-  // Also synthesize a "run" clip from walk with 1.6x speed
+  // Synthesize "run" clip by speeding up walk
   if (exportedClips.walk) {
     const walkParsed = THREE.AnimationClip.parse(exportedClips.walk);
+    const speedRatio = 1.6;
     const runTracks = walkParsed.tracks.map(t => {
       const times = new Float32Array(t.times.length);
       for (let i = 0; i < t.times.length; i++) {
-        times[i] = t.times[i] / 1.6;
+        times[i] = t.times[i] / speedRatio;
       }
       return t.clone().setInterpolation(THREE.InterpolateLinear);
     });
-    // Adjust duration
-    const runClip = new THREE.AnimationClip('run', walkParsed.duration / 1.6, runTracks);
+    const runClip = new THREE.AnimationClip('run', walkParsed.duration / speedRatio, runTracks);
     exportedClips.run = THREE.AnimationClip.toJSON(runClip);
     console.log(`Synthesized "run" clip: duration=${runClip.duration.toFixed(2)}s, tracks=${runClip.tracks.length}`);
   }

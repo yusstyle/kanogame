@@ -225,6 +225,12 @@ export function createMaterials(): GameMaterials {
     roadDust: standard("#b0946d", 0.98, earthMap),
     motorcycleRed: standard("#b82e24", 0.36, undefined, { metalness: 0.18, roughness: 0.36 }),
     motorcycleBlue: standard("#24558f", 0.36, undefined, { metalness: 0.18, roughness: 0.36 }),
+    carpetRed: standard("#781e18", 0.94),
+    tileFloor: standard("#d4cebf", 0.32, undefined, { roughness: 0.32, metalness: 0.08 }),
+    policeNavy: standard("#141b2d", 0.48, undefined, { metalness: 0.22, roughness: 0.48 }),
+    karotaYellow: standard("#d8af18", 0.42, undefined, { roughness: 0.42 }),
+    karotaGreen: standard("#156228", 0.45, undefined, { roughness: 0.45 }),
+    goldTrim: standard("#c9a23b", 0.35, undefined, { metalness: 0.62, roughness: 0.35 }),
   };
 }
 

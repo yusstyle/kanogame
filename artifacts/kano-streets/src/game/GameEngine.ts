@@ -8,6 +8,7 @@ import {
   type PlayerModel,
 } from "./actors";
 import { loadGLTFModel, loadHumanoidCharacter } from "./assetManifest";
+import { BuildingInteriorManager } from "./BuildingInteriors";
 import { ColliderIndex } from "./ColliderIndex";
 import { getDistrict, getDistrictLabel, ROAD_LAYOUT } from "./layout";
 import { createMaterials } from "./materials";
@@ -92,6 +93,10 @@ export class GameEngine {
   private kekeWheelSpin = 0;
   private walkPhase = 0;
   private wheelSpin = 0;
+  private readonly interiorManager: BuildingInteriorManager;
+  private cash = 150000;
+  private trafficFine = 0;
+  private hasApartmentRental = false;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -117,6 +122,8 @@ export class GameEngine {
     this.scene.fog = new THREE.Fog("#dcd4c3", 42, 230);
 
     this.materials = createMaterials();
+    this.interiorManager = new BuildingInteriorManager(this.materials);
+    this.scene.add(this.interiorManager.root);
     this.world = createWorld(this.materials);
     this.colliderIndex = new ColliderIndex(this.world.colliders);
     this.scene.add(this.world.root);
@@ -244,6 +251,11 @@ export class GameEngine {
 
   private updateLighting() {
     if (!this.sunLight) return;
+    if (this.interiorManager.activeInterior) {
+      this.sunLight.intensity = 0.2;
+      return;
+    }
+    this.sunLight.intensity = 1.6;
     const targetPos = this.mode === "driving"
       ? (this.activeVehicle === "keke" ? this.kekePosition : this.carPosition)
       : this.playerPosition;
@@ -344,7 +356,7 @@ export class GameEngine {
       return;
     }
     if (normalized === "e" && this.screen === "playing") {
-      this.toggleVehicle();
+      this.handleInteract();
       return;
     }
     if (normalized === "r" && this.screen !== "menu") {
@@ -384,6 +396,7 @@ export class GameEngine {
   reset() {
     this.mode = "on-foot";
     this.activeVehicle = "sedan";
+    this.interiorManager.activeInterior = null;
     this.playerPosition.copy(PLAYER_START);
     this.playerVerticalVelocity = 0;
     this.playerGrounded = true;
@@ -397,6 +410,7 @@ export class GameEngine {
     this.kekeYaw = 0;
     this.kekeSpeed = 0;
     this.player.root.visible = true;
+    this.player.playAction("idle", 0.1);
     this.car.root.visible = true;
     this.keke.root.visible = true;
     this.keys.clear();
@@ -441,7 +455,7 @@ export class GameEngine {
       return;
     }
     if (key === "e" && !event.repeat && this.screen === "playing") {
-      this.toggleVehicle();
+      this.handleInteract();
       return;
     }
     this.keys.add(movementKey);
@@ -474,6 +488,87 @@ export class GameEngine {
         ? null
         : "Click the world to capture the mouse · Esc pauses";
     this.pushSnapshot(true);
+  }
+
+  private handleInteract() {
+    if (this.mode === "driving") {
+      this.toggleVehicle();
+      return;
+    }
+
+    // 1. If inside an interior
+    if (this.interiorManager.activeInterior) {
+      const activeZone = this.interiorManager.getActiveZone();
+      if (activeZone) {
+        // Distance to exit door
+        const distExit = this.playerPosition.distanceTo(activeZone.exitPoint);
+        if (distExit <= 2.2) {
+          this.playerPosition.copy(activeZone.outdoorDoorPosition);
+          this.playerYaw = activeZone.outdoorDoorYaw;
+          this.interiorManager.activeInterior = null;
+          this.statusMessage = `Exited ${activeZone.name}`;
+          this.updateTransform();
+          this.pushSnapshot(true);
+          return;
+        }
+
+        // Check interactive station inside
+        if (activeZone.checkInteraction) {
+          const inter = activeZone.checkInteraction(this.playerPosition, {
+            cash: this.cash,
+            trafficFine: this.trafficFine,
+            hasApartmentRental: this.hasApartmentRental,
+          });
+          if (inter) {
+            const res = inter.action();
+            this.statusMessage = res.statusMessage;
+            if (res.cashDelta) this.cash += res.cashDelta;
+            if (res.clearFine) this.trafficFine = 0;
+            if (res.rentApartment) this.hasApartmentRental = true;
+            this.pushSnapshot(true);
+            return;
+          }
+        }
+      }
+      return;
+    }
+
+    // 2. Outdoors on foot: Check entrance doors of each interior
+    for (const [id, zone] of this.interiorManager.interiors.entries()) {
+      const distDoor = this.playerPosition.distanceTo(zone.outdoorDoorPosition);
+      if (distDoor <= 3.4) {
+        this.interiorManager.outdoorSavedPosition.copy(this.playerPosition);
+        this.interiorManager.outdoorSavedYaw = this.playerYaw;
+        this.interiorManager.activeInterior = id;
+        this.playerPosition.copy(zone.spawnPoint);
+        this.playerYaw = zone.spawnYaw;
+        this.statusMessage = `Entered ${zone.name}`;
+        this.updateTransform();
+        this.pushSnapshot(true);
+        return;
+      }
+    }
+
+    // Check outdoor Police Officer at (26, 0, -12)
+    if (this.playerPosition.distanceTo(new THREE.Vector3(26, 0, -12)) <= 3.2) {
+      this.statusMessage = "NPF Officer: 'Airport Road Division reporting. Area is under active patrol. Report any security concerns.'";
+      this.pushSnapshot(true);
+      return;
+    }
+
+    // Check outdoor KAROTA Officer at (20, 0, -9.5)
+    if (this.playerPosition.distanceTo(new THREE.Vector3(20, 0, -9.5)) <= 3.2) {
+      if (this.trafficFine > 0) {
+        this.statusMessage = `KAROTA Officer: 'You have an outstanding fine of ₦${this.trafficFine.toLocaleString()}. Settle it inside the station desk.'`;
+      } else {
+        this.statusMessage = "KAROTA Officer: 'Driver documents and roadworthiness verified. Safe driving in Kano!'";
+      }
+      this.pushSnapshot(true);
+      return;
+    }
+
+    // Check vehicles
+    this.toggleVehicle();
   }
 
   private toggleVehicle() {
@@ -690,6 +785,14 @@ export class GameEngine {
     } else {
       this.updateSedan(dt);
     }
+
+    const vehPos = this.activeVehicle === "keke" ? this.kekePosition : this.carPosition;
+    const vehSpeed = Math.abs(this.activeVehicle === "keke" ? this.kekeSpeed : this.carSpeed) * 3.6;
+    if (this.trafficFine === 0 && vehPos.distanceTo(new THREE.Vector3(20, 0, -9.5)) <= 8.5 && vehSpeed > 15) {
+      this.trafficFine = 5000;
+      this.statusMessage = "KAROTA Traffic Citation: Failed to stop at checkpoint! ₦5,000 penalty registered.";
+      this.pushSnapshot(true);
+    }
   }
 
   private updateSedan(dt: number) {
@@ -793,6 +896,14 @@ export class GameEngine {
   }
 
   private moveCircle(position: THREE.Vector3, dx: number, dz: number, radius: number) {
+    if (this.interiorManager.activeInterior) {
+      const nextX = position.x + dx;
+      if (!this.collides(nextX, position.z, radius)) position.x = nextX;
+      const nextZ = position.z + dz;
+      if (!this.collides(position.x, nextZ, radius)) position.z = nextZ;
+      return;
+    }
+
     const nextX = THREE.MathUtils.clamp(
       position.x + dx,
       -this.world.bounds + radius,
@@ -809,6 +920,26 @@ export class GameEngine {
   }
 
   private collides(x: number, z: number, radius: number, skipVehicle = false) {
+    if (this.interiorManager.activeInterior) {
+      const activeZone = this.interiorManager.getActiveZone();
+      if (!activeZone) return false;
+      return activeZone.colliders.some((collider: Collider) => {
+        const closestX = THREE.MathUtils.clamp(
+          x,
+          collider.x - collider.halfX,
+          collider.x + collider.halfX,
+        );
+        const closestZ = THREE.MathUtils.clamp(
+          z,
+          collider.z - collider.halfZ,
+          collider.z + collider.halfZ,
+        );
+        const dx = x - closestX;
+        const dz = z - closestZ;
+        return dx * dx + dz * dz < radius * radius;
+      });
+    }
+
     const bounds = this.world.bounds;
     if (Math.abs(x) > bounds - radius || Math.abs(z) > bounds - radius) return true;
 
@@ -910,6 +1041,9 @@ export class GameEngine {
   }
 
   private surfaceHeight(x: number, z: number) {
+    if (this.interiorManager.activeInterior) {
+      return -59.9;
+    }
     if (Math.abs(x + 31) <= 10.5 && Math.abs(z - 31) <= 9) return 0.045;
     for (const road of ROAD_LAYOUT) {
       const lateral = road.axis === "x" ? Math.abs(z - road.center) : Math.abs(x - road.center);
@@ -924,14 +1058,15 @@ export class GameEngine {
 
   private updateCamera(dt: number) {
     const isDriving = this.mode === "driving";
+    const isIndoors = Boolean(this.interiorManager.activeInterior);
     const vehiclePos = this.activeVehicle === "keke" ? this.kekePosition : this.carPosition;
     const vehicleYaw = this.activeVehicle === "keke" ? this.kekeYaw : this.carYaw;
     const target = isDriving
       ? new THREE.Vector3(vehiclePos.x, 1.0, vehiclePos.z)
-      : new THREE.Vector3(this.playerPosition.x, this.playerPosition.y + 1.25, this.playerPosition.z);
-    const distance = isDriving ? (this.activeVehicle === "keke" ? 5.8 : 8.3) : 6.35;
+      : new THREE.Vector3(this.playerPosition.x, this.playerPosition.y + (isIndoors ? 1.4 : 1.25), this.playerPosition.z);
+    const distance = isDriving ? (this.activeVehicle === "keke" ? 5.8 : 8.3) : (isIndoors ? 3.0 : 6.35);
     const followYaw = isDriving ? vehicleYaw + this.cameraYaw : this.cameraYaw;
-    const heightPitch = this.cameraPitch;
+    const heightPitch = isIndoors ? Math.min(this.cameraPitch, 0.45) : this.cameraPitch;
     const direction = new THREE.Vector3(
       -Math.sin(followYaw) * Math.cos(heightPitch),
       Math.sin(heightPitch),
@@ -942,17 +1077,27 @@ export class GameEngine {
     const pathLength = path.length();
     const samples = Math.ceil(pathLength / 0.45);
     let safeDistance = pathLength;
+    const activeZone = this.interiorManager.getActiveZone();
     for (let step = 2; step <= samples; step += 1) {
       const distanceAlongPath = Math.min(step * 0.45, pathLength);
       const point = target.clone().addScaledVector(path, distanceAlongPath / pathLength);
-      const blocked = this.colliderIndex.query(point.x, point.z, 1.2).some((collider: Collider) => {
-        if (point.y > (collider.height ?? 3.5) - 0.2) return false;
-        const dx = Math.max(Math.abs(point.x - collider.x) - collider.halfX, 0);
-        const dz = Math.max(Math.abs(point.z - collider.z) - collider.halfZ, 0);
-        return dx * dx + dz * dz < 0.32 * 0.32;
-      });
+      let blocked = false;
+      if (activeZone) {
+        blocked = activeZone.colliders.some((collider: Collider) => {
+          const dx = Math.max(Math.abs(point.x - collider.x) - collider.halfX, 0);
+          const dz = Math.max(Math.abs(point.z - collider.z) - collider.halfZ, 0);
+          return dx * dx + dz * dz < 0.32 * 0.32;
+        });
+      } else {
+        blocked = this.colliderIndex.query(point.x, point.z, 1.2).some((collider: Collider) => {
+          if (point.y > (collider.height ?? 3.5) - 0.2) return false;
+          const dx = Math.max(Math.abs(point.x - collider.x) - collider.halfX, 0);
+          const dz = Math.max(Math.abs(point.z - collider.z) - collider.halfZ, 0);
+          return dx * dx + dz * dz < 0.32 * 0.32;
+        });
+      }
       if (blocked) {
-        safeDistance = Math.max(2.2, distanceAlongPath - 0.55);
+        safeDistance = Math.max(isIndoors ? 1.5 : 2.2, distanceAlongPath - 0.45);
         break;
       }
     }
@@ -990,14 +1135,46 @@ export class GameEngine {
 
     let interactionPrompt: string | null = null;
     if (this.mode === "driving") {
-      interactionPrompt = this.activeVehicle === "keke" ? "Exit Keke Napep" : "Exit passenger car";
+      interactionPrompt = this.activeVehicle === "keke" ? "Exit Keke Napep" : "Exit Sedan";
+    } else if (this.interiorManager.activeInterior) {
+      const activeZone = this.interiorManager.getActiveZone();
+      if (activeZone) {
+        if (this.playerPosition.distanceTo(activeZone.exitPoint) <= 2.2) {
+          interactionPrompt = `Exit ${activeZone.name}`;
+        } else if (activeZone.checkInteraction) {
+          const inter = activeZone.checkInteraction(this.playerPosition, {
+            cash: this.cash,
+            trafficFine: this.trafficFine,
+            hasApartmentRental: this.hasApartmentRental,
+          });
+          if (inter) interactionPrompt = inter.prompt;
+        }
+      }
     } else {
-      const distCar = this.playerPosition.distanceTo(this.carPosition);
-      const distKeke = this.playerPosition.distanceTo(this.kekePosition);
-      if (distCar <= 4.7 && distCar <= distKeke) {
-        interactionPrompt = "Drive Sedan";
-      } else if (distKeke <= 4.7) {
-        interactionPrompt = "Ride Keke Napep";
+      // Check outdoor doors
+      for (const [, zone] of this.interiorManager.interiors.entries()) {
+        if (this.playerPosition.distanceTo(zone.outdoorDoorPosition) <= 3.4) {
+          interactionPrompt = `Enter ${zone.name}`;
+          break;
+        }
+      }
+      // Check officers
+      if (!interactionPrompt) {
+        if (this.playerPosition.distanceTo(new THREE.Vector3(26, 0, -12)) <= 3.2) {
+          interactionPrompt = "Talk to Police Officer";
+        } else if (this.playerPosition.distanceTo(new THREE.Vector3(20, 0, -9.5)) <= 3.2) {
+          interactionPrompt = "Talk to KAROTA Officer";
+        }
+      }
+      // Check vehicles
+      if (!interactionPrompt) {
+        const distCar = this.playerPosition.distanceTo(this.carPosition);
+        const distKeke = this.playerPosition.distanceTo(this.kekePosition);
+        if (distCar <= 4.7 && distCar <= distKeke) {
+          interactionPrompt = "Drive Sedan";
+        } else if (distKeke <= 4.7) {
+          interactionPrompt = "Ride Keke Napep";
+        }
       }
     }
 
@@ -1008,13 +1185,22 @@ export class GameEngine {
       ? (this.activeVehicle === "keke" ? Math.abs(this.kekeSpeed) * 3.6 : Math.abs(this.carSpeed) * 3.6)
       : 0;
 
+    const activeZone = this.interiorManager.getActiveZone();
+    const locationLabel = activeZone
+      ? activeZone.districtLabel
+      : getDistrictLabel(getDistrict(location.x, location.z));
+
     this.callbacks.onSnapshot({
       mode: this.mode,
       vehicleType: this.activeVehicle,
-      location: getDistrictLabel(getDistrict(location.x, location.z)),
+      location: locationLabel,
       speedKmh: currentSpeed,
       interactionPrompt,
       statusMessage: this.statusMessage,
+      cash: this.cash,
+      trafficFine: this.trafficFine,
+      hasApartmentRental: this.hasApartmentRental,
+      activeInterior: this.interiorManager.activeInterior,
     });
   }
 

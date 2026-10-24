@@ -6,7 +6,16 @@ export type Collider = {
   height?: number;
 };
 
-export type BuildingKind = "traditional" | "modern" | "shop" | "commercial";
+export type BuildingKind =
+  | "traditional"
+  | "modern"
+  | "shop"
+  | "commercial"
+  | "apartment"
+  | "church"
+  | "police"
+  | "villa";
+
 export type GraphicsQuality = "performance" | "balanced" | "quality";
 
 export type PlotAsset = {
@@ -20,6 +29,8 @@ export type VehicleType = "sedan" | "keke";
 
 export type GameScreen = "menu" | "playing" | "paused";
 
+export type InteriorId = "house" | "apartment" | "church" | "police-post";
+
 export type GameSnapshot = {
   mode: GameMode;
   vehicleType?: VehicleType | null;
@@ -27,6 +38,10 @@ export type GameSnapshot = {
   speedKmh: number;
   interactionPrompt: string | null;
   statusMessage: string | null;
+  cash?: number;
+  trafficFine?: number;
+  hasApartmentRental?: boolean;
+  activeInterior?: InteriorId | null;
 };
 
 export type GameMaterials = {
@@ -63,4 +78,10 @@ export type GameMaterials = {
   roadDust?: import("three").MeshStandardMaterial;
   motorcycleRed?: import("three").MeshStandardMaterial;
   motorcycleBlue?: import("three").MeshStandardMaterial;
+  carpetRed?: import("three").MeshStandardMaterial;
+  tileFloor?: import("three").MeshStandardMaterial;
+  policeNavy?: import("three").MeshStandardMaterial;
+  karotaYellow?: import("three").MeshStandardMaterial;
+  karotaGreen?: import("three").MeshStandardMaterial;
+  goldTrim?: import("three").MeshStandardMaterial;
 };

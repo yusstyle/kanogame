@@ -49,7 +49,11 @@ function App() {
         current.speedKmh === next.speedKmh &&
         current.interactionPrompt === next.interactionPrompt &&
         current.statusMessage === next.statusMessage &&
-        current.vehicleType === next.vehicleType
+        current.vehicleType === next.vehicleType &&
+        current.cash === next.cash &&
+        current.trafficFine === next.trafficFine &&
+        current.hasApartmentRental === next.hasApartmentRental &&
+        current.activeInterior === next.activeInterior
       ) {
         return current;
       }
@@ -74,6 +78,10 @@ function App() {
         speedKmh={snapshot.speedKmh}
         interactionPrompt={snapshot.interactionPrompt}
         statusMessage={snapshot.statusMessage}
+        cash={snapshot.cash}
+        trafficFine={snapshot.trafficFine}
+        hasApartmentRental={snapshot.hasApartmentRental}
+        activeInterior={snapshot.activeInterior}
         graphicsQuality={graphicsQuality}
         onStart={start}
         onPause={pause}

@@ -189,6 +189,66 @@
 @keyframes ks-arrive { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes ks-fade-in { from { opacity: 0; } to { opacity: 1; } }
 
+.ks-hud-wallet {
+  position: absolute;
+  top: clamp(74px, 11vh, 112px);
+  left: clamp(18px, 3.5vw, 48px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.ks-wallet-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(20, 29, 27, 0.65);
+  backdrop-filter: blur(8px);
+}
+
+.ks-wallet-item small {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 7px;
+  letter-spacing: 0.15em;
+  font-weight: 700;
+}
+
+.ks-wallet-item strong {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #eeddbb;
+}
+
+.ks-fine-alert {
+  border-color: rgba(220, 60, 40, 0.7);
+  background: rgba(60, 16, 12, 0.75);
+}
+
+.ks-fine-alert strong {
+  color: #ff7766;
+}
+
+.ks-rent-badge {
+  border-color: rgba(40, 160, 80, 0.6);
+  background: rgba(16, 45, 25, 0.75);
+}
+
+.ks-rent-badge strong {
+  color: #77eebb;
+}
+
+.ks-interior-badge {
+  border-color: rgba(228, 160, 110, 0.6);
+  background: rgba(45, 30, 20, 0.75);
+}
+
+.ks-interior-badge strong {
+  color: #e4a06e;
+}
+
 @media (max-width: 680px) {
   .ks-menu { padding: 22px 23px 18px; }
   .ks-menu-content { margin-top: clamp(64px, 13vh, 100px); }

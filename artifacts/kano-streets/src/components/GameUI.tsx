@@ -14,6 +14,10 @@ export interface GameUIProps {
   speedKmh: number;
   interactionPrompt: string | null;
   statusMessage: string | null;
+  cash?: number;
+  trafficFine?: number;
+  hasApartmentRental?: boolean;
+  activeInterior?: string | null;
   graphicsQuality: GraphicsQuality;
   onStart: () => void;
   onPause: () => void;
@@ -45,6 +49,10 @@ export default function GameUI({
   speedKmh,
   interactionPrompt,
   statusMessage,
+  cash,
+  trafficFine,
+  hasApartmentRental,
+  activeInterior,
   graphicsQuality,
   onStart,
   onPause,
@@ -112,6 +120,31 @@ export default function GameUI({
             <div className="ks-hud-location"><span className="ks-live-dot" /> {location} <span className="ks-location-divider">/</span> FREE ROAM</div>
             <span className="ks-pause-hint"><Key>ESC</Key><span>PAUSE</span></span>
           </header>
+
+          <div className="ks-hud-wallet" aria-label="Player wallet and civil status">
+            <span className="ks-wallet-item">
+              <small>CASH</small>
+              <strong>₦{(cash ?? 150000).toLocaleString()}</strong>
+            </span>
+            {(trafficFine ?? 0) > 0 && (
+              <span className="ks-wallet-item ks-fine-alert">
+                <small>KAROTA CITATION</small>
+                <strong>₦{(trafficFine ?? 0).toLocaleString()}</strong>
+              </span>
+            )}
+            {hasApartmentRental && (
+              <span className="ks-wallet-item ks-rent-badge">
+                <small>APARTMENT</small>
+                <strong>UNIT 2B LEASED</strong>
+              </span>
+            )}
+            {activeInterior && (
+              <span className="ks-wallet-item ks-interior-badge">
+                <small>LOCATION</small>
+                <strong>INDOORS</strong>
+              </span>
+            )}
+          </div>
 
           <div className="ks-mode-chip" aria-live="polite">
             <span className={`ks-mode-symbol ${mode}`} aria-hidden="true">{mode === 'driving' ? (vehicleType === 'keke' ? 'K' : 'D') : '·'}</span>

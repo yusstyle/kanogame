@@ -4,6 +4,14 @@ import { createMotorcycleModel } from "./actors";
 import { createMarketStall, createPlot } from "./buildings";
 import { getDistrict, ROAD_LAYOUT, ROAD_CENTERS, WORLD_BOUNDS, WORLD_EXTENT, type RoadSpec } from "./layout";
 import { makeSignMaterial } from "./materials";
+import {
+  createChristianChurch,
+  createFourStoreyApartment,
+  createKarotaOfficerModel,
+  createModernVilla,
+  createPoliceOfficerModel,
+  createPoliceStation,
+} from "./modernDistrict";
 import type { BuildingKind, Collider, GameMaterials } from "./types";
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
@@ -698,6 +706,17 @@ export function createWorld(materials: GameMaterials): WorldResult {
         const [offsetX, offsetZ] = parcelOffsets[slot];
         const x = blockX + offsetX;
         const z = blockZ + offsetZ;
+
+        // Skip procedural parcels in zones reserved for modern district landmarks and civil infrastructure
+        if (
+          Math.hypot(x - 28, z - (-18)) < 16 ||
+          Math.hypot(x - 48, z - (-50)) < 16 ||
+          Math.hypot(x - 44, z - 39) < 16 ||
+          Math.hypot(x - (-48), z - 37) < 18
+        ) {
+          continue;
+        }
+
         const selector = (xi * 7 + zi * 11 + slot * 5 + variant) % 12;
         let kind: BuildingKind;
         switch (district) {
@@ -732,6 +751,47 @@ export function createWorld(materials: GameMaterials): WorldResult {
       }
     }
   }
+
+  // Modern Kano-Inspired District & Civil Infrastructure
+  // 1. Four-Storey Apartment Building (Airport View Apartments)
+  const apartment = createFourStoreyApartment(materials);
+  apartment.root.position.set(48, 0, -50);
+  root.add(apartment.root);
+  colliders.push(...apartment.colliders.map((c) => ({ ...c, x: c.x + 48, z: c.z - 50 })));
+
+  // 2. Modern Residential Villa (Al-Baraka Villa)
+  const villa = createModernVilla(materials);
+  villa.root.position.set(44, 0, 39);
+  root.add(villa.root);
+  colliders.push(...villa.colliders.map((c) => ({ ...c, x: c.x + 44, z: c.z + 39 })));
+
+  // 3. St. Stephen's Anglican Church (Sabon Gari)
+  const church = createChristianChurch(materials);
+  church.root.position.set(-48, 0, 37);
+  root.add(church.root);
+  colliders.push(...church.colliders.map((c) => ({ ...c, x: c.x - 48, z: c.z + 37 })));
+
+  // 4. Police & KAROTA Station Compound
+  const policeStation = createPoliceStation(materials);
+  policeStation.root.position.set(28, 0, -18);
+  root.add(policeStation.root);
+  colliders.push(...policeStation.colliders.map((c) => ({ ...c, x: c.x + 28, z: c.z - 18 })));
+
+  // 5. Visible Nigerian Police Officer
+  const policeOfficer = createPoliceOfficerModel(materials);
+  policeOfficer.position.set(26, 0, -12);
+  policeOfficer.rotation.y = 0.3;
+  policeOfficer.traverse((o) => { o.userData.noMerge = true; });
+  root.add(policeOfficer);
+  colliders.push({ x: 26, z: -12, halfX: 0.35, halfZ: 0.35, height: 1.9 });
+
+  // 6. Visible KAROTA Traffic Officer & Roadside Checkpoint
+  const karotaOfficer = createKarotaOfficerModel(materials);
+  karotaOfficer.position.set(20, 0, -9.5);
+  karotaOfficer.rotation.y = Math.PI / 2;
+  karotaOfficer.traverse((o) => { o.userData.noMerge = true; });
+  root.add(karotaOfficer);
+  colliders.push({ x: 20, z: -9.5, halfX: 0.35, halfZ: 0.35, height: 1.9 });
 
   addMarketWaterTank(root, materials, colliders, -43, 44);
   addKanoRoadsideProps(root, materials, colliders, -16, 26, Math.PI / 2);
