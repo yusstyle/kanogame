@@ -60,8 +60,19 @@ export interface InteriorZone {
       cash: number;
       trafficFine: number;
       hasApartmentRental: boolean;
+      score?: number;
     },
-  ) => { prompt: string; action: () => { statusMessage: string; cashDelta?: number; clearFine?: boolean; rentApartment?: boolean } } | null;
+  ) => {
+    prompt: string;
+    action: () => {
+      statusMessage: string;
+      cashDelta?: number;
+      clearFine?: boolean;
+      rentApartment?: boolean;
+      scoreDelta?: number;
+      socialContactId?: string;
+    };
+  } | null;
 }
 
 export class BuildingInteriorManager {
@@ -77,6 +88,8 @@ export class BuildingInteriorManager {
     this.buildApartmentInterior();
     this.buildChurchInterior();
     this.buildPolicePostInterior();
+    this.buildRestaurantInterior();
+    this.buildGamingHubInterior();
   }
 
   // 1. Modern Villa Interior (Al-Baraka Villa)
@@ -560,6 +573,272 @@ export class BuildingInteriorManager {
             prompt: "Speak with Duty Officer",
             action: () => ({
               statusMessage: "Duty Officer: 'Airport Road Division reporting. Area is under active patrol. Report any security concerns.'",
+            }),
+          };
+        }
+
+        return null;
+      },
+    });
+  }
+
+  // 5. Arewa Fast Food & Suya Lounge Interior
+  private buildRestaurantInterior() {
+    const cx = 380;
+    const cy = -60;
+    const cz = 0;
+    const group = new THREE.Group();
+    group.position.set(cx, cy, cz);
+    this.root.add(group);
+
+    const colliders: Collider[] = [];
+    const width = 14;
+    const depth = 11;
+    const height = 3.8;
+
+    // Floor (Polished Terrazzo Tiles) & Ceiling
+    addBox(group, this.materials.tileFloor || this.materials.concrete, 0, 0, 0, width, 0.1, depth, false);
+    addBox(group, this.materials.white, 0, height, 0, width, 0.1, depth, false);
+
+    // Perimeter Walls in Warm Terracotta
+    const wallMat = this.materials.warmOrange || this.materials.ochre;
+    addBox(group, wallMat, 0, height / 2, -depth / 2, width, height, 0.25);
+    addBox(group, this.materials.white, 0, height / 2, depth / 2, width, height, 0.25);
+    addBox(group, this.materials.white, -width / 2, height / 2, 0, 0.25, height, depth);
+    addBox(group, this.materials.white, width / 2, height / 2, 0, 0.25, height, depth);
+
+    // Service Counter & Food Warmer (North-West)
+    const counterX = -3.2;
+    const counterZ = -2.6;
+    addBox(group, this.materials.wood, counterX, 0.55, counterZ, 5.2, 1.1, 1.2);
+    addBox(group, this.materials.darkTrim, counterX, 1.12, counterZ, 5.4, 0.08, 1.3);
+    addBox(group, this.materials.black, counterX - 1.4, 1.3, counterZ, 0.5, 0.35, 0.4);
+    addBox(group, this.materials.glassLit, counterX + 1.1, 1.35, counterZ, 2.2, 0.45, 0.7);
+    const menuSign = makeSignMaterial("AREWA KITCHEN SPECIALS · JOLLOF RICE ₦3,500 · KANO SUYA ₦2,500 · CHAPMAN ₦1,200", "#4c1a0e");
+    addBox(group, menuSign, counterX, 2.8, -depth / 2 + 0.15, 6.2, 0.9, 0.08);
+
+    // Chef / Server Behind Counter
+    const chefMat = this.materials.white;
+    addBox(group, chefMat, counterX, 0.9, counterZ - 1.1, 0.48, 0.75, 0.35);
+    addCyl(group, this.materials.clay, counterX, 1.55, counterZ - 1.1, 0.15, 0.3);
+    addCyl(group, chefMat, counterX, 1.82, counterZ - 1.1, 0.2, 0.25);
+
+    // 4 Dining Booths with Upholstered Bench Seats & Wooden Tables
+    const boothConfigs = [
+      { x: 3.5, z: -3.0, hasAmina: true },
+      { x: 3.5, z: 0.0, hasAmina: false },
+      { x: 3.5, z: 3.0, hasAmina: false },
+      { x: -3.5, z: 2.5, hasAmina: false },
+    ];
+    boothConfigs.forEach((b) => {
+      addBox(group, this.materials.wood, b.x, 0.42, b.z, 2.4, 0.08, 1.2);
+      addCyl(group, this.materials.metal, b.x, 0.2, b.z, 0.1, 0.4);
+      for (const side of [-1, 1]) {
+        const bz = b.z + side * 0.95;
+        addBox(group, this.materials.clothRed, b.x, 0.4, bz, 2.4, 0.45, 0.5);
+        addBox(group, this.materials.clothRed, b.x, 0.85, bz + side * 0.2, 2.4, 0.55, 0.15);
+      }
+      addCyl(group, this.materials.white, b.x - 0.4, 0.48, b.z, 0.22, 0.04);
+      addCyl(group, this.materials.white, b.x + 0.4, 0.48, b.z, 0.22, 0.04);
+      addCyl(group, this.materials.glassLit, b.x, 0.54, b.z, 0.08, 0.18);
+
+      colliders.push({ x: cx + b.x, z: cz + b.z, halfX: 1.4, halfZ: 1.3, height: 1.4 });
+
+      if (b.hasAmina) {
+        addBox(group, this.materials.clothRed, b.x, 0.72, b.z - 0.95, 0.44, 0.65, 0.32);
+        addCyl(group, this.materials.clay, b.x, 1.25, b.z - 0.95, 0.14, 0.28);
+      }
+    });
+
+    // Exit Door
+    addBox(group, this.materials.wood, 0, 1.1, depth / 2 - 0.08, 1.4, 2.4, 0.1);
+
+    const restoLight1 = new THREE.PointLight("#ffe2b8", 2.0, 16, 1.1);
+    restoLight1.position.set(-2, height - 0.6, -1);
+    group.add(restoLight1);
+
+    const restoLight2 = new THREE.PointLight("#ffcca0", 1.8, 16, 1.1);
+    restoLight2.position.set(3, height - 0.6, 1);
+    group.add(restoLight2);
+
+    colliders.push(
+      { x: cx, z: cz - depth / 2, halfX: width / 2, halfZ: 0.3, height },
+      { x: cx, z: cz + depth / 2, halfX: width / 2, halfZ: 0.3, height },
+      { x: cx - width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height },
+      { x: cx + width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height },
+      { x: cx + counterX, z: cz + counterZ, halfX: 2.8, halfZ: 0.7, height: 1.4 },
+    );
+
+    this.interiors.set("restaurant", {
+      id: "restaurant",
+      name: "Arewa Fast Food & Suya Lounge",
+      districtLabel: "AIRPORT ROAD · AREWA LOUNGE",
+      root: group,
+      colliders,
+      spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.8),
+      spawnYaw: Math.PI,
+      exitPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.1),
+      outdoorDoorPosition: new THREE.Vector3(16, 0, -36.5),
+      outdoorDoorYaw: 0,
+      checkInteraction: (pos, state) => {
+        const distCounter = pos.distanceTo(new THREE.Vector3(cx + counterX, cy + 0.1, cz + counterZ));
+        if (distCounter <= 2.5) {
+          return {
+            prompt: "Order Kano Suya & Jollof Platter (₦3,500)",
+            action: () => {
+              if (state.cash < 3500) {
+                return { statusMessage: "Insufficient cash: You need ₦3,500 for the special platter." };
+              }
+              return {
+                statusMessage: "Delicious Kano Beef Suya & Jollof Rice served! Recharged and energized.",
+                cashDelta: -3500,
+              };
+            },
+          };
+        }
+
+        const distAmina = pos.distanceTo(new THREE.Vector3(cx + 3.5, cy + 0.1, cz - 3.0));
+        if (distAmina <= 2.2) {
+          return {
+            prompt: "Talk with Amina Lawal (Architect)",
+            action: () => ({
+              statusMessage: "Amina Lawal: 'Sannu! I am taking a break from drafting villa blueprints. Beautiful evening in Kano!'",
+              socialContactId: "amina",
+            }),
+          };
+        }
+
+        return null;
+      },
+    });
+  }
+
+  // 6. Kano Cyber & PS5 Game Hub Interior
+  private buildGamingHubInterior() {
+    const cx = 420;
+    const cy = -60;
+    const cz = 0;
+    const group = new THREE.Group();
+    group.position.set(cx, cy, cz);
+    this.root.add(group);
+
+    const colliders: Collider[] = [];
+    const width = 13;
+    const depth = 10;
+    const height = 3.6;
+
+    addBox(group, this.materials.black, 0, 0, 0, width, 0.1, depth, false);
+    addBox(group, this.materials.black, 0, height, 0, width, 0.1, depth, false);
+
+    const cyanMat = this.materials.neonCyan || this.materials.glassLit;
+    const magentaMat = this.materials.neonMagenta || this.materials.glassLit;
+    addBox(group, this.materials.darkTrim, 0, height / 2, -depth / 2, width, height, 0.25);
+    addBox(group, this.materials.darkTrim, 0, height / 2, depth / 2, width, height, 0.25);
+    addBox(group, this.materials.darkTrim, -width / 2, height / 2, 0, 0.25, height, depth);
+    addBox(group, this.materials.darkTrim, width / 2, height / 2, 0, 0.25, height, depth);
+
+    addBox(group, cyanMat, 0, height - 0.4, -depth / 2 + 0.15, width - 1, 0.08, 0.04);
+    addBox(group, magentaMat, 0, height - 0.4, depth / 2 - 0.15, width - 1, 0.08, 0.04);
+
+    const boardSign = makeSignMaterial("KANO ESPORTS LEADERBOARD · 1. Z-BELLO 9,840 PTS · 2. KANO-DRIFTER 8,920 PTS · 3. YOU", "#0a1224");
+    addBox(group, boardSign, 0, 2.5, -depth / 2 + 0.16, 7.2, 1.4, 0.08);
+
+    const row1X = -3.2;
+    addBox(group, this.materials.darkTrim, row1X, 0.45, -0.6, 1.2, 0.75, 5.2);
+    for (let i = 0; i < 3; i++) {
+      const pz = -2.2 + i * 1.6;
+      addBox(group, cyanMat, row1X, 1.15, pz, 0.1, 0.55, 0.95);
+      addBox(group, magentaMat, row1X + 0.25, 0.85, pz, 0.35, 0.04, 0.6);
+      addBox(group, cyanMat, row1X - 0.4, 0.55, pz, 0.45, 0.6, 0.2);
+      addBox(group, this.materials.black, row1X + 0.95, 0.55, pz, 0.6, 1.1, 0.6);
+
+      colliders.push({ x: cx + row1X, z: cz + pz, halfX: 0.8, halfZ: 0.7, height: 1.4 });
+    }
+
+    const row2X = 3.2;
+    addBox(group, this.materials.darkTrim, row2X, 0.45, -0.6, 1.2, 0.75, 5.2);
+    for (let i = 0; i < 3; i++) {
+      const pz = -2.2 + i * 1.6;
+      addBox(group, magentaMat, row2X, 1.15, pz, 0.1, 0.55, 0.95);
+      addBox(group, this.materials.white, row2X - 0.25, 0.85, pz, 0.35, 0.12, 0.15);
+      addBox(group, this.materials.black, row2X - 0.95, 0.55, pz, 0.6, 1.1, 0.6);
+
+      if (i === 0) {
+        addBox(group, this.materials.neonCyan || this.materials.cloth, row2X - 0.95, 0.75, pz, 0.44, 0.65, 0.32);
+        addCyl(group, this.materials.clay, row2X - 0.95, 1.25, pz, 0.14, 0.28);
+      }
+
+      colliders.push({ x: cx + row2X, z: cz + pz, halfX: 0.8, halfZ: 0.7, height: 1.4 });
+    }
+
+    const arcX = -4.5;
+    const arcZ = 3.4;
+    addBox(group, this.materials.bankBlue || this.materials.black, arcX, 1.0, arcZ, 1.0, 1.9, 0.9);
+    addBox(group, cyanMat, arcX, 1.2, arcZ - 0.38, 0.7, 0.65, 0.08);
+    colliders.push({ x: cx + arcX, z: cz + arcZ, halfX: 0.6, halfZ: 0.6, height: 2.0 });
+
+    const cyberLight1 = new THREE.PointLight("#18d6e8", 2.2, 14, 1.2);
+    cyberLight1.position.set(-2.5, height - 0.6, -1);
+    group.add(cyberLight1);
+
+    const cyberLight2 = new THREE.PointLight("#e8188e", 2.2, 14, 1.2);
+    cyberLight2.position.set(2.5, height - 0.6, 1);
+    group.add(cyberLight2);
+
+    addBox(group, this.materials.wood, 0, 1.1, depth / 2 - 0.08, 1.4, 2.4, 0.1);
+
+    colliders.push(
+      { x: cx, z: cz - depth / 2, halfX: width / 2, halfZ: 0.3, height },
+      { x: cx, z: cz + depth / 2, halfX: width / 2, halfZ: 0.3, height },
+      { x: cx - width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height },
+      { x: cx + width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height },
+    );
+
+    this.interiors.set("gaming-hub", {
+      id: "gaming-hub",
+      name: "Kano Cyber & PS5 Game Hub",
+      districtLabel: "AIRPORT ROAD · GAMING HUB",
+      root: group,
+      colliders,
+      spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.8),
+      spawnYaw: Math.PI,
+      exitPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.1),
+      outdoorDoorPosition: new THREE.Vector3(80, 0, -40.5),
+      outdoorDoorYaw: 0,
+      checkInteraction: (pos, state) => {
+        const distConsole = pos.distanceTo(new THREE.Vector3(cx + row1X + 0.8, cy + 0.1, cz - 0.6));
+        if (distConsole <= 2.2) {
+          return {
+            prompt: "Play Kano Street Drift Tournament (₦1,000 Entry)",
+            action: () => {
+              if (state.cash < 1000) {
+                return { statusMessage: "Insufficient cash: You need ₦1,000 for tournament entry fee." };
+              }
+              const score = Math.floor(7000 + Math.random() * 2800);
+              const won = score >= 8200;
+              if (won) {
+                return {
+                  statusMessage: `Championship Victory! Score: ${score.toLocaleString()} pts! Won 1st Place & ₦5,000 prize!`,
+                  cashDelta: 4000,
+                  scoreDelta: score,
+                };
+              }
+              return {
+                statusMessage: `Good Race! Score: ${score.toLocaleString()} pts. Finished in Top 5!`,
+                cashDelta: -1000,
+                scoreDelta: score,
+              };
+            },
+          };
+        }
+
+        const distZainab = pos.distanceTo(new THREE.Vector3(cx + row2X - 0.95, cy + 0.1, cz - 2.2));
+        if (distZainab <= 2.2) {
+          return {
+            prompt: "Chat with Zainab Bello (Esports Champion)",
+            action: () => ({
+              statusMessage: "Zainab Bello: 'Yo! You want to test your reflexes on the Kano Drift circuit? Let us see what you got!'",
+              socialContactId: "zainab",
             }),
           };
         }

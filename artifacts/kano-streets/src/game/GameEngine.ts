@@ -16,7 +16,8 @@ import { buildNavigationNetwork, type NavigationNetwork } from "./navigation";
 import { PedestrianSystem } from "./PedestrianSystem";
 import { TrafficSystem } from "./TrafficSystem";
 import { createWorld } from "./world";
-import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, VehicleType } from "./types";
+import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType } from "./types";
+import { SocialSystem } from "./socialSystem";
 
 const PLAYER_START = new THREE.Vector3(-4, 0, -4);
 const CAR_START = new THREE.Vector3(-2, 0, -8);
@@ -94,9 +95,13 @@ export class GameEngine {
   private walkPhase = 0;
   private wheelSpin = 0;
   private readonly interiorManager: BuildingInteriorManager;
+  public readonly socialSystem = new SocialSystem();
   private cash = 150000;
   private trafficFine = 0;
   private hasApartmentRental = false;
+  private gameMinutes = 600; // 10:00 AM
+  private gameScore = 0;
+  private featuredContactId: string | null = null;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -255,7 +260,14 @@ export class GameEngine {
       this.sunLight.intensity = 0.2;
       return;
     }
-    this.sunLight.intensity = 1.6;
+    const hour = (this.gameMinutes / 60) % 24;
+    let dayFactor = 1.0;
+    if (hour >= 6 && hour <= 18) {
+      dayFactor = Math.sin(((hour - 6) / 12) * Math.PI);
+    } else {
+      dayFactor = 0.12;
+    }
+    this.sunLight.intensity = 0.4 + dayFactor * 1.5;
     const targetPos = this.mode === "driving"
       ? (this.activeVehicle === "keke" ? this.kekePosition : this.carPosition)
       : this.playerPosition;
@@ -397,6 +409,7 @@ export class GameEngine {
     this.mode = "on-foot";
     this.activeVehicle = "sedan";
     this.interiorManager.activeInterior = null;
+    this.featuredContactId = null;
     this.playerPosition.copy(PLAYER_START);
     this.playerVerticalVelocity = 0;
     this.playerGrounded = true;
@@ -518,6 +531,7 @@ export class GameEngine {
             cash: this.cash,
             trafficFine: this.trafficFine,
             hasApartmentRental: this.hasApartmentRental,
+            score: this.gameScore,
           });
           if (inter) {
             const res = inter.action();
@@ -525,6 +539,19 @@ export class GameEngine {
             if (res.cashDelta) this.cash += res.cashDelta;
             if (res.clearFine) this.trafficFine = 0;
             if (res.rentApartment) this.hasApartmentRental = true;
+            if (res.scoreDelta) this.gameScore = Math.max(this.gameScore, res.scoreDelta);
+            if (res.socialContactId) {
+              this.featuredContactId = res.socialContactId;
+              const choices = this.socialSystem.getChoices(res.socialContactId, this.cash, this.hasApartmentRental);
+              if (choices.length > 0) {
+                const choice = choices[choices.length - 1];
+                const outcome = this.socialSystem.interact(res.socialContactId, choice.id, this.cash, this.hasApartmentRental);
+                if (outcome) {
+                  this.statusMessage = outcome.statusMessage;
+                  if (outcome.cashDelta) this.cash += outcome.cashDelta;
+                }
+              }
+            }
             this.pushSnapshot(true);
             return;
           }
@@ -549,9 +576,24 @@ export class GameEngine {
       }
     }
 
+    // Check outdoor 24/7 ATM Cash Point at Arewa Commercial Bank (86.2, 0, -13.9)
+    if (this.playerPosition.distanceTo(new THREE.Vector3(86.2, 0, -13.9)) <= 2.4) {
+      this.cash += 20000;
+      this.statusMessage = "ATM: Dispensed ₦20,000 cash from Arewa Commercial Bank account. Balance updated.";
+      this.pushSnapshot(true);
+      return;
+    }
+
     // Check outdoor Police Officer at (26, 0, -12)
     if (this.playerPosition.distanceTo(new THREE.Vector3(26, 0, -12)) <= 3.2) {
       this.statusMessage = "NPF Officer: 'Airport Road Division reporting. Area is under active patrol. Report any security concerns.'";
+      this.pushSnapshot(true);
+      return;
+    }
+
+    // Check outdoor Checkpoint 2 NPF Officer at (-10, 0, -56)
+    if (this.playerPosition.distanceTo(new THREE.Vector3(-10, 0, -56)) <= 3.2) {
+      this.statusMessage = "NPF Highway Patrol: 'Sabon Gari checkpoint secure. Drive safely and observe road regulations.'";
       this.pushSnapshot(true);
       return;
     }
@@ -666,6 +708,7 @@ export class GameEngine {
     const dt = Math.min(this.lastFrameAt === 0 ? 1 / 60 : now - this.lastFrameAt, 0.04);
     this.lastFrameAt = now;
     if (this.screen === "playing") {
+      this.gameMinutes += dt * 4;
       if (this.mode === "on-foot") this.updatePlayer(dt, now);
       else this.updateCar(dt);
 
@@ -791,6 +834,10 @@ export class GameEngine {
     if (this.trafficFine === 0 && vehPos.distanceTo(new THREE.Vector3(20, 0, -9.5)) <= 8.5 && vehSpeed > 15) {
       this.trafficFine = 5000;
       this.statusMessage = "KAROTA Traffic Citation: Failed to stop at checkpoint! ₦5,000 penalty registered.";
+      this.pushSnapshot(true);
+    } else if (this.trafficFine === 0 && vehPos.distanceTo(new THREE.Vector3(-10, 0, -56)) <= 8.5 && vehSpeed > 15) {
+      this.trafficFine = 5000;
+      this.statusMessage = "NPF Traffic Citation: Failed to stop at Sabon Gari checkpoint! ₦5,000 penalty registered.";
       this.pushSnapshot(true);
     }
   }
@@ -1158,10 +1205,16 @@ export class GameEngine {
           break;
         }
       }
+      // Check ATM
+      if (!interactionPrompt && this.playerPosition.distanceTo(new THREE.Vector3(86.2, 0, -13.9)) <= 2.4) {
+        interactionPrompt = "ATM: Withdraw Cash (₦20,000)";
+      }
       // Check officers
       if (!interactionPrompt) {
         if (this.playerPosition.distanceTo(new THREE.Vector3(26, 0, -12)) <= 3.2) {
           interactionPrompt = "Talk to Police Officer";
+        } else if (this.playerPosition.distanceTo(new THREE.Vector3(-10, 0, -56)) <= 3.2) {
+          interactionPrompt = "Talk to NPF Officer";
         } else if (this.playerPosition.distanceTo(new THREE.Vector3(20, 0, -9.5)) <= 3.2) {
           interactionPrompt = "Talk to KAROTA Officer";
         }
@@ -1190,6 +1243,20 @@ export class GameEngine {
       ? activeZone.districtLabel
       : getDistrictLabel(getDistrict(location.x, location.z));
 
+    const totalMins = Math.floor(this.gameMinutes) % (24 * 60);
+    const hrs = Math.floor(totalMins / 60);
+    const mins = Math.floor(totalMins % 60);
+    const timeString = `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+
+    let featuredContact: SocialContact | null = null;
+    if (this.interiorManager.activeInterior === "restaurant") {
+      featuredContact = this.socialSystem.getContact("amina") ?? null;
+    } else if (this.interiorManager.activeInterior === "gaming-hub") {
+      featuredContact = this.socialSystem.getContact("zainab") ?? null;
+    } else if (this.featuredContactId) {
+      featuredContact = this.socialSystem.getContact(this.featuredContactId) ?? null;
+    }
+
     this.callbacks.onSnapshot({
       mode: this.mode,
       vehicleType: this.activeVehicle,
@@ -1201,7 +1268,22 @@ export class GameEngine {
       trafficFine: this.trafficFine,
       hasApartmentRental: this.hasApartmentRental,
       activeInterior: this.interiorManager.activeInterior,
+      timeString,
+      gameScore: this.gameScore,
+      featuredContact,
     });
+  }
+
+  public interactSocial(contactId: string, choiceId: string) {
+    const outcome = this.socialSystem.interact(contactId, choiceId, this.cash, this.hasApartmentRental);
+    if (outcome) {
+      this.statusMessage = outcome.statusMessage;
+      if (outcome.cashDelta) this.cash += outcome.cashDelta;
+      this.featuredContactId = contactId;
+      this.pushSnapshot(true);
+      return outcome;
+    }
+    return null;
   }
 
   private lerpAngle(from: number, to: number, alpha: number) {

@@ -14,7 +14,11 @@ export type BuildingKind =
   | "apartment"
   | "church"
   | "police"
-  | "villa";
+  | "villa"
+  | "bank"
+  | "restaurant"
+  | "gaming"
+  | "plaza";
 
 export type GraphicsQuality = "performance" | "balanced" | "quality";
 
@@ -29,7 +33,20 @@ export type VehicleType = "sedan" | "keke";
 
 export type GameScreen = "menu" | "playing" | "paused";
 
-export type InteriorId = "house" | "apartment" | "church" | "police-post";
+export type InteriorId = "house" | "apartment" | "church" | "police-post" | "restaurant" | "gaming-hub";
+
+export type RelationshipStage = "stranger" | "acquaintance" | "friend" | "dating" | "partner";
+
+export type SocialContact = {
+  id: string;
+  name: string;
+  profession: string;
+  district: string;
+  stage: RelationshipStage;
+  affection: number; // 0 to 100
+  description: string;
+  avatarSeed?: number;
+};
 
 export type GameSnapshot = {
   mode: GameMode;
@@ -42,6 +59,9 @@ export type GameSnapshot = {
   trafficFine?: number;
   hasApartmentRental?: boolean;
   activeInterior?: InteriorId | null;
+  timeString?: string;
+  gameScore?: number;
+  featuredContact?: SocialContact | null;
 };
 
 export type GameMaterials = {
@@ -84,4 +104,8 @@ export type GameMaterials = {
   karotaYellow?: import("three").MeshStandardMaterial;
   karotaGreen?: import("three").MeshStandardMaterial;
   goldTrim?: import("three").MeshStandardMaterial;
+  neonCyan?: import("three").MeshStandardMaterial;
+  neonMagenta?: import("three").MeshStandardMaterial;
+  bankBlue?: import("three").MeshStandardMaterial;
+  warmOrange?: import("three").MeshStandardMaterial;
 };

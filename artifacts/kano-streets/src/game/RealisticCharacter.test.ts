@@ -8,6 +8,7 @@ import { ASSET_MANIFEST } from "./assetManifest";
 import { createPlayerModel } from "./actors";
 import { createMaterials } from "./materials";
 import { GameEngine } from "./GameEngine";
+import { SocialSystem } from "./socialSystem";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -361,4 +362,184 @@ test("GameEngine door transitions, KAROTA citations, and player state updates", 
   assert.equal(latestSnapshot.trafficFine, 5000, "Snapshot must reflect the active ₦5,000 fine");
 
   engine.dispose();
+});
+
+test("Milestone 3: Modern Kano Living World - Arewa Restaurant & Cyber Hub Interiors", () => {
+  const { canvas, rendererFactory } = installBrowserStubs();
+
+  let latestSnapshot: any = null;
+  const engine = new GameEngine(
+    canvas,
+    {
+      onSnapshot: (s) => {
+        latestSnapshot = s;
+      },
+      onPause: () => {},
+    },
+    rendererFactory,
+  );
+  engine.setScreen("playing");
+
+  // 1. Move player to Arewa Fast Food & Suya Lounge door at (16, 0, -36.5)
+  // @ts-expect-error accessing private field for deterministic unit test
+  engine.playerPosition.set(16, 0, -36.5);
+  // @ts-expect-error accessing private method for deterministic unit test
+  engine.handleInteract();
+
+  // @ts-expect-error accessing private field
+  assert.equal(engine.interiorManager.activeInterior, "restaurant", "Player must be inside Arewa Restaurant");
+  // @ts-expect-error accessing private animate
+  engine.animate();
+  assert.ok(latestSnapshot.location.includes("AREWA LOUNGE"), "Location must show Arewa Lounge");
+  assert.equal(latestSnapshot.featuredContact?.name, "Amina Lawal", "Featured contact must be Amina Lawal inside restaurant");
+
+  // 2. Order Jollof / Suya Platter at counter: cx + counterX = 380 - 3.2 = 376.8, cy = -60, cz + counterZ = -2.6
+  const initialCash = latestSnapshot.cash;
+  // @ts-expect-error accessing private field
+  engine.playerPosition.set(376.8, -59.9, -2.6);
+  // @ts-expect-error accessing private method
+  engine.handleInteract();
+  assert.equal(latestSnapshot.cash, initialCash - 3500, "Cash must be reduced by ₦3,500 after ordering platter");
+  assert.ok(latestSnapshot.statusMessage.includes("Delicious Kano Beef Suya"), "Status must confirm platter order");
+
+  // 3. Exit restaurant: cx = 380, cy = -60, cz + depth/2 - 1.1 = 3.9
+  // @ts-expect-error accessing private field
+  engine.playerPosition.set(380, -59.9, 3.9);
+  // @ts-expect-error accessing private method
+  engine.handleInteract();
+  // @ts-expect-error accessing private field
+  assert.equal(engine.interiorManager.activeInterior, null, "Player must exit back outdoors");
+
+  // 4. Enter Kano Cyber & PS5 Game Hub at (80, 0, -40.5)
+  // @ts-expect-error accessing private field
+  engine.playerPosition.set(80, 0, -40.5);
+  // @ts-expect-error accessing private method
+  engine.handleInteract();
+  // @ts-expect-error accessing private field
+  assert.equal(engine.interiorManager.activeInterior, "gaming-hub", "Player must be inside gaming hub");
+  // @ts-expect-error accessing private animate
+  engine.animate();
+  assert.ok(latestSnapshot.location.includes("GAMING HUB"), "Location must show Cyber Game Hub");
+  assert.equal(latestSnapshot.featuredContact?.name, "Zainab Bello", "Featured contact must be Zainab Bello");
+
+  // 5. Play tournament at console: cx = 420, row1X + 0.8 = -3.2 + 0.8 = -2.4 -> x = 417.6, z = -0.6
+  // @ts-expect-error accessing private field
+  engine.playerPosition.set(417.6, -59.9, -0.6);
+  // @ts-expect-error accessing private method
+  engine.handleInteract();
+  assert.ok(latestSnapshot.gameScore > 0, "Tournament score must be recorded in snapshot");
+
+  // 6. Exit gaming hub: cx = 420, cz + depth/2 - 1.1 = 3.9
+  // @ts-expect-error accessing private field
+  engine.playerPosition.set(420, -59.9, 3.9);
+  // @ts-expect-error accessing private method
+  engine.handleInteract();
+  // @ts-expect-error accessing private field
+  assert.equal(engine.interiorManager.activeInterior, null, "Player must exit back outdoors");
+
+  engine.dispose();
+});
+
+test("Milestone 3: 24/7 ATM Cash Point, Clock Simulation & Sabon Gari NPF Checkpoint", () => {
+  const { canvas, rendererFactory } = installBrowserStubs();
+
+  let latestSnapshot: any = null;
+  const engine = new GameEngine(
+    canvas,
+    {
+      onSnapshot: (s) => {
+        latestSnapshot = s;
+      },
+      onPause: () => {},
+    },
+    rendererFactory,
+  );
+  engine.setScreen("playing");
+
+  // 1. In-game clock verification
+  assert.ok(latestSnapshot.timeString, "Snapshot must have timeString");
+  assert.match(latestSnapshot.timeString, /^\d{2}:\d{2}$/, "Time string format must be hh:mm");
+
+  // 2. Approach 24/7 ATM Cash Point at Arewa Commercial Bank (86.2, 0, -12.8)
+  // @ts-expect-error accessing private field
+  engine.playerPosition.set(86.2, 0, -12.8);
+  // @ts-expect-error accessing private method
+  engine.pushSnapshot(true);
+  assert.equal(latestSnapshot.interactionPrompt, "ATM: Withdraw Cash (₦20,000)");
+
+  const preCash = latestSnapshot.cash;
+  // @ts-expect-error accessing private method
+  engine.handleInteract();
+  assert.equal(latestSnapshot.cash, preCash + 20000, "ATM must dispense ₦20,000 cash");
+  assert.ok(latestSnapshot.statusMessage.includes("ATM: Dispensed ₦20,000 cash"), "Status must confirm withdrawal");
+
+  // 3. Talk to Sabon Gari NPF Highway Patrol Officer at (-10, 0, -56)
+  // @ts-expect-error accessing private field
+  engine.playerPosition.set(-10, 0, -56);
+  // @ts-expect-error accessing private method
+  engine.handleInteract();
+  assert.ok(latestSnapshot.statusMessage.includes("NPF Highway Patrol"), "Officer must greet player with division message");
+
+  // 4. Test Sabon Gari checkpoint speeding citation
+  // @ts-expect-error accessing private field
+  engine.mode = "driving";
+  // @ts-expect-error accessing private field
+  engine.carPosition.set(-10, 0, -53);
+  // @ts-expect-error accessing private field
+  engine.carSpeed = 8.0; // ~28.8 km/h
+  // @ts-expect-error accessing private method
+  engine.updateCar(0.016);
+  // @ts-expect-error accessing private method
+  engine.pushSnapshot(true);
+  assert.equal(latestSnapshot.trafficFine, 5000, "NPF citation of ₦5,000 must be registered for Sabon Gari checkpoint speeding");
+
+  engine.dispose();
+});
+
+test("Milestone 3: Social System & Adult Relationship Progression", () => {
+  const social = new SocialSystem();
+  const amina = social.getContact("amina");
+  assert.ok(amina, "Amina Lawal must exist in contacts");
+  assert.equal(amina.stage, "stranger");
+
+  // 1. Initial choices: greet or chat
+  let choices = social.getChoices("amina", 100000, false);
+  assert.ok(choices.some((c) => c.id === "greet"));
+  assert.ok(choices.some((c) => c.id === "chat_city"));
+
+  // Greet repeatedly to build rapport
+  for (let i = 0; i < 3; i++) {
+    social.interact("amina", "greet", 100000, false);
+  }
+  assert.equal(amina.stage, "acquaintance", "Amina should become an acquaintance");
+
+  // 2. Exchange contacts
+  const exchangeRes = social.interact("amina", "exchange_contacts", 100000, false);
+  assert.ok(exchangeRes);
+  assert.ok(exchangeRes.statusMessage.includes("ACQUAINTANCES"));
+
+  // 3. Dinner invite at Arewa Lounge (costs ₦5,000)
+  choices = social.getChoices("amina", 100000, false);
+  assert.ok(choices.some((c) => c.id === "invite_food"), "Should have food invite choice once acquaintance");
+  const dinnerRes = social.interact("amina", "invite_food", 100000, false);
+  assert.ok(dinnerRes);
+  assert.equal(dinnerRes.cashDelta, -5000, "Dinner must deduct ₦5,000");
+  assert.equal(amina.stage, "friend", "Stage should progress to friend");
+
+  // 4. Romantic date proposal (consent-based)
+  const dateRes = social.interact("amina", "ask_date", 100000, false);
+  assert.ok(dateRes);
+  assert.equal(amina.stage, "dating", "Stage must progress to dating");
+  assert.ok(dateRes.statusMessage.includes("DATING"));
+
+  // 5. Apartment visit invitation (requires apartment rental)
+  const rejectWithoutApt = social.interact("amina", "invite_apartment", 100000, false);
+  assert.ok(rejectWithoutApt);
+  assert.ok(rejectWithoutApt.statusMessage.includes("lease Unit 2B"), "Should require Unit 2B lease");
+
+  const acceptWithApt = social.interact("amina", "invite_apartment", 100000, true);
+  assert.ok(acceptWithApt);
+  assert.equal(amina.stage, "partner", "Stage must progress to partner");
+  assert.equal(amina.affection, 100, "Affection reaches 100%");
+  assert.ok(acceptWithApt.statusMessage.includes("PARTNER"));
 });

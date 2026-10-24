@@ -249,6 +249,47 @@
   color: #e4a06e;
 }
 
+.ks-hud-time {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(20, 29, 27, 0.55);
+  backdrop-filter: blur(8px);
+}
+
+.ks-hud-time small {
+  color: var(--ks-copper);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.ks-hud-time strong {
+  color: #eeddbb;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+.ks-score-badge {
+  border-color: rgba(24, 214, 232, 0.6);
+  background: rgba(12, 36, 45, 0.75);
+}
+
+.ks-score-badge strong {
+  color: #18d6e8;
+}
+
+.ks-contact-badge {
+  border-color: rgba(232, 24, 142, 0.6);
+  background: rgba(45, 12, 32, 0.75);
+}
+
+.ks-contact-badge strong {
+  color: #ff6ebb;
+}
+
 @media (max-width: 680px) {
   .ks-menu { padding: 22px 23px 18px; }
   .ks-menu-content { margin-top: clamp(64px, 13vh, 100px); }

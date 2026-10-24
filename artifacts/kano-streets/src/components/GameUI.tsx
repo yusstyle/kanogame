@@ -1,6 +1,6 @@
 import './GameUI.css';
 import TouchControls from './TouchControls';
-import type { VehicleType } from '../game/types';
+import type { SocialContact, VehicleType } from '../game/types';
 
 export type Screen = 'menu' | 'playing' | 'paused';
 export type Mode = 'on-foot' | 'driving';
@@ -18,6 +18,9 @@ export interface GameUIProps {
   trafficFine?: number;
   hasApartmentRental?: boolean;
   activeInterior?: string | null;
+  timeString?: string;
+  gameScore?: number;
+  featuredContact?: SocialContact | null;
   graphicsQuality: GraphicsQuality;
   onStart: () => void;
   onPause: () => void;
@@ -53,6 +56,9 @@ export default function GameUI({
   trafficFine,
   hasApartmentRental,
   activeInterior,
+  timeString,
+  gameScore,
+  featuredContact,
   graphicsQuality,
   onStart,
   onPause,
@@ -118,6 +124,7 @@ export default function GameUI({
           <header className="ks-hud-header">
             <div className="ks-hud-brand"><BrandMark /><span>KANO <i>/</i> STREETS</span></div>
             <div className="ks-hud-location"><span className="ks-live-dot" /> {location} <span className="ks-location-divider">/</span> FREE ROAM</div>
+            <div className="ks-hud-time"><small>TIME</small> <strong>{timeString ?? "10:00"}</strong></div>
             <span className="ks-pause-hint"><Key>ESC</Key><span>PAUSE</span></span>
           </header>
 
@@ -142,6 +149,18 @@ export default function GameUI({
               <span className="ks-wallet-item ks-interior-badge">
                 <small>LOCATION</small>
                 <strong>INDOORS</strong>
+              </span>
+            )}
+            {gameScore !== undefined && gameScore > 0 && (
+              <span className="ks-wallet-item ks-score-badge">
+                <small>ESPORTS SCORE</small>
+                <strong>{gameScore.toLocaleString()} PTS</strong>
+              </span>
+            )}
+            {featuredContact && (
+              <span className="ks-wallet-item ks-contact-badge">
+                <small>{featuredContact.name.toUpperCase()}</small>
+                <strong>{featuredContact.stage.toUpperCase()} ({featuredContact.affection}%)</strong>
               </span>
             )}
           </div>

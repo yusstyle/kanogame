@@ -231,6 +231,10 @@ export function createMaterials(): GameMaterials {
     karotaYellow: standard("#d8af18", 0.42, undefined, { roughness: 0.42 }),
     karotaGreen: standard("#156228", 0.45, undefined, { roughness: 0.45 }),
     goldTrim: standard("#c9a23b", 0.35, undefined, { metalness: 0.62, roughness: 0.35 }),
+    neonCyan: standard("#18d6e8", 0.2, undefined, { emissive: "#0cb2c4", emissiveIntensity: 0.85 }),
+    neonMagenta: standard("#e8188e", 0.2, undefined, { emissive: "#c40c72", emissiveIntensity: 0.85 }),
+    bankBlue: standard("#123862", 0.38, undefined, { metalness: 0.3, roughness: 0.38 }),
+    warmOrange: standard("#e26a22", 0.42, undefined, { roughness: 0.42 }),
   };
 }
 

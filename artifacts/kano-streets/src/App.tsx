@@ -53,7 +53,10 @@ function App() {
         current.cash === next.cash &&
         current.trafficFine === next.trafficFine &&
         current.hasApartmentRental === next.hasApartmentRental &&
-        current.activeInterior === next.activeInterior
+        current.activeInterior === next.activeInterior &&
+        current.timeString === next.timeString &&
+        current.gameScore === next.gameScore &&
+        current.featuredContact === next.featuredContact
       ) {
         return current;
       }
@@ -82,6 +85,9 @@ function App() {
         trafficFine={snapshot.trafficFine}
         hasApartmentRental={snapshot.hasApartmentRental}
         activeInterior={snapshot.activeInterior}
+        timeString={snapshot.timeString}
+        gameScore={snapshot.gameScore}
+        featuredContact={snapshot.featuredContact}
         graphicsQuality={graphicsQuality}
         onStart={start}
         onPause={pause}

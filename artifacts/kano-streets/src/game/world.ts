@@ -5,12 +5,17 @@ import { createMarketStall, createPlot } from "./buildings";
 import { getDistrict, ROAD_LAYOUT, ROAD_CENTERS, WORLD_BOUNDS, WORLD_EXTENT, type RoadSpec } from "./layout";
 import { makeSignMaterial } from "./materials";
 import {
+  createBompaiApartments,
   createChristianChurch,
   createFourStoreyApartment,
+  createGamingCentre,
   createKarotaOfficerModel,
+  createModernBankOfficePlaza,
+  createModernRestaurant,
   createModernVilla,
   createPoliceOfficerModel,
   createPoliceStation,
+  createSabonGariPlaza,
 } from "./modernDistrict";
 import type { BuildingKind, Collider, GameMaterials } from "./types";
 
@@ -712,7 +717,12 @@ export function createWorld(materials: GameMaterials): WorldResult {
           Math.hypot(x - 28, z - (-18)) < 16 ||
           Math.hypot(x - 48, z - (-50)) < 16 ||
           Math.hypot(x - 44, z - 39) < 16 ||
-          Math.hypot(x - (-48), z - 37) < 18
+          Math.hypot(x - (-48), z - 37) < 18 ||
+          Math.hypot(x - 16, z - (-42)) < 16 ||
+          Math.hypot(x - 80, z - (-22)) < 18 ||
+          Math.hypot(x - 80, z - (-46)) < 16 ||
+          Math.hypot(x - 18, z - 42) < 16 ||
+          Math.hypot(x - (-22), z - 48) < 16
         ) {
           continue;
         }
@@ -793,6 +803,44 @@ export function createWorld(materials: GameMaterials): WorldResult {
   root.add(karotaOfficer);
   colliders.push({ x: 20, z: -9.5, halfX: 0.35, halfZ: 0.35, height: 1.9 });
 
+  // 7. Arewa Fast Food & Suya Lounge
+  const restaurant = createModernRestaurant(materials);
+  restaurant.root.position.set(16, 0, -42);
+  root.add(restaurant.root);
+  colliders.push(...restaurant.colliders.map((c) => ({ ...c, x: c.x + 16, z: c.z - 42 })));
+
+  // 8. Arewa Commercial Bank & Financial Suites
+  const bankPlaza = createModernBankOfficePlaza(materials);
+  bankPlaza.root.position.set(80, 0, -22);
+  root.add(bankPlaza.root);
+  colliders.push(...bankPlaza.colliders.map((c) => ({ ...c, x: c.x + 80, z: c.z - 22 })));
+
+  // 9. Kano Cyber & PS5 Game Hub
+  const gameHub = createGamingCentre(materials);
+  gameHub.root.position.set(80, 0, -46);
+  root.add(gameHub.root);
+  colliders.push(...gameHub.colliders.map((c) => ({ ...c, x: c.x + 80, z: c.z - 46 })));
+
+  // 10. Bompai Heights 4-Storey Luxury Flats
+  const bompaiFlats = createBompaiApartments(materials);
+  bompaiFlats.root.position.set(18, 0, 42);
+  root.add(bompaiFlats.root);
+  colliders.push(...bompaiFlats.colliders.map((c) => ({ ...c, x: c.x + 18, z: c.z + 42 })));
+
+  // 11. Sabon Gari Commercial Complex & Fellowship Bookstore
+  const sabonGariComplex = createSabonGariPlaza(materials);
+  sabonGariComplex.root.position.set(-22, 0, 48);
+  root.add(sabonGariComplex.root);
+  colliders.push(...sabonGariComplex.colliders.map((c) => ({ ...c, x: c.x - 22, z: c.z + 48 })));
+
+  // 12. Checkpoint 2: NPF Highway Patrol on Sabon Gari Avenue
+  const officer2 = createPoliceOfficerModel(materials);
+  officer2.position.set(-10, 0, -56);
+  officer2.rotation.y = -Math.PI / 2;
+  officer2.traverse((o) => { o.userData.noMerge = true; });
+  root.add(officer2);
+  colliders.push({ x: -10, z: -56, halfX: 0.35, halfZ: 0.35, height: 1.9 });
+
   addMarketWaterTank(root, materials, colliders, -43, 44);
   addKanoRoadsideProps(root, materials, colliders, -16, 26, Math.PI / 2);
   addKanoRoadsideProps(root, materials, colliders, 18, -22, 0);
@@ -833,6 +881,9 @@ export function createWorld(materials: GameMaterials): WorldResult {
   addStreetSign(root, colliders, -15, 130, "SABON GARI", Math.PI / 2);
   addStreetSign(root, colliders, 78, -130, "AIRPORT ROAD", 0);
   addStreetSign(root, colliders, 130, 15, "RESIDENTIAL QUARTER", -Math.PI / 2);
+  addStreetSign(root, colliders, -48, 14, "ST. STEPHEN'S ANGLICAN CHURCH ↗", 0);
+  addStreetSign(root, colliders, 64, -14, "AREWA COMMERCIAL BANK & CYBER HUB ↗", 0);
+  addStreetSign(root, colliders, 16, -14, "AREWA FAST FOOD & SUYA LOUNGE ↘", 0);
 
   // Small neighborhood benches and public water points.
   const benchLocations = [[-44, 27], [-20, 35], [32, -34], [40, -27]] as const;
