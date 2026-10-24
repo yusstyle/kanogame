@@ -574,6 +574,64 @@ function addCulvertBridges(root: THREE.Group, materials: GameMaterials) {
   }
 }
 
+function addNorthernExpansionGateway(root: THREE.Group, materials: GameMaterials, colliders: Collider[]) {
+  const gateZ = -126;
+  const group = new THREE.Group();
+  group.position.set(0, 0, gateZ);
+  root.add(group);
+
+  const pillarOffset = 11.5;
+  for (const px of [-pillarOffset, pillarOffset]) {
+    addBox(group, materials.metal, px, 3.8, 0, 0.9, 7.6, 0.9);
+    addBox(group, materials.concrete, px, 0.4, 0, 1.8, 0.8, 1.8);
+    colliders.push({ x: px, z: gateZ, halfX: 1.0, halfZ: 1.0, height: 7.6 });
+  }
+
+  addBox(group, materials.metal, 0, 7.2, 0, 24.0, 0.9, 0.8);
+  addBox(group, materials.metal, 0, 6.4, 0, 23.0, 0.15, 0.15);
+
+  const gateSign = makeSignMaterial("KANO RING ROAD · KAWU INDUSTRIAL PARK · CHAD BASIN ARTERY ↗\nFEDERAL HIGHWAY EXPANSION ZONE · DRIVE SAFELY", "#155724");
+  addBox(group, gateSign, 0, 7.5, 0.45, 18.0, 1.6, 0.12);
+
+  for (const bx of [-8, -2, 2, 8]) {
+    addBox(group, materials.clay, bx, 8.4, 0.45, 0.35, 0.35, 0.2);
+  }
+
+  const barrierMat = materials.karotaYellow || materials.clay;
+  for (const bx of [-7.5, -2.5, 2.5, 7.5]) {
+    addBox(group, barrierMat, bx, 0.5, 3.0, 3.8, 0.9, 0.3);
+    addBox(group, materials.black, bx, 0.5, 3.16, 3.4, 0.3, 0.05);
+    colliders.push({ x: bx, z: gateZ + 3.0, halfX: 2.0, halfZ: 0.3, height: 1.1 });
+  }
+}
+
+function addAutoTuningWorkshop(root: THREE.Group, materials: GameMaterials, colliders: Collider[]) {
+  const group = new THREE.Group();
+  group.position.set(-16, 0, -22);
+  root.add(group);
+
+  const shopSign = makeSignMaterial("SANI AUTO CLINIC & VULCANIZER\nENGINE TUNING · METALLIC SPRAY · WHEEL BALANCING", "#852d19");
+  addBox(group, shopSign, 0, 3.2, 0, 5.8, 0.8, 0.1);
+
+  addBox(group, materials.wood, 0, 3.0, 1.8, 6.2, 0.12, 4.0);
+  addCylinder(group, materials.metal, -2.8, 1.5, 3.6, 0.06, 0.06, 3.0);
+  addCylinder(group, materials.metal, 2.8, 1.5, 3.6, 0.06, 0.06, 3.0);
+
+  for (let t = 0; t < 3; t++) {
+    addCylinder(group, materials.black, -1.8, 0.25 + t * 0.38, 1.5, 0.45, 0.45, 0.35);
+  }
+  for (let t = 0; t < 2; t++) {
+    addCylinder(group, materials.black, -1.0, 0.25 + t * 0.38, 1.8, 0.45, 0.45, 0.35);
+  }
+
+  addCylinder(group, materials.clay, 1.8, 0.7, 1.5, 0.35, 0.35, 1.1);
+  addBox(group, materials.metal, 0.8, 0.6, 1.6, 0.8, 1.1, 0.6);
+
+  colliders.push(
+    { x: -16, z: -22, halfX: 3.2, halfZ: 2.0, height: 3.2 },
+  );
+}
+
 function mergeStaticMeshesByCell(root: THREE.Group) {
   root.updateMatrixWorld(true);
   const buckets = new Map<
@@ -844,6 +902,8 @@ export function createWorld(materials: GameMaterials): WorldResult {
   addMarketWaterTank(root, materials, colliders, -43, 44);
   addKanoRoadsideProps(root, materials, colliders, -16, 26, Math.PI / 2);
   addKanoRoadsideProps(root, materials, colliders, 18, -22, 0);
+  addAutoTuningWorkshop(root, materials, colliders);
+  addNorthernExpansionGateway(root, materials, colliders);
 
   const trees: [number, number, number, boolean][] = [];
   for (const road of ROAD_LAYOUT.filter((item) => item.arterial)) {

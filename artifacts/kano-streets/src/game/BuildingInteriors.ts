@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { makeSignMaterial } from "./materials";
-import type { Collider, GameMaterials, InteriorId } from "./types";
+import type { Collider, GameMaterials, InteriorId, PropertyId, BusinessId } from "./types";
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
 const unitCyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
@@ -61,6 +61,8 @@ export interface InteriorZone {
       trafficFine: number;
       hasApartmentRental: boolean;
       score?: number;
+      ownedProperties?: string[];
+      ownedBusinesses?: string[];
     },
   ) => {
     prompt: string;
@@ -71,6 +73,8 @@ export interface InteriorZone {
       rentApartment?: boolean;
       scoreDelta?: number;
       socialContactId?: string;
+      purchasedProperty?: PropertyId;
+      purchasedBusiness?: BusinessId;
     };
   } | null;
 }
@@ -293,15 +297,30 @@ export class BuildingInteriorManager {
       outdoorDoorPosition: new THREE.Vector3(48, 0, -43.5),
       outdoorDoorYaw: 0,
       checkInteraction: (pos, state) => {
-        // Distance to rental desk (cx + 2.8, cz - 3.2)
+        // Distance to rental & deed desk (cx + 2.8, cz - 3.2)
         const d = pos.distanceTo(new THREE.Vector3(cx + 2.8, cy + 0.1, cz - 3.2));
         if (d <= 2.2) {
+          if (state.ownedProperties?.includes("unit-2b")) {
+            return {
+              prompt: "Unit 2B: Freehold Deed of Ownership Held",
+              action: () => ({
+                statusMessage: "You hold the official Certificate of Occupancy for Unit 2B Airport View Apartments. Freehold property with zero monthly rent.",
+              }),
+            };
+          }
           if (state.hasApartmentRental) {
             return {
-              prompt: "Apartment Rented · View Lease Status",
-              action: () => ({
-                statusMessage: "You are the official tenant of Unit 2B. Rent paid for current month.",
-              }),
+              prompt: "Purchase Unit 2B Freehold Ownership (₦18,000,000)",
+              action: () => {
+                if (state.cash < 18000000) {
+                  return { statusMessage: "Insufficient capital: Freehold deed of ownership requires ₦18,000,000." };
+                }
+                return {
+                  statusMessage: "Congratulations! Freehold Certificate of Occupancy acquired for Unit 2B Airport View Apartments!",
+                  cashDelta: -18000000,
+                  purchasedProperty: "unit-2b",
+                };
+              },
             };
           }
           return {
@@ -708,6 +727,31 @@ export class BuildingInteriorManager {
           };
         }
 
+        const distFranchise = pos.distanceTo(new THREE.Vector3(cx - 3.2, cy + 0.1, cz + 2.5));
+        if (distFranchise <= 2.2) {
+          if (state.ownedBusinesses?.includes("arewa-suya-franchise")) {
+            return {
+              prompt: "Arewa Suya Franchise Share: Active Partner",
+              action: () => ({
+                statusMessage: "You are an equity partner in Arewa Suya Lounge. Yields ~₦30,000/day net profit.",
+              }),
+            };
+          }
+          return {
+            prompt: "Invest: Acquire Arewa Suya Franchise Share (₦1,200,000)",
+            action: () => {
+              if (state.cash < 1200000) {
+                return { statusMessage: "Insufficient capital: Arewa Suya franchise equity requires ₦1,200,000." };
+              }
+              return {
+                statusMessage: "Franchise Partnership Agreement signed! You now earn ~₦30,000/day net profit.",
+                cashDelta: -1200000,
+                purchasedBusiness: "arewa-suya-franchise",
+              };
+            },
+          };
+        }
+
         return null;
       },
     });
@@ -840,6 +884,31 @@ export class BuildingInteriorManager {
               statusMessage: "Zainab Bello: 'Yo! You want to test your reflexes on the Kano Drift circuit? Let us see what you got!'",
               socialContactId: "zainab",
             }),
+          };
+        }
+
+        const distRigBiz = pos.distanceTo(new THREE.Vector3(cx, cy + 0.1, cz - depth / 2 + 1.8));
+        if (distRigBiz <= 2.2) {
+          if (state.ownedBusinesses?.includes("cyber-hub-station")) {
+            return {
+              prompt: "PS5 Tournament Rig Station: Active Enterprise",
+              action: () => ({
+                statusMessage: "You own 2 commercial tournament PS5 stations at the Cyber Hub. Yields ~₦18,000/day net profit.",
+              }),
+            };
+          }
+          return {
+            prompt: "Acquire Dual PS5 Tournament Rig Station (₦800,000)",
+            action: () => {
+              if (state.cash < 800000) {
+                return { statusMessage: "Insufficient funds: Dual PS5 Tournament rig setup requires ₦800,000." };
+              }
+              return {
+                statusMessage: "Tournament Rig stations acquired! Generating ~₦18,000/day commercial esports revenue.",
+                cashDelta: -800000,
+                purchasedBusiness: "cyber-hub-station",
+              };
+            },
           };
         }
 

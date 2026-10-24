@@ -12,6 +12,7 @@ export type GameViewportHandle = {
   requestPointerLock: () => void;
   reset: () => void;
   setControlKey: (key: string, pressed: boolean) => void;
+  setGPSTarget: (id: string | null) => void;
 };
 
 type GameViewportProps = {
@@ -41,6 +42,7 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
         requestPointerLock: () => engineRef.current?.requestPointerLock(),
         reset: () => engineRef.current?.reset(),
         setControlKey: (key, pressed) => engineRef.current?.setControlKey(key, pressed),
+        setGPSTarget: (id) => engineRef.current?.setGPSTarget(id),
       }),
       [],
     );

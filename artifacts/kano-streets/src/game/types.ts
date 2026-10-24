@@ -35,6 +35,38 @@ export type GameScreen = "menu" | "playing" | "paused";
 
 export type InteriorId = "house" | "apartment" | "church" | "police-post" | "restaurant" | "gaming-hub";
 
+export type PropertyId = "unit-2b" | "bompai-penthouse" | "albaraka-villa";
+export type BusinessId = "sabon-gari-shop" | "arewa-suya-franchise" | "cyber-hub-station";
+
+export interface PropertyInfo {
+  id: PropertyId;
+  name: string;
+  location: string;
+  rentMonthly?: number;
+  purchasePrice: number;
+  isRented: boolean;
+  isOwned: boolean;
+  dailyUpkeep: number;
+  description: string;
+}
+
+export interface BusinessInfo {
+  id: BusinessId;
+  name: string;
+  location: string;
+  purchasePrice: number;
+  dailyRevenue: number;
+  dailyCost: number;
+  isOwned: boolean;
+  description: string;
+}
+
+export interface VehicleUpgrade {
+  engineStage: number;
+  paintColor: string;
+  suspensionUpgraded: boolean;
+}
+
 export type RelationshipStage = "stranger" | "acquaintance" | "friend" | "dating" | "partner";
 
 export type SocialContact = {
@@ -62,6 +94,11 @@ export type GameSnapshot = {
   timeString?: string;
   gameScore?: number;
   featuredContact?: SocialContact | null;
+  ownedProperties?: string[];
+  ownedBusinesses?: string[];
+  dailyIncome?: number;
+  dayCount?: number;
+  gpsTarget?: string | null;
 };
 
 export type GameMaterials = {

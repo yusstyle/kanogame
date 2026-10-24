@@ -41,6 +41,10 @@ function App() {
     viewportRef.current?.setControlKey(key, pressed);
   }, []);
 
+  const setGPSTarget = useCallback((id: string | null) => {
+    viewportRef.current?.setGPSTarget(id);
+  }, []);
+
   const receiveSnapshot = useCallback((next: GameSnapshot) => {
     setSnapshot((current) => {
       if (
@@ -56,7 +60,10 @@ function App() {
         current.activeInterior === next.activeInterior &&
         current.timeString === next.timeString &&
         current.gameScore === next.gameScore &&
-        current.featuredContact === next.featuredContact
+        current.featuredContact === next.featuredContact &&
+        current.dailyIncome === next.dailyIncome &&
+        current.dayCount === next.dayCount &&
+        current.gpsTarget === next.gpsTarget
       ) {
         return current;
       }
@@ -88,12 +95,18 @@ function App() {
         timeString={snapshot.timeString}
         gameScore={snapshot.gameScore}
         featuredContact={snapshot.featuredContact}
+        ownedProperties={snapshot.ownedProperties}
+        ownedBusinesses={snapshot.ownedBusinesses}
+        dailyIncome={snapshot.dailyIncome}
+        dayCount={snapshot.dayCount}
+        gpsTarget={snapshot.gpsTarget}
         graphicsQuality={graphicsQuality}
         onStart={start}
         onPause={pause}
         onResume={resume}
         onReset={reset}
         onControlKey={setControlKey}
+        onSetGPSTarget={setGPSTarget}
         onQualityChange={setGraphicsQuality}
       />
     </main>

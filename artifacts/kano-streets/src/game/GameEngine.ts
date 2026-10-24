@@ -18,6 +18,8 @@ import { TrafficSystem } from "./TrafficSystem";
 import { createWorld } from "./world";
 import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType } from "./types";
 import { SocialSystem } from "./socialSystem";
+import { EconomySystem } from "./economySystem";
+import { KANO_LANDMARKS, getNearestLandmark } from "./landmarks";
 
 const PLAYER_START = new THREE.Vector3(-4, 0, -4);
 const CAR_START = new THREE.Vector3(-2, 0, -8);
@@ -96,12 +98,14 @@ export class GameEngine {
   private wheelSpin = 0;
   private readonly interiorManager: BuildingInteriorManager;
   public readonly socialSystem = new SocialSystem();
+  public readonly economy = new EconomySystem();
   private cash = 150000;
   private trafficFine = 0;
   private hasApartmentRental = false;
   private gameMinutes = 600; // 10:00 AM
   private gameScore = 0;
   private featuredContactId: string | null = null;
+  private gpsTargetLandmark: string | null = null;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -129,6 +133,13 @@ export class GameEngine {
     this.materials = createMaterials();
     this.interiorManager = new BuildingInteriorManager(this.materials);
     this.scene.add(this.interiorManager.root);
+
+    const saved = this.economy.loadFromStorage();
+    if (saved) {
+      this.cash = saved.cash;
+      this.trafficFine = saved.trafficFine;
+      this.hasApartmentRental = saved.hasApartmentRental;
+    }
     this.world = createWorld(this.materials);
     this.colliderIndex = new ColliderIndex(this.world.colliders);
     this.scene.add(this.world.root);
@@ -532,6 +543,8 @@ export class GameEngine {
             trafficFine: this.trafficFine,
             hasApartmentRental: this.hasApartmentRental,
             score: this.gameScore,
+            ownedProperties: this.economy.getOwnedPropertiesList(),
+            ownedBusinesses: this.economy.getOwnedBusinessesList(),
           });
           if (inter) {
             const res = inter.action();
@@ -540,6 +553,14 @@ export class GameEngine {
             if (res.clearFine) this.trafficFine = 0;
             if (res.rentApartment) this.hasApartmentRental = true;
             if (res.scoreDelta) this.gameScore = Math.max(this.gameScore, res.scoreDelta);
+            if (res.purchasedProperty) {
+              const p = this.economy.properties.get(res.purchasedProperty);
+              if (p) p.isOwned = true;
+            }
+            if (res.purchasedBusiness) {
+              const b = this.economy.businesses.get(res.purchasedBusiness);
+              if (b) b.isOwned = true;
+            }
             if (res.socialContactId) {
               this.featuredContactId = res.socialContactId;
               const choices = this.socialSystem.getChoices(res.socialContactId, this.cash, this.hasApartmentRental);
@@ -552,6 +573,7 @@ export class GameEngine {
                 }
               }
             }
+            this.economy.saveToStorage(this.cash, this.trafficFine, this.hasApartmentRental);
             this.pushSnapshot(true);
             return;
           }
@@ -605,6 +627,77 @@ export class GameEngine {
       } else {
         this.statusMessage = "KAROTA Officer: 'Driver documents and roadworthiness verified. Safe driving in Kano!'";
       }
+      this.pushSnapshot(true);
+      return;
+    }
+
+    // Check outdoor Sabon Gari Commercial Complex Shop at (-22, 0, 45.2)
+    if (this.playerPosition.distanceTo(new THREE.Vector3(-22, 0, 45.2)) <= 2.8) {
+      const biz = this.economy.businesses.get("sabon-gari-shop");
+      if (biz?.isOwned) {
+        this.statusMessage = "Sabon Gari Electronics: Owned retail enterprise. Daily yield: ~₦10,000 net profit.";
+      } else {
+        const res = this.economy.purchaseBusiness("sabon-gari-shop", this.cash);
+        this.statusMessage = res.message;
+        if (res.success) {
+          this.cash -= res.cost;
+          this.economy.saveToStorage(this.cash, this.trafficFine, this.hasApartmentRental);
+        }
+      }
+      this.pushSnapshot(true);
+      return;
+    }
+
+    // Check outdoor Bompai Heights Concierge at (18, 0, 39.5)
+    if (this.playerPosition.distanceTo(new THREE.Vector3(18, 0, 39.5)) <= 2.8) {
+      const prop = this.economy.properties.get("bompai-penthouse");
+      if (prop?.isOwned) {
+        this.statusMessage = "Bompai Heights Penthouse: Owned luxury residence.";
+      } else {
+        const res = this.economy.purchaseProperty("bompai-penthouse", this.cash);
+        this.statusMessage = res.message;
+        if (res.success) {
+          this.cash -= res.cost;
+          this.economy.saveToStorage(this.cash, this.trafficFine, this.hasApartmentRental);
+        }
+      }
+      this.pushSnapshot(true);
+      return;
+    }
+
+    // Check outdoor Al-Baraka Executive Villa Gate at (44, 0, 45)
+    if (this.playerPosition.distanceTo(new THREE.Vector3(44, 0, 45)) <= 2.8) {
+      const prop = this.economy.properties.get("albaraka-villa");
+      if (prop?.isOwned) {
+        this.statusMessage = "Al-Baraka Executive Villa: Owned residence.";
+      } else {
+        const res = this.economy.purchaseProperty("albaraka-villa", this.cash);
+        this.statusMessage = res.message;
+        if (res.success) {
+          this.cash -= res.cost;
+          this.economy.saveToStorage(this.cash, this.trafficFine, this.hasApartmentRental);
+        }
+      }
+      this.pushSnapshot(true);
+      return;
+    }
+
+    // Check outdoor Sani Auto Tuning Workshop at (-16, 0, -22)
+    if (this.playerPosition.distanceTo(new THREE.Vector3(-16, 0, -22)) <= 3.2) {
+      const res = this.economy.upgradeVehicleEngine(this.cash);
+      this.statusMessage = res.message;
+      if (res.success) {
+        this.cash -= res.cost;
+        this.economy.saveToStorage(this.cash, this.trafficFine, this.hasApartmentRental);
+      }
+      this.pushSnapshot(true);
+      return;
+    }
+
+    // Check outdoor pedestrian talk interaction
+    const pedInter = this.pedestrianSystem.checkPedestrianInteraction(this.playerPosition);
+    if (pedInter) {
+      this.statusMessage = pedInter.action();
       this.pushSnapshot(true);
       return;
     }
@@ -709,6 +802,16 @@ export class GameEngine {
     this.lastFrameAt = now;
     if (this.screen === "playing") {
       this.gameMinutes += dt * 4;
+      const hours = (this.gameMinutes / 60) % 24;
+      this.pedestrianSystem.setTimeOfDay(hours);
+
+      const dayOutcome = this.economy.updateDayCycle(this.gameMinutes, this.cash);
+      if (dayOutcome.cashDelta !== 0) {
+        this.cash += dayOutcome.cashDelta;
+        this.statusMessage = dayOutcome.message;
+        this.economy.saveToStorage(this.cash, this.trafficFine, this.hasApartmentRental);
+      }
+
       if (this.mode === "on-foot") this.updatePlayer(dt, now);
       else this.updateCar(dt);
 
@@ -844,10 +947,12 @@ export class GameEngine {
 
   private updateSedan(dt: number) {
     const throttle = this.keys.has("w");
-    const braking = this.keys.has("s") || this.keys.has(" ");
+    const braking = this.keys.has("s");
+    const handbrake = this.keys.has(" ");
     const steer =
       (this.keys.has("d") ? 1 : 0) - (this.keys.has("a") ? 1 : 0);
-    const accel = 7.8;
+    const engineMultiplier = 1 + this.economy.vehicleUpgrade.engineStage * 0.22;
+    const accel = 7.8 * engineMultiplier;
     const brakeAccel = 15.5;
     const reverseAccel = 4.1;
 
@@ -860,10 +965,16 @@ export class GameEngine {
       if (Math.abs(this.carSpeed) < 0.035) this.carSpeed = 0;
     }
 
-    this.carSpeed = THREE.MathUtils.clamp(this.carSpeed, -6.5, 18.2);
+    if (handbrake) {
+      this.carSpeed *= Math.exp(-4.2 * dt);
+      if (Math.abs(this.carSpeed) < 0.12) this.carSpeed = 0;
+    }
+
+    const topSpeed = 18.2 * engineMultiplier;
+    this.carSpeed = THREE.MathUtils.clamp(this.carSpeed, -6.5, topSpeed);
     const steeringFactor = THREE.MathUtils.clamp(Math.abs(this.carSpeed) / 3, 0, 1);
     this.carYaw +=
-      steer * 0.9 * steeringFactor * dt * (this.carSpeed >= 0 ? 1 : -1);
+      steer * 0.95 * steeringFactor * dt * (this.carSpeed >= 0 ? 1 : -1);
     this.carYaw = THREE.MathUtils.euclideanModulo(this.carYaw + Math.PI, Math.PI * 2) - Math.PI;
 
     const previous = this.carPosition.clone();
@@ -1193,6 +1304,9 @@ export class GameEngine {
             cash: this.cash,
             trafficFine: this.trafficFine,
             hasApartmentRental: this.hasApartmentRental,
+            score: this.gameScore,
+            ownedProperties: this.economy.getOwnedPropertiesList(),
+            ownedBusinesses: this.economy.getOwnedBusinessesList(),
           });
           if (inter) interactionPrompt = inter.prompt;
         }
@@ -1217,6 +1331,36 @@ export class GameEngine {
           interactionPrompt = "Talk to NPF Officer";
         } else if (this.playerPosition.distanceTo(new THREE.Vector3(20, 0, -9.5)) <= 3.2) {
           interactionPrompt = "Talk to KAROTA Officer";
+        }
+      }
+      // Check outdoor shops / properties
+      if (!interactionPrompt) {
+        if (this.playerPosition.distanceTo(new THREE.Vector3(-22, 0, 45.2)) <= 2.8) {
+          const biz = this.economy.businesses.get("sabon-gari-shop");
+          interactionPrompt = biz?.isOwned
+            ? "Sabon Gari Electronics: Owned Enterprise"
+            : "Acquire Sabon Gari Electronics Stall (₦450,000)";
+        } else if (this.playerPosition.distanceTo(new THREE.Vector3(18, 0, 39.5)) <= 2.8) {
+          const prop = this.economy.properties.get("bompai-penthouse");
+          interactionPrompt = prop?.isOwned
+            ? "Bompai Penthouse: Owned Residence"
+            : "Purchase Bompai Penthouse (₦35,000,000)";
+        } else if (this.playerPosition.distanceTo(new THREE.Vector3(44, 0, 45)) <= 2.8) {
+          const prop = this.economy.properties.get("albaraka-villa");
+          interactionPrompt = prop?.isOwned
+            ? "Al-Baraka Villa: Owned Residence"
+            : "Purchase Al-Baraka Villa (₦65,000,000)";
+        } else if (this.playerPosition.distanceTo(new THREE.Vector3(-16, 0, -22)) <= 3.2) {
+          interactionPrompt = this.economy.vehicleUpgrade.engineStage >= 2
+            ? "Sani Auto Workshop: Max Stage 2 Tune Active"
+            : `Sani Auto: Engine Tune Stage ${this.economy.vehicleUpgrade.engineStage + 1} (₦${this.economy.vehicleUpgrade.engineStage === 0 ? "50,000" : "95,000"})`;
+        }
+      }
+      // Check street pedestrians
+      if (!interactionPrompt) {
+        const pedInter = this.pedestrianSystem.checkPedestrianInteraction(this.playerPosition);
+        if (pedInter) {
+          interactionPrompt = pedInter.prompt;
         }
       }
       // Check vehicles
@@ -1271,7 +1415,25 @@ export class GameEngine {
       timeString,
       gameScore: this.gameScore,
       featuredContact,
+      ownedProperties: this.economy.getOwnedPropertiesList(),
+      ownedBusinesses: this.economy.getOwnedBusinessesList(),
+      dailyIncome: this.economy.getDailyNetIncome(),
+      dayCount: this.economy.dayCount,
+      gpsTarget: this.gpsTargetLandmark,
     });
+  }
+
+  public setGPSTarget(id: string | null) {
+    this.gpsTargetLandmark = id;
+    if (id) {
+      const lm = KANO_LANDMARKS.find((l) => l.id === id);
+      if (lm) {
+        this.statusMessage = `GPS Target set: ${lm.name} (${lm.district})`;
+      }
+    } else {
+      this.statusMessage = "GPS Navigation cleared";
+    }
+    this.pushSnapshot(true);
   }
 
   public interactSocial(contactId: string, choiceId: string) {

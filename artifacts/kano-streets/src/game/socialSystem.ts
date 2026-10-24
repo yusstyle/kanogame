@@ -93,6 +93,22 @@ export class SocialSystem {
       choices.push({ id: "exchange_contacts", label: "Exchange phone numbers & stay in touch" });
     }
 
+    if (id === "amina" && c.affection >= 20) {
+      choices.push({ id: "architectural_tour", label: "Discuss modern Kano villa architecture & design" });
+    }
+    if (id === "zainab" && c.affection >= 20) {
+      choices.push({ id: "drift_challenge", label: "Challenge Zainab to Street Drift 1v1 match" });
+    }
+    if (id === "fatima" && c.affection >= 15) {
+      choices.push({ id: "discuss_business", label: "Explore smart-farming investments in northern Nigeria" });
+    }
+    if (id === "chinedu" && c.affection >= 15) {
+      choices.push({ id: "choir_music", label: "Talk about St. Stephen's Anglican choir & community" });
+    }
+    if (id === "danladi" && c.affection >= 20) {
+      choices.push({ id: "ask_security_tips", label: "Ask for highway security tips & traffic regulations" });
+    }
+
     // Hangout choices
     if (c.affection >= 25) {
       choices.push({
@@ -178,6 +194,60 @@ export class SocialSystem {
           affectionDelta: 12,
           newStage: "acquaintance",
           statusMessage: `Exchanged contacts with ${firstName}. Now ACQUAINTANCES!`,
+        };
+      }
+
+      case "architectural_tour": {
+        c.affection = Math.min(100, c.affection + 15);
+        if (c.stage === "acquaintance" && c.affection >= 40) c.stage = "friend";
+        return {
+          speaker: c.name,
+          response: `${firstName}: 'Look at the curved louvres on Bompai Heights! Combining Sahelian passive solar cooling with modern concrete is my passion.'`,
+          affectionDelta: 15,
+          statusMessage: `Discussed Kano architectural heritage with Amina. Affection +15!`,
+        };
+      }
+
+      case "drift_challenge": {
+        c.affection = Math.min(100, c.affection + 16);
+        if (c.stage === "acquaintance" && c.affection >= 40) c.stage = "friend";
+        return {
+          speaker: c.name,
+          response: `${firstName}: 'You handled that hairpin drift like a pro! I rarely meet drivers who can keep up with my times!'`,
+          affectionDelta: 16,
+          statusMessage: `Thrilling 1v1 Street Drift match with Zainab! Affection +16!`,
+        };
+      }
+
+      case "discuss_business": {
+        c.affection = Math.min(100, c.affection + 15);
+        if (c.stage === "acquaintance" && c.affection >= 40) c.stage = "friend";
+        return {
+          speaker: c.name,
+          response: `${firstName}: 'Smart irrigation and solar cold-storage in Kano can transform agricultural logistics across northern Nigeria.'`,
+          affectionDelta: 15,
+          statusMessage: `Explored agribusiness investments with Fatima. Affection +15!`,
+        };
+      }
+
+      case "choir_music": {
+        c.affection = Math.min(100, c.affection + 14);
+        if (c.stage === "acquaintance" && c.affection >= 40) c.stage = "friend";
+        return {
+          speaker: c.name,
+          response: `${firstName}: 'The acoustics inside St. Stephen's sanctuary are breathtaking. You are welcome to join us during choir practice!'`,
+          affectionDelta: 14,
+          statusMessage: `Connected with Chinedu over music and community. Affection +14!`,
+        };
+      }
+
+      case "ask_security_tips": {
+        c.affection = Math.min(100, c.affection + 12);
+        return {
+          speaker: c.name,
+          response: `${firstName}: 'Always verify your vehicle particulars and drive cautiously near junctions. Our goal is ensuring every resident returns home safely.'`,
+          affectionDelta: 12,
+          statusMessage: `Learned highway safety and traffic rules from Sgt. Danladi. Affection +12!`,
         };
       }
 

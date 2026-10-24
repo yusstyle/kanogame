@@ -290,6 +290,261 @@
   color: #ff6ebb;
 }
 
+.ks-biz-badge {
+  border-color: rgba(235, 180, 50, 0.65) !important;
+  background: rgba(50, 38, 12, 0.8) !important;
+}
+
+.ks-biz-badge strong {
+  color: #f7ca55 !important;
+}
+
+.ks-property-badge {
+  border-color: rgba(60, 180, 100, 0.65) !important;
+  background: rgba(14, 45, 26, 0.8) !important;
+}
+
+.ks-property-badge strong {
+  color: #6fe5a8 !important;
+}
+
+.ks-hud-directory-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border: 1px solid rgba(228, 160, 110, 0.4);
+  background: rgba(20, 29, 27, 0.7);
+  color: var(--ks-ink);
+  font: inherit;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: all 0.15s ease;
+  backdrop-filter: blur(8px);
+}
+
+.ks-hud-directory-btn:hover {
+  background: rgba(228, 160, 110, 0.25);
+  border-color: var(--ks-copper);
+}
+
+.ks-hud-directory-btn .ks-key {
+  border-color: rgba(228, 160, 110, 0.6);
+  color: #eeddbb;
+}
+
+.ks-gps-chip {
+  position: absolute;
+  top: clamp(18px, 3.5vh, 36px);
+  right: clamp(180px, 20vw, 320px);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 12px;
+  border: 1px solid rgba(228, 160, 110, 0.6);
+  border-left: 3px solid var(--ks-copper);
+  background: rgba(20, 29, 27, 0.85);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+  animation: ks-fade-in 0.2s ease-out;
+}
+
+.ks-gps-icon {
+  font-size: 14px;
+  color: var(--ks-copper);
+}
+
+.ks-gps-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ks-gps-info strong {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: #eeddbb;
+}
+
+.ks-gps-info small {
+  font-size: 7px;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 0.05em;
+}
+
+.ks-gps-clear {
+  margin-left: 6px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.ks-gps-clear:hover {
+  color: #ff7766;
+}
+
+.ks-directory-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(12, 19, 17, 0.82);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  animation: ks-fade-in 0.2s ease-out;
+}
+
+.ks-directory-panel {
+  width: min(840px, calc(100% - 32px));
+  max-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  background: #172421;
+  border: 1px solid rgba(244, 238, 223, 0.22);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.ks-directory-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid rgba(244, 238, 223, 0.15);
+  background: rgba(23, 36, 33, 0.95);
+}
+
+.ks-directory-header h2 {
+  margin: 4px 0 0;
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--ks-ink);
+}
+
+.ks-directory-close {
+  background: none;
+  border: 1px solid rgba(244, 238, 223, 0.25);
+  border-radius: 2px;
+  color: var(--ks-muted);
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ks-directory-close:hover {
+  border-color: var(--ks-copper);
+  color: var(--ks-ink);
+}
+
+.ks-directory-list {
+  padding: 18px 24px 24px;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.ks-directory-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: rgba(22, 34, 31, 0.7);
+  border: 1px solid rgba(244, 238, 223, 0.12);
+  transition: border-color 0.15s ease;
+}
+
+.ks-directory-card:hover {
+  border-color: rgba(228, 160, 110, 0.4);
+}
+
+.ks-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ks-card-main h3 {
+  margin: 3px 0 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #f7efdf;
+}
+
+.ks-card-main p {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.45;
+  color: rgba(244, 238, 223, 0.65);
+}
+
+.ks-card-coords {
+  margin-top: 4px;
+  font-size: 8px;
+  color: var(--ks-copper);
+  letter-spacing: 0.08em;
+}
+
+.ks-cat-tag {
+  align-self: flex-start;
+  padding: 2px 6px;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  border-radius: 2px;
+  background: rgba(244, 238, 223, 0.1);
+  color: rgba(244, 238, 223, 0.8);
+}
+
+.ks-cat-tag.commercial { background: rgba(235, 180, 50, 0.2); color: #f7ca55; }
+.ks-cat-tag.civic { background: rgba(50, 140, 235, 0.2); color: #6bb2f7; }
+.ks-cat-tag.residential { background: rgba(60, 180, 100, 0.2); color: #6fe5a8; }
+.ks-cat-tag.industrial { background: rgba(200, 100, 40, 0.2); color: #f78d52; }
+.ks-cat-tag.cultural { background: rgba(180, 70, 220, 0.2); color: #d67ef7; }
+.ks-cat-tag.transit { background: rgba(40, 200, 190, 0.2); color: #4ff7e7; }
+
+.ks-card-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ks-gps-btn {
+  padding: 5px 12px;
+  border: 1px solid rgba(228, 160, 110, 0.5);
+  background: rgba(228, 160, 110, 0.15);
+  color: #eeddbb;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ks-gps-btn:hover {
+  background: var(--ks-copper);
+  color: #172421;
+}
+
+.ks-gps-btn.active {
+  border-color: #6fe5a8;
+  background: rgba(111, 229, 168, 0.2);
+  color: #6fe5a8;
+}
+
 @media (max-width: 680px) {
   .ks-menu { padding: 22px 23px 18px; }
   .ks-menu-content { margin-top: clamp(64px, 13vh, 100px); }

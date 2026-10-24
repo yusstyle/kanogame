@@ -10,10 +10,13 @@ import type { ColliderIndex } from "./ColliderIndex";
 import type { NavigationNetwork, PedestrianWaypoint } from "./navigation";
 import type { GameMaterials, GraphicsQuality } from "./types";
 
-export type PedestrianState = "walking" | "idle" | "vendor" | "talking";
+export type PedestrianState = "walking" | "idle" | "vendor" | "talking" | "visiting";
+export type NPCRole = "resident" | "trader" | "worker" | "customer" | "worshipper" | "visitor";
 
 export interface Pedestrian {
   id: string;
+  name: string;
+  role: NPCRole;
   model: PlayerModel;
   position: THREE.Vector3;
   yaw: number;
@@ -22,6 +25,10 @@ export interface Pedestrian {
   stateTimer: number;
   currentWaypoint: PedestrianWaypoint | null;
   targetWaypoint: PedestrianWaypoint | null;
+  destinationName: string;
+  destinationPoint: THREE.Vector3 | null;
+  dialogues: string[];
+  vendorCry?: string;
   walkPhase: number;
   personalSpeed: number;
   lookSeed: number;
@@ -84,11 +91,119 @@ const NPC_PALETTES: PedestrianOptions[] = [
   },
 ];
 
+const NPC_ROUTINE_PROFILES = [
+  {
+    name: "Ibrahim Garba",
+    role: "resident" as NPCRole,
+    destinationName: "Bompai Heights Luxury Flats",
+    destX: 18,
+    destZ: 42,
+    dialogues: [
+      "Sannu! I am heading back towards Bompai Heights. The evening breeze is so peaceful here.",
+      "Kano is growing so quickly! The new buildings and apartments along Airport Road look so sharp.",
+      "Always obey the traffic signs on Murtala Mohammed Way. KAROTA officers are very watchful today!",
+    ],
+  },
+  {
+    name: "Maryam Sani",
+    role: "trader" as NPCRole,
+    destinationName: "Sabon Gari Open-Air Kasuwa",
+    destX: -31,
+    destZ: 31,
+    dialogues: [
+      "Ina kwana! Fresh provisions and textiles arrived this morning. Best prices in Sabon Gari!",
+      "Commerce is thriving in Kano! Make sure you visit the electronics arcade and market stalls.",
+      "Trade has connected northern Nigeria for centuries. It is the lifeblood of our historic city.",
+    ],
+  },
+  {
+    name: "Suleiman Bello",
+    role: "worker" as NPCRole,
+    destinationName: "Arewa Commercial Bank Plaza",
+    destX: 80,
+    destZ: -22,
+    dialogues: [
+      "Barkade! Just stopped by the Arewa Commercial Bank 24/7 ATM. Fast, reliable service today.",
+      "Northern finance and technology are moving forward. Hope you have a productive and blessed day!",
+      "If you need cash for local market purchases, the bank ATM at Bompai branch is always stocked.",
+    ],
+  },
+  {
+    name: "Ngozi Eze",
+    role: "customer" as NPCRole,
+    destinationName: "Arewa Fast Food & Suya Lounge",
+    destX: 16,
+    destZ: -42,
+    dialogues: [
+      "The spiced Kano Suya at Arewa Lounge smells incredible! Getting a dinner platter for my family.",
+      "Have you tried their chilled Chapman? It is so refreshing after walking through the city.",
+      "Amina Lawal is inside drafting blueprints. She is one of the top modern architects in Kano!",
+    ],
+  },
+  {
+    name: "Musa Haruna",
+    role: "customer" as NPCRole,
+    destinationName: "Kano Cyber & PS5 Game Hub",
+    destX: 80,
+    destZ: -46,
+    dialogues: [
+      "Zainab is on an unbelievable winning streak at the Cyber Hub! You should challenge her reflexes.",
+      "The fibre optic speeds at the gaming centre are lightning fast. Great tournament atmosphere!",
+      "Street Drift Series is happening this week. The ₦5,000 cash prize is serious motivation.",
+    ],
+  },
+  {
+    name: "Grace Danjuma",
+    role: "worshipper" as NPCRole,
+    destinationName: "St. Stephen's Anglican Church",
+    destX: -48,
+    destZ: 37,
+    dialogues: [
+      "Peace be with you! St. Stephen's choir is rehearsing lovely hymns for Sunday service.",
+      "May your steps be blessed and guided safely through the neighborhood today.",
+      "Sabon Gari is a welcoming community where different cultures and faiths live in harmony.",
+    ],
+  },
+  {
+    name: "Abubakar Usman",
+    role: "worshipper" as NPCRole,
+    destinationName: "Community Friday Mosque",
+    destX: -31,
+    destZ: -31,
+    dialogues: [
+      "Salam Alaikum! A peaceful day for reflection and brotherhood across Kano.",
+      "Kano's heritage is rich and deep. Respect the streets, walk with peace, and drive safely.",
+      "The Dala ancient city walls carry over a thousand years of history. Always honor your roots.",
+    ],
+  },
+  {
+    name: "Halima Idris",
+    role: "resident" as NPCRole,
+    destinationName: "Al-Baraka Executive Villa",
+    destX: 44,
+    destZ: 39,
+    dialogues: [
+      "Good day! Beautiful afternoon for a stroll through the residential quarter.",
+      "The tree-lined roads give our neighborhood such a welcoming and clean atmosphere.",
+      "If you are looking for long-term real estate, the modern residential villas are top quality.",
+    ],
+  },
+];
+
+const VENDOR_PROFILES = [
+  { name: "Alhaji Lawan", cry: "Fresh Yams and Ripe Plantains straight from Yankaba market! Sannu da zuwa!" },
+  { name: "Mallam Yakubu", cry: "Traditional Tuwo grain, beans, and fragrant Northern spices here!" },
+  { name: "Mama Blessing", cry: "Original colourful Hollandis and quality guinea brocade fabrics! Good price!" },
+  { name: "Chidi Nnamdi", cry: "Quality phone chargers, USB cables, and heavy-duty power banks! Tested and trusted!" },
+  { name: "Mai Shayi Garba", cry: "Freshly brewed spiced tea, fried eggs and soft Kano bread! Hot and delicious!" },
+];
+
 export class PedestrianSystem {
   public pedestrians: Pedestrian[] = [];
   private readonly root = new THREE.Group();
   private quality: GraphicsQuality = "balanced";
   private time = 0;
+  private timeOfDayHours = 10;
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -118,7 +233,6 @@ export class PedestrianSystem {
     if (this.pedestrians.length < targetCount) {
       this.spawnAdditionalWalkers(targetCount - this.pedestrians.length);
     } else if (this.pedestrians.length > targetCount) {
-      // Remove excess walkers (preserve fixed vendors)
       const walkers = this.pedestrians.filter((p) => p.state !== "vendor");
       while (this.pedestrians.length > targetCount && walkers.length > 0) {
         const removed = walkers.pop();
@@ -131,6 +245,10 @@ export class PedestrianSystem {
         }
       }
     }
+  }
+
+  public setTimeOfDay(hours: number) {
+    this.timeOfDayHours = hours;
   }
 
   public async upgradeWithRealisticAvatars() {
@@ -155,25 +273,22 @@ export class PedestrianSystem {
   }
 
   private spawnCrowd() {
-    // 1. Spawn Fixed Market Vendors in Sabon Gari
     this.spawnMarketVendors();
-
-    // 2. Spawn Sidewalk & Plaza Walkers
     const initialWalkerCount = this.quality === "performance" ? 4 : this.quality === "balanced" ? 9 : 15;
     this.spawnAdditionalWalkers(initialWalkerCount);
   }
 
   private spawnMarketVendors() {
-    // Market center is at (-31, 31)
     const vendorLocations = [
-      { x: -31 - 5.1, z: 31 - 4.2 - 1.1, yaw: 0 }, // Behind northern stall 1
-      { x: -31 + 5.1, z: 31 - 4.2 - 1.1, yaw: 0 }, // Behind northern stall 2
-      { x: -31 - 5.1, z: 31 + 4.2 + 1.1, yaw: Math.PI }, // Behind southern stall 3
-      { x: -31 + 5.1, z: 31 + 4.2 + 1.1, yaw: Math.PI }, // Behind southern stall 4
-      { x: -31, z: 31 - 1.25, yaw: 0 }, // Behind central market table
+      { x: -31 - 5.1, z: 31 - 4.2 - 1.1, yaw: 0 },
+      { x: -31 + 5.1, z: 31 - 4.2 - 1.1, yaw: 0 },
+      { x: -31 - 5.1, z: 31 + 4.2 + 1.1, yaw: Math.PI },
+      { x: -31 + 5.1, z: 31 + 4.2 + 1.1, yaw: Math.PI },
+      { x: -31, z: 31 - 1.25, yaw: 0 },
     ];
 
     vendorLocations.forEach((loc, index) => {
+      const vProfile = VENDOR_PROFILES[index % VENDOR_PROFILES.length];
       const palette = NPC_PALETTES[index % NPC_PALETTES.length];
       const model = createPedestrianModel(this.materials, palette);
       const y = this.surfaceHeight(loc.x, loc.z);
@@ -184,6 +299,8 @@ export class PedestrianSystem {
 
       this.pedestrians.push({
         id: `vendor_${index}`,
+        name: vProfile.name,
+        role: "trader",
         model,
         position: new THREE.Vector3(loc.x, y, loc.z),
         yaw: loc.yaw,
@@ -192,6 +309,10 @@ export class PedestrianSystem {
         stateTimer: 0,
         currentWaypoint: null,
         targetWaypoint: null,
+        destinationName: "Sabon Gari Kasuwa Stall",
+        destinationPoint: new THREE.Vector3(loc.x, y, loc.z),
+        dialogues: [vProfile.cry, "Welcome to my market stall! Fresh goods everyday!"],
+        vendorCry: vProfile.cry,
         walkPhase: index * 1.5,
         personalSpeed: 0,
         lookSeed: index * 2.3,
@@ -204,11 +325,9 @@ export class PedestrianSystem {
     if (waypoints.length === 0) return;
 
     for (let i = 0; i < count; i += 1) {
-      // Pick a random waypoint far from the player spawn (-4, -4)
       const valid = waypoints.filter((wp) => {
         const distToPlayer = Math.hypot(wp.x - (-4), wp.z - (-4));
         if (distToPlayer < 12) return false;
-        // Don't collide with static obstacles
         const colliders = this.colliderIndex.query(wp.x, wp.z, 0.45);
         if (colliders.length > 0) return false;
         return true;
@@ -219,6 +338,7 @@ export class PedestrianSystem {
       const nextId = startWp.nextIds[Math.floor(Math.random() * startWp.nextIds.length)];
       const nextWp = nextId ? this.network.pedestrianWaypoints.get(nextId) ?? null : null;
 
+      const profile = NPC_ROUTINE_PROFILES[(this.pedestrians.length + i) % NPC_ROUTINE_PROFILES.length];
       const palette = NPC_PALETTES[(this.pedestrians.length + i) % NPC_PALETTES.length];
       const model = createPedestrianModel(this.materials, palette);
       const y = this.surfaceHeight(startWp.x, startWp.z);
@@ -232,6 +352,8 @@ export class PedestrianSystem {
 
       this.pedestrians.push({
         id: `ped_${Date.now()}_${i}`,
+        name: profile.name,
+        role: profile.role,
         model,
         position: new THREE.Vector3(startWp.x, y, startWp.z),
         yaw: initialYaw,
@@ -240,11 +362,32 @@ export class PedestrianSystem {
         stateTimer: 4 + Math.random() * 8,
         currentWaypoint: startWp,
         targetWaypoint: nextWp,
+        destinationName: profile.destinationName,
+        destinationPoint: new THREE.Vector3(profile.destX, 0, profile.destZ),
+        dialogues: profile.dialogues,
         walkPhase: Math.random() * Math.PI * 2,
         personalSpeed: 1.1 + Math.random() * 0.35,
         lookSeed: Math.random() * 10,
       });
     }
+  }
+
+  public checkPedestrianInteraction(playerPos: THREE.Vector3): { prompt: string; action: () => string } | null {
+    for (const p of this.pedestrians) {
+      if (p.position.distanceTo(playerPos) <= 2.4) {
+        return {
+          prompt: `Talk to ${p.name} (${p.role.toUpperCase()})`,
+          action: () => {
+            if (p.state === "vendor") {
+              return `${p.name} (Trader): '${p.vendorCry || "Welcome to my stall! Best prices in Kano!"}'`;
+            }
+            const quote = p.dialogues[Math.floor(Math.random() * p.dialogues.length)];
+            return `${p.name} (${p.role.toUpperCase()}): '${quote}' [Destination: ${p.destinationName}]`;
+          },
+        };
+      }
+    }
+    return null;
   }
 
   public update(dt: number, playerPosition: THREE.Vector3, playerVehiclePos: THREE.Vector3 | null) {
@@ -254,12 +397,11 @@ export class PedestrianSystem {
       const p = this.pedestrians[i];
       const distToPlayer = p.position.distanceTo(playerPosition);
 
-      // Distance culling: pedestrians >85m away skip animation
       if (distToPlayer > 85) {
         continue;
       }
 
-      this.updatePedestrian(p, dt, playerPosition, playerVehiclePos);
+      this.updatePedestrian(p, dt, playerPosition, playerVehiclePos, i);
     }
   }
 
@@ -268,20 +410,41 @@ export class PedestrianSystem {
     dt: number,
     playerPosition: THREE.Vector3,
     playerVehiclePos: THREE.Vector3 | null,
+    pedIdx: number,
   ) {
-    // 1. Vendor behavior (stationary, subtle gesturing, looking around)
     if (p.state === "vendor") {
       this.animateVendor(p, dt);
       return;
     }
 
-    // 2. Walker state machine (walking <-> idle)
     p.stateTimer -= dt;
 
-    if (p.state === "idle") {
+    // Check interaction with nearby pedestrians (spontaneous street chatting)
+    if (p.state === "walking" && p.stateTimer > 0 && Math.random() < 0.008) {
+      for (let j = 0; j < this.pedestrians.length; j++) {
+        if (j === pedIdx) continue;
+        const other = this.pedestrians[j];
+        if (other.state === "walking" && p.position.distanceTo(other.position) <= 2.2) {
+          p.state = "talking";
+          p.stateTimer = 4.0;
+          other.state = "talking";
+          other.stateTimer = 4.0;
+          p.yaw = Math.atan2(other.position.x - p.position.x, other.position.z - p.position.z);
+          other.yaw = Math.atan2(p.position.x - other.position.x, p.position.z - other.position.z);
+          break;
+        }
+      }
+    }
+
+    if (p.state === "talking") {
       p.speed = THREE.MathUtils.damp(p.speed, 0, 8, dt);
       if (p.stateTimer <= 0) {
-        // Transition back to walking
+        p.state = "walking";
+        p.stateTimer = 6 + Math.random() * 8;
+      }
+    } else if (p.state === "idle" || p.state === "visiting") {
+      p.speed = THREE.MathUtils.damp(p.speed, 0, 8, dt);
+      if (p.stateTimer <= 0) {
         p.state = "walking";
         p.stateTimer = 5 + Math.random() * 10;
         if (p.currentWaypoint && p.currentWaypoint.nextIds.length > 0) {
@@ -290,10 +453,14 @@ export class PedestrianSystem {
         }
       }
     } else if (p.state === "walking") {
-      p.speed = THREE.MathUtils.damp(p.speed, p.personalSpeed, 6, dt);
+      // Pace varies with time of day (faster during rush, relaxed in evening)
+      const timeSpeedMultiplier = (this.timeOfDayHours >= 7 && this.timeOfDayHours <= 9) ? 1.25 : 1.0;
+      p.speed = THREE.MathUtils.damp(p.speed, p.personalSpeed * timeSpeedMultiplier, 6, dt);
 
-      // Chance to take a brief rest or look around
-      if (p.stateTimer <= 0 && Math.random() < 0.25) {
+      if (p.destinationPoint && p.position.distanceTo(p.destinationPoint) <= 6.0 && Math.random() < 0.05) {
+        p.state = "visiting";
+        p.stateTimer = 6.0 + Math.random() * 8.0;
+      } else if (p.stateTimer <= 0 && Math.random() < 0.2) {
         p.state = "idle";
         p.stateTimer = 2.5 + Math.random() * 4;
       }
@@ -304,11 +471,23 @@ export class PedestrianSystem {
         const distSq = dx * dx + dz * dz;
 
         if (distSq < 1.4 * 1.4) {
-          // Reached waypoint, pick next
           p.currentWaypoint = p.targetWaypoint;
           if (p.targetWaypoint.nextIds.length > 0) {
-            const nextId = p.targetWaypoint.nextIds[Math.floor(Math.random() * p.targetWaypoint.nextIds.length)];
-            p.targetWaypoint = this.network.pedestrianWaypoints.get(nextId) ?? null;
+            // Intelligent waypoint selection: bias towards destination point if available
+            if (p.destinationPoint) {
+              const bestNext = p.targetWaypoint.nextIds
+                .map((id) => this.network.pedestrianWaypoints.get(id))
+                .filter((wp): wp is PedestrianWaypoint => Boolean(wp))
+                .sort((a, b) => {
+                  const distA = Math.hypot(a.x - p.destinationPoint!.x, a.z - p.destinationPoint!.z);
+                  const distB = Math.hypot(b.x - p.destinationPoint!.x, b.z - p.destinationPoint!.z);
+                  return distA - distB;
+                })[0];
+              p.targetWaypoint = bestNext ?? null;
+            } else {
+              const nextId = p.targetWaypoint.nextIds[Math.floor(Math.random() * p.targetWaypoint.nextIds.length)];
+              p.targetWaypoint = this.network.pedestrianWaypoints.get(nextId) ?? null;
+            }
           }
         }
 
@@ -318,7 +497,6 @@ export class PedestrianSystem {
             p.targetWaypoint.z - p.position.z,
           );
 
-          // Turn towards waypoint
           let yawDiff = desiredYaw - p.yaw;
           while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
           while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
@@ -328,12 +506,11 @@ export class PedestrianSystem {
       }
     }
 
-    // 3. Move and avoid obstacles
+    // Move and avoid obstacles
     if (p.speed > 0.05) {
       const moveX = Math.sin(p.yaw) * p.speed * dt;
       const moveZ = Math.cos(p.yaw) * p.speed * dt;
 
-      // Safe step check: ensure new position does not enter building colliders
       const nextX = p.position.x + moveX;
       const nextZ = p.position.z + moveZ;
       const obstacles = this.colliderIndex.query(nextX, nextZ, 0.42);
@@ -342,7 +519,6 @@ export class PedestrianSystem {
         p.position.x = nextX;
         p.position.z = nextZ;
       } else {
-        // Obstructed, pause and turn around
         p.state = "idle";
         p.stateTimer = 1.5;
         p.yaw += Math.PI * 0.75;
@@ -351,7 +527,6 @@ export class PedestrianSystem {
       p.position.y = this.surfaceHeight(p.position.x, p.position.z);
     }
 
-    // 4. Procedural walk animation
     const isMoving = p.speed > 0.15;
     if (p.model.riggedCharacter) {
       if (isMoving) {
@@ -375,12 +550,10 @@ export class PedestrianSystem {
     p.model.leftLeg.rotation.x = THREE.MathUtils.damp(p.model.leftLeg.rotation.x, swing, 8, dt);
     p.model.rightLeg.rotation.x = THREE.MathUtils.damp(p.model.rightLeg.rotation.x, -swing, 8, dt);
 
-    // Subtle vertical bounce
     const bounce = isMoving ? Math.abs(Math.sin(p.walkPhase * 2)) * 0.03 : 0;
     p.model.root.position.set(p.position.x, p.position.y + bounce, p.position.z);
     p.model.root.rotation.y = p.yaw;
 
-    // Subtle head turn
     if (p.model.head) {
       const headYaw = Math.sin(this.time * 0.7 + p.lookSeed) * 0.22;
       p.model.head.rotation.y = THREE.MathUtils.damp(p.model.head.rotation.y, headYaw, 4, dt);
@@ -396,7 +569,6 @@ export class PedestrianSystem {
       return;
     }
 
-    // Subtle breathing & occasional greeting gesture
     const breath = Math.sin(this.time * 1.6 + p.lookSeed) * 0.035;
     p.model.leftArm.rotation.x = THREE.MathUtils.damp(p.model.leftArm.rotation.x, breath, 4, dt);
     p.model.rightArm.rotation.x = THREE.MathUtils.damp(p.model.rightArm.rotation.x, -breath, 4, dt);

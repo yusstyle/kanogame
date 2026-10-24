@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import './GameUI.css';
 import TouchControls from './TouchControls';
 import type { SocialContact, VehicleType } from '../game/types';
+import { KANO_LANDMARKS } from '../game/landmarks';
 
 export type Screen = 'menu' | 'playing' | 'paused';
 export type Mode = 'on-foot' | 'driving';
@@ -21,12 +23,18 @@ export interface GameUIProps {
   timeString?: string;
   gameScore?: number;
   featuredContact?: SocialContact | null;
+  ownedProperties?: string[];
+  ownedBusinesses?: string[];
+  dailyIncome?: number;
+  dayCount?: number;
+  gpsTarget?: string | null;
   graphicsQuality: GraphicsQuality;
   onStart: () => void;
   onPause: () => void;
   onResume: () => void;
   onReset: () => void;
   onControlKey: (key: string, pressed: boolean) => void;
+  onSetGPSTarget?: (id: string | null) => void;
   onQualityChange: (quality: GraphicsQuality) => void;
 }
 
@@ -59,14 +67,22 @@ export default function GameUI({
   timeString,
   gameScore,
   featuredContact,
+  ownedProperties,
+  ownedBusinesses,
+  dailyIncome,
+  dayCount,
+  gpsTarget,
   graphicsQuality,
   onStart,
   onPause,
   onResume,
   onReset,
   onControlKey,
+  onSetGPSTarget,
   onQualityChange,
 }: GameUIProps) {
+  const [showDirectory, setShowDirectory] = useState(false);
+
   if (screen === 'menu') {
     return (
       <div className="ks-ui ks-menu">
@@ -111,6 +127,8 @@ export default function GameUI({
     );
   }
 
+  const activeGpsLandmark = gpsTarget ? KANO_LANDMARKS.find((l) => l.id === gpsTarget) : null;
+
   return (
     <div className={`ks-ui ks-gameplay ${screen === 'paused' ? 'is-paused' : ''}`}>
       {screen === 'playing' && (
@@ -125,14 +143,49 @@ export default function GameUI({
             <div className="ks-hud-brand"><BrandMark /><span>KANO <i>/</i> STREETS</span></div>
             <div className="ks-hud-location"><span className="ks-live-dot" /> {location} <span className="ks-location-divider">/</span> FREE ROAM</div>
             <div className="ks-hud-time"><small>TIME</small> <strong>{timeString ?? "10:00"}</strong></div>
+            <button
+              className="ks-hud-directory-btn"
+              onClick={() => setShowDirectory(!showDirectory)}
+              aria-label="Toggle City Directory and GPS navigation"
+            >
+              <Key>M</Key>
+              <span>DIRECTORY</span>
+            </button>
             <span className="ks-pause-hint"><Key>ESC</Key><span>PAUSE</span></span>
           </header>
 
+          {activeGpsLandmark && (
+            <div className="ks-gps-chip" role="status">
+              <span className="ks-gps-icon">↗</span>
+              <div className="ks-gps-info">
+                <strong>GPS: {activeGpsLandmark.name}</strong>
+                <small>{activeGpsLandmark.district} ({activeGpsLandmark.x}, {activeGpsLandmark.z})</small>
+              </div>
+              <button
+                className="ks-gps-clear"
+                onClick={() => onSetGPSTarget?.(null)}
+                title="Clear GPS waypoint"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           <div className="ks-hud-wallet" aria-label="Player wallet and civil status">
+            <span className="ks-wallet-item">
+              <small>CALENDAR</small>
+              <strong>DAY {dayCount ?? 1}</strong>
+            </span>
             <span className="ks-wallet-item">
               <small>CASH</small>
               <strong>₦{(cash ?? 150000).toLocaleString()}</strong>
             </span>
+            {dailyIncome !== undefined && dailyIncome !== 0 && (
+              <span className={`ks-wallet-item ${dailyIncome > 0 ? "ks-biz-badge" : "ks-fine-alert"}`}>
+                <small>DAILY NET</small>
+                <strong>{dailyIncome > 0 ? "+" : ""}₦{dailyIncome.toLocaleString()}</strong>
+              </span>
+            )}
             {(trafficFine ?? 0) > 0 && (
               <span className="ks-wallet-item ks-fine-alert">
                 <small>KAROTA CITATION</small>
@@ -143,6 +196,18 @@ export default function GameUI({
               <span className="ks-wallet-item ks-rent-badge">
                 <small>APARTMENT</small>
                 <strong>UNIT 2B LEASED</strong>
+              </span>
+            )}
+            {ownedProperties && ownedProperties.length > 0 && (
+              <span className="ks-wallet-item ks-rent-badge">
+                <small>PROPERTY</small>
+                <strong>{ownedProperties.length} OWNED</strong>
+              </span>
+            )}
+            {ownedBusinesses && ownedBusinesses.length > 0 && (
+              <span className="ks-wallet-item ks-biz-badge">
+                <small>BUSINESS</small>
+                <strong>{ownedBusinesses.length} ACTIVE</strong>
               </span>
             )}
             {activeInterior && (
@@ -192,6 +257,43 @@ export default function GameUI({
             )}
           </div>
           {statusMessage && <div className="ks-status-message" role="status">{statusMessage}</div>}
+
+          {showDirectory && (
+            <div className="ks-directory-layer" role="dialog" aria-modal="true" aria-labelledby="ks-dir-title">
+              <div className="ks-directory-panel">
+                <div className="ks-directory-header">
+                  <div>
+                    <div className="ks-edition">KANO URBAN DIRECTORY</div>
+                    <h2 id="ks-dir-title">City Landmarks &amp; GPS Navigation</h2>
+                  </div>
+                  <button className="ks-directory-close" onClick={() => setShowDirectory(false)}>✕</button>
+                </div>
+                <div className="ks-directory-list">
+                  {KANO_LANDMARKS.map((lm) => (
+                    <div key={lm.id} className="ks-directory-card">
+                      <div className="ks-card-main">
+                        <span className={`ks-cat-tag ${lm.category}`}>{lm.category.toUpperCase()}</span>
+                        <h3>{lm.name}</h3>
+                        <p>{lm.description}</p>
+                        <small className="ks-card-coords">{lm.district} · Coord: ({lm.x}, {lm.z})</small>
+                      </div>
+                      <div className="ks-card-actions">
+                        {gpsTarget === lm.id ? (
+                          <button className="ks-gps-btn active" onClick={() => onSetGPSTarget?.(null)}>
+                            Active Waypoint ✓
+                          </button>
+                        ) : (
+                          <button className="ks-gps-btn" onClick={() => { onSetGPSTarget?.(lm.id); setShowDirectory(false); }}>
+                            Set GPS Pin ↗
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 
