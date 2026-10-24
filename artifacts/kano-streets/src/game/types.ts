@@ -59,4 +59,8 @@ export type GameMaterials = {
   black: import("three").MeshStandardMaterial;
   kekeYellow: import("three").MeshStandardMaterial;
   kekeGreen: import("three").MeshStandardMaterial;
+  corrugatedZinc?: import("three").MeshStandardMaterial;
+  roadDust?: import("three").MeshStandardMaterial;
+  motorcycleRed?: import("three").MeshStandardMaterial;
+  motorcycleBlue?: import("three").MeshStandardMaterial;
 };

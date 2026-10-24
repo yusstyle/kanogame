@@ -44,6 +44,27 @@ function capsule(
   return mesh;
 }
 
+function addCyl(
+  parent: THREE.Object3D,
+  material: THREE.Material,
+  x: number,
+  y: number,
+  z: number,
+  radiusTop: number,
+  radiusBottom: number,
+  height: number,
+) {
+  const mesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(radiusTop, radiusBottom, height, 12),
+    material,
+  );
+  mesh.position.set(x, y, z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  parent.add(mesh);
+  return mesh;
+}
+
 export type PlayerModel = {
   root: THREE.Group;
   leftArm: THREE.Group;
@@ -498,4 +519,97 @@ export function createKekeModel(
     frontWheel,
     rearWheels,
   };
+}
+
+export type MotorcycleModel = {
+  root: THREE.Group;
+  frontFork: THREE.Group;
+  frontWheel: THREE.Mesh;
+  rearWheel: THREE.Mesh;
+};
+
+export function createMotorcycleModel(
+  materials: GameMaterials,
+  colorHex = "#b82e24",
+): MotorcycleModel {
+  const root = new THREE.Group();
+  root.name = "motorcycle-root";
+
+  const frameMat = materials.black;
+  const chromeMat = materials.metal;
+  const tankMat = new THREE.MeshStandardMaterial({
+    color: colorHex,
+    roughness: 0.35,
+    metalness: 0.22,
+  });
+  const rubberMat = new THREE.MeshStandardMaterial({ color: "#222322", roughness: 0.95 });
+  const seatMat = new THREE.MeshStandardMaterial({ color: "#1a1918", roughness: 0.9 });
+  const lampMat = new THREE.MeshStandardMaterial({
+    color: "#fff2d0",
+    emissive: "#c29e50",
+    emissiveIntensity: 0.6,
+  });
+
+  // Chassis / frame
+  addBox(root, frameMat, 0, 0.42, 0, 0.16, 0.22, 1.25);
+  addBox(root, frameMat, 0, 0.62, 0.15, 0.18, 0.28, 0.42);
+
+  // Engine block
+  addBox(root, chromeMat, 0, 0.34, 0.05, 0.28, 0.24, 0.38);
+
+  // Fuel tank
+  addBox(root, tankMat, 0, 0.78, 0.22, 0.32, 0.24, 0.55);
+
+  // Vinyl seat
+  const seat = addBox(root, seatMat, 0, 0.72, -0.32, 0.26, 0.14, 0.65);
+  seat.rotation.x = 0.05;
+
+  // Rear luggage rack
+  addBox(root, chromeMat, 0, 0.74, -0.74, 0.3, 0.04, 0.32);
+
+  // Exhaust muffler (right side)
+  addCyl(root, chromeMat, 0.18, 0.26, -0.22, 0.04, 0.045, 0.85);
+
+  // Rear wheel
+  const rearWheel = new THREE.Mesh(
+    new THREE.TorusGeometry(0.28, 0.065, 8, 16),
+    rubberMat,
+  );
+  rearWheel.rotation.y = Math.PI / 2;
+  rearWheel.position.set(0, 0.28, -0.68);
+  rearWheel.castShadow = true;
+  root.add(rearWheel);
+  addCyl(root, chromeMat, 0, 0.28, -0.68, 0.12, 0.12, 0.06);
+
+  // Front fork & handlebars
+  const frontFork = new THREE.Group();
+  frontFork.position.set(0, 0.28, 0.74);
+  frontFork.rotation.x = -0.22;
+  root.add(frontFork);
+
+  for (const s of [-0.09, 0.09]) {
+    addCyl(frontFork, chromeMat, s, 0.32, 0, 0.022, 0.022, 0.68);
+  }
+
+  // Front wheel
+  const frontWheel = new THREE.Mesh(
+    new THREE.TorusGeometry(0.28, 0.065, 8, 16),
+    rubberMat,
+  );
+  frontWheel.rotation.y = Math.PI / 2;
+  frontWheel.castShadow = true;
+  frontFork.add(frontWheel);
+
+  // Handlebars
+  addBox(frontFork, chromeMat, 0, 0.68, 0.04, 0.62, 0.035, 0.035);
+  addBox(frontFork, rubberMat, -0.28, 0.68, 0.04, 0.1, 0.045, 0.045);
+  addBox(frontFork, rubberMat, 0.28, 0.68, 0.04, 0.1, 0.045, 0.045);
+
+  // Round front headlamp
+  addCyl(frontFork, lampMat, 0, 0.58, 0.14, 0.09, 0.09, 0.08);
+
+  // Resting kickstand lean
+  root.rotation.z = -0.09;
+
+  return { root, frontFork, frontWheel, rearWheel };
 }

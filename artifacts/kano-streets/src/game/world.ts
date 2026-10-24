@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { createMotorcycleModel } from "./actors";
 import { createMarketStall, createPlot } from "./buildings";
 import { getDistrict, ROAD_LAYOUT, ROAD_CENTERS, WORLD_BOUNDS, WORLD_EXTENT, type RoadSpec } from "./layout";
 import { makeSignMaterial } from "./materials";
@@ -73,20 +74,21 @@ function makeSkyTexture() {
   if (!context) throw new Error("Unable to create Kano sky");
 
   const gradient = context.createLinearGradient(0, 0, 0, 512);
-  gradient.addColorStop(0, "#627c88");
-  gradient.addColorStop(0.43, "#9baab0");
-  gradient.addColorStop(0.76, "#dbc39b");
-  gradient.addColorStop(1, "#d9b97e");
+  gradient.addColorStop(0, "#3e6a88");
+  gradient.addColorStop(0.35, "#7598ae");
+  gradient.addColorStop(0.68, "#b8ccd6");
+  gradient.addColorStop(0.88, "#dcd4c3");
+  gradient.addColorStop(1, "#dcd4c3");
   context.fillStyle = gradient;
   context.fillRect(0, 0, 1024, 512);
 
-  for (let i = 0; i < 48; i += 1) {
+  for (let i = 0; i < 36; i += 1) {
     const x = ((i * 173) % 1024) - 80;
     const y = 80 + ((i * 59) % 170);
-    const radius = 24 + ((i * 13) % 74);
+    const radius = 28 + ((i * 13) % 80);
     const cloud = context.createRadialGradient(x, y, 0, x, y, radius);
-    cloud.addColorStop(0, "rgba(244,227,194,0.12)");
-    cloud.addColorStop(1, "rgba(244,227,194,0)");
+    cloud.addColorStop(0, "rgba(255,248,235,0.14)");
+    cloud.addColorStop(1, "rgba(255,248,235,0)");
     context.fillStyle = cloud;
     context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
   }
@@ -485,6 +487,80 @@ function addKanoRoadsideProps(
   );
 }
 
+function addOverheadUtilityLines(root: THREE.Group, materials: GameMaterials, colliders: Collider[]) {
+  const poleZ = 11.2;
+  const poleLocations: number[] = [-108, -72, -36, 0, 36, 72, 108];
+
+  for (let i = 0; i < poleLocations.length; i += 1) {
+    const x = poleLocations[i];
+    const pole = new THREE.Group();
+    pole.position.set(x, 0, poleZ);
+    root.add(pole);
+
+    // Weathered wooden utility pole
+    addCylinder(pole, materials.bark, 0, 3.2, 0, 0.14, 0.12, 6.4);
+    // Double crossarms at top
+    addBox(pole, materials.wood, 0, 5.9, 0, 1.8, 0.12, 0.12);
+    addBox(pole, materials.wood, 0, 5.4, 0, 1.8, 0.12, 0.12);
+    // Ceramic bell insulators
+    for (const sx of [-0.75, -0.25, 0.25, 0.75]) {
+      addCylinder(pole, materials.white, sx, 6.02, 0, 0.04, 0.04, 0.1);
+      addCylinder(pole, materials.white, sx, 5.52, 0, 0.04, 0.04, 0.1);
+    }
+    colliders.push({ x, z: poleZ, halfX: 0.25, halfZ: 0.25, height: 6.4 });
+
+    // String hanging cables between consecutive poles
+    if (i < poleLocations.length - 1) {
+      const nextX = poleLocations[i + 1];
+      const span = nextX - x;
+      const midX = (x + nextX) / 2;
+      for (const yLevel of [5.85, 5.35]) {
+        for (const sx of [-0.65, 0.65]) {
+          addBox(root, materials.black, midX, yLevel - 0.2, poleZ + sx * 0.15, span, 0.025, 0.025, false);
+        }
+      }
+    }
+  }
+}
+
+function addParkedMotorcycles(root: THREE.Group, materials: GameMaterials, colliders: Collider[]) {
+  const spots = [
+    { x: -24.5, z: 27.2, yaw: -0.4, color: "#b82e24" },  // Sabon Gari market edge
+    { x: -37.2, z: 35.8, yaw: 0.8, color: "#24558f" },   // Sabon Gari market stall
+    { x: -14.2, z: 12.4, yaw: 1.57, color: "#b82e24" },  // Commercial corridor sidewalk
+    { x: 18.5, z: 12.4, yaw: -1.57, color: "#222222" },  // Commercial shop front
+    { x: -22.4, z: -17.8, yaw: 0.2, color: "#24558f" },  // Dala traditional compound gate
+    { x: -44.8, z: -27.2, yaw: -1.2, color: "#b82e24" }, // Residential quarter lane
+    { x: -18.2, z: -38.4, yaw: 1.8, color: "#1e6b36" },  // Friday Mosque approach
+    { x: 42.5, z: -12.4, yaw: -0.8, color: "#b82e24" },  // Airport Road commercial corner
+  ];
+
+  spots.forEach((spot) => {
+    const bike = createMotorcycleModel(materials, spot.color);
+    bike.root.position.set(spot.x, 0, spot.z);
+    bike.root.rotation.y = spot.yaw;
+    bike.root.traverse((obj) => { obj.userData.noMerge = true; });
+    root.add(bike.root);
+    colliders.push({ x: spot.x, z: spot.z, halfX: 0.35, halfZ: 0.7, height: 1.1 });
+  });
+}
+
+function addCulvertBridges(root: THREE.Group, materials: GameMaterials) {
+  const culvertMat = materials.concrete;
+  for (const road of ROAD_LAYOUT) {
+    const drainDist = road.width / 2 + 0.35;
+    for (const along of [-93, -31, 31, 93]) {
+      for (const side of [-1, 1]) {
+        if (road.axis === "x") {
+          addBox(root, culvertMat, along, 0.05, road.center + side * drainDist, 3.2, 0.08, 0.85);
+        } else {
+          addBox(root, culvertMat, road.center + side * drainDist, 0.05, along, 0.85, 0.08, 3.2);
+        }
+      }
+    }
+  }
+}
+
 function mergeStaticMeshesByCell(root: THREE.Group) {
   root.updateMatrixWorld(true);
   const buckets = new Map<
@@ -582,6 +658,7 @@ export function createWorld(materials: GameMaterials): WorldResult {
   ROAD_LAYOUT.forEach((road) => addRoad(root, materials, road));
   addCrosswalks(root, materials);
   addRoadWear(root, materials);
+  addCulvertBridges(root, materials);
 
   const blockCenters = ROAD_CENTERS.slice(0, -1).map((center, index) =>
     (center + ROAD_CENTERS[index + 1]) / 2,
@@ -595,6 +672,8 @@ export function createWorld(materials: GameMaterials): WorldResult {
   const shopNames = [
     "KASUWA PROVISIONS", "AREWA TEXTILES", "DALA MOTOR PARTS", "MAISHA GRAIN",
     "SABON GARI STORES", "KANO BOOKS", "NORTH STAR PHARMACY", "TEA & BREAD",
+    "AL-IKHLAS CELLULAR & POS", "YANKABA FRESH PRODUCE", "DAN MAJE CHEMIST",
+    "SANI VULCANIZER", "MAI SHAYI (HOT TEA)", "BAYAJIDDA TEXTILES",
   ];
   let variant = 0;
   for (let zi = 0; zi < blockCenters.length; zi += 1) {
@@ -718,6 +797,8 @@ export function createWorld(materials: GameMaterials): WorldResult {
   });
 
   addDistantHill(root, materials);
+  addOverheadUtilityLines(root, materials, colliders);
+  addParkedMotorcycles(root, materials, colliders);
 
   // Low sand shoulders and edge debris soften the map border but stay outside
   // the connected neighborhood streets and building parcels.

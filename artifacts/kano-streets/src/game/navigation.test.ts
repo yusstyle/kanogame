@@ -40,3 +40,4 @@ test("navigation network builds valid traffic and pedestrian graphs", () => {
   assert.ok(next !== null, "Can advance to next waypoint");
   assert.notEqual(next.id, nearest.id, "Next waypoint is distinct from current");
 });
+

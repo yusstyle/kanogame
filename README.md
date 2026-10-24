@@ -130,6 +130,27 @@ pnpm --filter @workspace/kano-streets run build
 
 ---
 
+## Milestone I: Visual Realism & World Immersion
+
+- **Sahelian Daylight Lighting & Atmospheric Fog**:
+  - Dynamic sun tracking that centers the shadow frustum around the active player/vehicle, ensuring sharp contact shadows and building depth anywhere in the 270m city.
+  - Linear distance fog (`near: 42m, far: 230m`) that leaves the immediate neighborhood 100% crisp and saturated while hazing distant horizons.
+  - Upgraded desert sky dome: rich azure zenith (`#3e6a88`) softly transitioning through dust cerulean (`#7598ae`) to warm horizon glow (`#dcd4c3`).
+- **PBR Road Surfaces & Drainage Infrastructure**:
+  - Multi-layered procedural asphalt with aggregate speckling, bitumen seals, and weathering micro-cracks.
+  - Open concrete drainage channels (*magudana*) with entry culvert slabs connecting street lanes into compound portals.
+- **Urban Kano Streetscape & Props**:
+  - **Overhead Utility Lines**: Weathered wooden utility poles with double crossarms, ceramic insulators, and hanging power line cables strung along Murtala Mohammed Way.
+  - **Parked Commercial Motorcycles (Okada/Achaba)**: Game-ready Boxer 100cc motorbikes with tubular frame, red/blue fuel tanks, spoke wheels, chrome exhaust pipes, and kickstands parked along sidewalks, shops, and mosques.
+- **Hausa Architectural Elements**:
+  - *Dakali*: Exterior masonry/earth roadside benches built into compound walls for community conversation.
+  - *Zankwaye*: Parapet relief pinnacles crowning compound wall corners.
+  - *Zannuwa*: Projecting wooden rainwater drainage spouts protruding from building parapets.
+  - Commercial Corrugated Zinc Awnings with metallic PBR finish across Sabon Gari storefronts.
+  - Expanded authentic storefront signage (*Al-Ikhlas Cellular & POS*, *Yankaba Fresh Produce*, *Dan Maje Chemist*, *Sani Vulcanizer*, *Mai Shayi Tea & Bread*).
+
+---
+
 ## License
 
 MIT (Assets: Poly Haven models and textures under CC0)

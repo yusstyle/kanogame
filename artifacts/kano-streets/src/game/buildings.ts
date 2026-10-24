@@ -178,6 +178,21 @@ function addCourtyard(
   box(proceduralGate, materials.darkTrim, 0, 0.04, 0.01, 2.1, 0.12, 0.68, false);
   proceduralGate.traverse((c) => { c.userData.noMerge = true; });
 
+  // Traditional Hausa exterior mud benches (Dakali) for roadside conversation
+  box(root, materials.compoundWall, -4.2, 0.22, 7.34, 2.6, 0.44, 0.44);
+  box(root, materials.compoundWall, 4.2, 0.22, 7.34, 2.6, 0.44, 0.44);
+
+  // Parapet pinnacles (Zankwaye) on compound front corners
+  for (const cornerX of [-6.75, 6.75]) {
+    const pinnacle = box(root, materials.ochre, cornerX, height + 0.28, 7.0, 0.24, 0.52, 0.24);
+    pinnacle.rotation.y = Math.PI / 4;
+  }
+
+  // Wooden parapet roof rainwater spouts (Zannuwa)
+  for (const spoutX of [-3.8, 3.8]) {
+    cylinder(root, materials.wood, spoutX, height + 0.08, 7.28, 0.045, 0.045, 0.55);
+  }
+
   colliders.push(
     { x: -6.75, z: 0, halfX: 0.32, halfZ: 7.22, height },
     { x: 6.75, z: 0, halfX: 0.32, halfZ: 7.22, height },
@@ -363,10 +378,16 @@ function addShop(
   const signMat = makeSignMaterial(name, signTone);
   box(root, signMat, 0, 3.23, front + 0.17, 7.0, 0.63, 0.15);
 
-  for (let i = 0; i < 7; i += 1) {
-    const stripeMat = i % 2 === 0 ? materials.cloth : materials.clothRed;
-    box(root, stripeMat, -3.3 + i * 1.1, 2.7, front + 0.88, 1.08, 0.13, 1.55);
-    box(root, stripeMat, -3.3 + i * 1.1, 2.49, front + 1.56, 1.08, 0.52, 0.13);
+  if (variant % 2 === 1 && materials.corrugatedZinc) {
+    // Corrugated zinc metal awning commonly seen in Sabon Gari commercial shops
+    box(root, materials.corrugatedZinc, 0, 2.7, front + 0.88, 7.7, 0.08, 1.6);
+    box(root, materials.metal, 0, 2.74, front + 1.65, 7.7, 0.08, 0.08);
+  } else {
+    for (let i = 0; i < 7; i += 1) {
+      const stripeMat = i % 2 === 0 ? materials.cloth : materials.clothRed;
+      box(root, stripeMat, -3.3 + i * 1.1, 2.7, front + 0.88, 1.08, 0.13, 1.55);
+      box(root, stripeMat, -3.3 + i * 1.1, 2.49, front + 1.56, 1.08, 0.52, 0.13);
+    }
   }
 
   for (const x of [-3.8, 3.8]) {

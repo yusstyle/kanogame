@@ -1,22 +1,30 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as THREE from "three";
+import { createMotorcycleModel } from "./actors";
 import { ColliderIndex } from "./ColliderIndex";
 import { createMaterials } from "./materials";
 import { buildNavigationNetwork } from "./navigation";
 import { PedestrianSystem } from "./PedestrianSystem";
 import { TrafficSystem } from "./TrafficSystem";
+import { createWorld } from "./world";
 import type { Collider } from "./types";
 
 function installBrowserStubs() {
   const context = {
     fillStyle: "",
+    strokeStyle: "",
+    lineWidth: 1,
     globalAlpha: 1,
     font: "",
     textAlign: "center",
     textBaseline: "middle",
     fillRect() {},
     fillText() {},
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    stroke() {},
     createLinearGradient: () => ({ addColorStop() {} }),
     createRadialGradient: () => ({ addColorStop() {} }),
   };
@@ -122,4 +130,25 @@ test("PedestrianSystem spawns vendors, walkers, and navigates sidewalks", () => 
   } finally {
     pedestrians.dispose();
   }
+});
+
+test("Milestone I: Visual realism, motorcycles, utility infrastructure, and materials", () => {
+  const env = setupTestEnvironment();
+
+  // Test materials
+  assert.ok(env.materials.asphalt, "Asphalt material generated");
+  assert.ok(env.materials.corrugatedZinc, "Corrugated zinc material generated");
+  assert.ok(env.materials.motorcycleRed, "Motorcycle red paint generated");
+
+  // Test motorcycle model
+  const bike = createMotorcycleModel(env.materials, "#b82e24");
+  assert.ok(bike.root instanceof THREE.Group, "Motorcycle model has root group");
+  assert.ok(bike.frontFork instanceof THREE.Group, "Motorcycle has steerable front fork");
+  assert.ok(bike.frontWheel instanceof THREE.Mesh, "Motorcycle has front wheel");
+  assert.ok(bike.rearWheel instanceof THREE.Mesh, "Motorcycle has rear wheel");
+
+  // Test world generation includes roadside props and culverts
+  const world = createWorld(env.materials);
+  assert.ok(world.colliders.length > 250, "World colliders include roadside infrastructure");
+  assert.ok(world.root.children.length > 0, "World root has scenery children");
 });

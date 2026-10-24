@@ -113,8 +113,8 @@ export class GameEngine {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    this.scene.background = new THREE.Color("#dfcfb0");
-    this.scene.fog = new THREE.FogExp2("#d2bf9b", 0.0046);
+    this.scene.background = new THREE.Color("#dcd4c3");
+    this.scene.fog = new THREE.Fog("#dcd4c3", 42, 230);
 
     this.materials = createMaterials();
     this.world = createWorld(this.materials);
@@ -219,27 +219,37 @@ export class GameEngine {
   }
 
   private addLighting() {
-    const hemi = new THREE.HemisphereLight("#edf4ea", "#886f4a", 1.75);
+    const hemi = new THREE.HemisphereLight("#d8e8f2", "#7a5e42", 1.45);
     this.scene.add(hemi);
 
-    const sun = new THREE.DirectionalLight("#ffeed2", 2.65);
+    const sun = new THREE.DirectionalLight("#fff8ed", 2.85);
     sun.position.set(-44, 62, -34);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
-    sun.shadow.camera.left = -82;
-    sun.shadow.camera.right = 82;
-    sun.shadow.camera.top = 82;
-    sun.shadow.camera.bottom = -82;
+    sun.shadow.camera.left = -58;
+    sun.shadow.camera.right = 58;
+    sun.shadow.camera.top = 58;
+    sun.shadow.camera.bottom = -58;
     sun.shadow.camera.near = 1;
-    sun.shadow.camera.far = 180;
-    sun.shadow.bias = -0.00036;
-    sun.shadow.normalBias = 0.025;
+    sun.shadow.camera.far = 175;
+    sun.shadow.bias = -0.00032;
+    sun.shadow.normalBias = 0.024;
     this.scene.add(sun);
     this.sunLight = sun;
 
-    const bounce = new THREE.DirectionalLight("#c7dbe0", 0.52);
+    const bounce = new THREE.DirectionalLight("#a3c0d4", 0.55);
     bounce.position.set(52, 28, 40);
     this.scene.add(bounce);
+  }
+
+  private updateLighting() {
+    if (!this.sunLight) return;
+    const targetPos = this.mode === "driving"
+      ? (this.activeVehicle === "keke" ? this.kekePosition : this.carPosition)
+      : this.playerPosition;
+    this.sunLight.position.set(targetPos.x - 44, 62, targetPos.z - 34);
+    this.sunLight.target.position.set(targetPos.x, targetPos.y, targetPos.z);
+    this.sunLight.target.updateMatrixWorld();
   }
 
   private async loadAssets() {
@@ -551,6 +561,7 @@ export class GameEngine {
       this.trafficSystem.update(dt, this.playerPosition, activeVehPos);
       this.pedestrianSystem.update(dt, this.playerPosition, activeVehPos);
     }
+    this.updateLighting();
     this.updateCamera(dt);
     this.renderer.render(this.scene, this.camera);
     this.pushSnapshot(false);

@@ -9,12 +9,18 @@ import type { Collider } from "./types";
 function installBrowserStubs() {
   const context = {
     fillStyle: "",
+    strokeStyle: "",
+    lineWidth: 1,
     globalAlpha: 1,
     font: "",
     textAlign: "center",
     textBaseline: "middle",
     fillRect() {},
     fillText() {},
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    stroke() {},
     createLinearGradient() {
       return { addColorStop() {} };
     },
