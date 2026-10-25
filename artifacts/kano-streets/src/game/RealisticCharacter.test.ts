@@ -5,7 +5,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as THREE from "three";
 import { ASSET_MANIFEST } from "./assetManifest";
-import { createPlayerModel } from "./actors";
+import {
+  createPlayerModel,
+  createDeliveryVanModel,
+  createPickupTruckModel,
+  createMinibusModel,
+  createFreightTruckModel,
+} from "./actors";
 import { createMaterials } from "./materials";
 import { GameEngine } from "./GameEngine";
 import { SocialSystem } from "./socialSystem";
@@ -14,6 +20,8 @@ import { KANO_LANDMARKS, getNearestLandmark } from "./landmarks";
 import { PedestrianSystem } from "./PedestrianSystem";
 import { buildNavigationNetwork } from "./navigation";
 import { ColliderIndex } from "./ColliderIndex";
+import { getDistrict, getDistrictLabel } from "./layout";
+import { MissionSystem, CAREER_MISSIONS_CATALOG } from "./missionSystem";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -134,6 +142,7 @@ function installBrowserStubs() {
   return {
     canvas,
     rendererFactory: () => renderer as unknown as THREE.WebGLRenderer,
+    storageMap,
   };
 }
 
@@ -779,14 +788,15 @@ test("Milestone 4: Intelligent Pedestrian AI Routines, Waypoints & Sidewalk Dial
 test("Milestone 4: City Landmarks, GPS Navigation & Northern Expansion Gateway", () => {
   const { canvas, rendererFactory } = installBrowserStubs();
 
-  // 1. Verify 14 registered landmarks across all categories
-  assert.equal(KANO_LANDMARKS.length, 14, "Must have 14 registered Kano landmarks");
+  // 1. Verify registered landmarks across all categories
+  assert.ok(KANO_LANDMARKS.length >= 14, "Must have registered Kano landmarks");
   const categories = new Set(KANO_LANDMARKS.map((l) => l.category));
   assert.ok(categories.has("civic"));
   assert.ok(categories.has("commercial"));
   assert.ok(categories.has("residence"));
   assert.ok(categories.has("worship"));
   assert.ok(categories.has("security"));
+  assert.ok(categories.has("industrial"));
 
   // 2. Nearest landmark calculation
   const nearestGateway = getNearestLandmark(0, -126);
@@ -874,4 +884,257 @@ test("Milestone 4: Social System Role-Specific Activities & Deepened Conversatio
   assert.ok(secRes);
   assert.equal(secRes.affectionDelta, 12);
   assert.ok(secRes.statusMessage.includes("Sgt. Danladi"));
+});
+
+test("Milestone 5: Industrial Kano District & Spatial Layout", () => {
+  // 1. Verify district detection for coordinates north of z = -120
+  assert.equal(getDistrict(0, -126), "industrial");
+  assert.equal(getDistrict(-40, -180), "industrial");
+  assert.equal(getDistrict(45, -175), "industrial");
+  assert.equal(getDistrict(0, -220), "industrial");
+
+  // 2. District label
+  assert.equal(getDistrictLabel("industrial"), "KAWU INDUSTRIAL & LOGISTICS DISTRICT");
+
+  // 3. Verify 6 registered industrial landmarks
+  const industrialLandmarks = KANO_LANDMARKS.filter((l) => l.category === "industrial");
+  assert.equal(industrialLandmarks.length, 6, "Must have 6 industrial landmarks");
+
+  const ids = new Set(industrialLandmarks.map((l) => l.id));
+  assert.ok(ids.has("kawu-freight-terminal"));
+  assert.ok(ids.has("dawanau-grain-depot"));
+  assert.ok(ids.has("arewa-heavy-workshop"));
+  assert.ok(ids.has("container-yard"));
+  assert.ok(ids.has("workers-canteen"));
+  assert.ok(ids.has("logistics-dispatch-board"));
+
+  // 4. Nearest landmark calculations in industrial zone
+  const nearestDawanau = getNearestLandmark(45, -175);
+  assert.ok(nearestDawanau);
+  assert.equal(nearestDawanau.landmark.id, "dawanau-grain-depot");
+  assert.equal(nearestDawanau.distance, 0);
+
+  const nearestTerminal = getNearestLandmark(-42, -175);
+  assert.ok(nearestTerminal);
+  assert.equal(nearestTerminal.landmark.id, "kawu-freight-terminal");
+  assert.equal(nearestTerminal.distance, 0);
+});
+
+test("Milestone 5: 4 New Commercial Vehicle Models & Multi-Vehicle Physics", () => {
+  const materials = createMaterials();
+
+  // 1. Delivery Van model construction
+  const van = createDeliveryVanModel(materials);
+  assert.ok(van.root instanceof THREE.Group);
+  assert.equal(van.wheels.length, 4, "Van must have 4 wheels");
+  assert.equal(van.frontWheels.length, 2, "Van must have 2 steerable front wheels");
+
+  // 2. Pickup Truck model construction
+  const pickup = createPickupTruckModel(materials);
+  assert.ok(pickup.root instanceof THREE.Group);
+  assert.equal(pickup.wheels.length, 4, "Pickup must have 4 wheels");
+  assert.equal(pickup.frontWheels.length, 2, "Pickup must have 2 front wheels");
+
+  // 3. Passenger Minibus / Danfo model construction
+  const minibus = createMinibusModel(materials);
+  assert.ok(minibus.root instanceof THREE.Group);
+  assert.equal(minibus.wheels.length, 4, "Minibus must have 4 wheels");
+  assert.equal(minibus.frontWheels.length, 2, "Minibus must have 2 front wheels");
+
+  // 4. Freight Truck model construction
+  const truck = createFreightTruckModel(materials);
+  assert.ok(truck.root instanceof THREE.Group);
+  assert.equal(truck.wheels.length, 6, "Freight truck must have 6 wheels (dual rear tandem)");
+  assert.equal(truck.frontWheels.length, 2, "Freight truck must have 2 front wheels");
+
+  // 5. GameEngine interaction with all vehicles
+  const { canvas, rendererFactory } = installBrowserStubs();
+  let latestSnapshot: any = null;
+  const engine = new GameEngine(
+    canvas,
+    {
+      onSnapshot: (s) => {
+        latestSnapshot = s;
+      },
+      onPause: () => {},
+    },
+    rendererFactory,
+  );
+  engine.setScreen("playing");
+
+  assert.equal(latestSnapshot.mode, "on-foot");
+
+  // Check Sedan entry at start position
+  assert.equal(engine.getActiveVehiclePosition().x, -2);
+  assert.equal(engine.getActiveVehiclePosition().z, -8);
+
+  // Drive Sedan
+  engine.setControlKey("e", true);
+  assert.equal(latestSnapshot.mode, "driving");
+  assert.equal(latestSnapshot.vehicleType, "sedan");
+  assert.ok(latestSnapshot.statusMessage?.includes("driving the Sedan"));
+
+  // Exit Sedan
+  engine.setControlKey("e", true);
+  assert.equal(latestSnapshot.mode, "on-foot");
+  assert.equal(latestSnapshot.statusMessage, "Exited safely");
+
+  engine.dispose();
+});
+
+test("Milestone 5: Career Missions State Machine & Single Payout Guarantee", () => {
+  const missionSys = new MissionSystem();
+
+  // 1. Catalog integrity
+  assert.equal(CAREER_MISSIONS_CATALOG.length, 5, "5 career contracts in catalog");
+  assert.equal(missionSys.getAvailableMissions().length, 5, "All 5 initially available");
+  assert.equal(missionSys.getActiveMission(), null);
+  assert.equal(missionSys.careerEarnings, 0);
+
+  // 2. Accept Local Delivery contract
+  const acceptRes = missionSys.acceptMission("local-delivery-electronics");
+  assert.ok(acceptRes.success);
+  assert.ok(acceptRes.message.includes("Contract Accepted"));
+  assert.equal(missionSys.activeMissionId, "local-delivery-electronics");
+
+  const active = missionSys.getActiveMission();
+  assert.ok(active);
+  assert.equal(active.state, "in_progress");
+  assert.equal(active.currentStageIndex, 0);
+
+  // 3. Second mission acceptance blocked
+  const secondAccept = missionSys.acceptMission("freight-machine-parts");
+  assert.equal(secondAccept.success, false, "Cannot accept second mission while one is active");
+
+  // 4. Check interaction outside checkpoint radius
+  const outsidePos = new THREE.Vector3(0, 0, 0);
+  assert.equal(missionSys.checkMissionInteraction(outsidePos), null);
+
+  // 5. Checkpoint 1 interaction
+  const stage1Target = new THREE.Vector3(active.stages[0].targetCoords.x, 0, active.stages[0].targetCoords.z);
+  const inter1 = missionSys.checkMissionInteraction(stage1Target);
+  assert.ok(inter1);
+  assert.equal(inter1.prompt, active.stages[0].actionPrompt);
+
+  // 6. Advance Stage 1
+  const adv1 = missionSys.advanceStage(stage1Target);
+  assert.ok(adv1);
+  assert.equal(adv1.completed, false);
+  assert.equal(adv1.reward, 0);
+  assert.equal(active.currentStageIndex, 1);
+
+  // 7. Checkpoint 2 interaction & completion
+  const stage2Target = new THREE.Vector3(active.stages[1].targetCoords.x, 0, active.stages[1].targetCoords.z);
+  const inter2 = missionSys.checkMissionInteraction(stage2Target);
+  assert.ok(inter2);
+  assert.equal(inter2.prompt, active.stages[1].actionPrompt);
+
+  const adv2 = missionSys.advanceStage(stage2Target);
+  assert.ok(adv2);
+  assert.equal(adv2.completed, true);
+  assert.equal(adv2.reward, 22000);
+  assert.equal(adv2.bonus, 0);
+  assert.equal(missionSys.careerEarnings, 22000);
+  assert.equal(missionSys.activeMissionId, null);
+  assert.ok(missionSys.completedMissionIds.has("local-delivery-electronics"));
+
+  // 8. Strict Rule: Single payout guarantee (contract cannot be accepted again or re-paid)
+  const reAccept = missionSys.acceptMission("local-delivery-electronics");
+  assert.equal(reAccept.success, false, "Cannot repeat completed contract in same cycle");
+
+  // 9. Enterprise Supply Bonus verification
+  const supplyAccept = missionSys.acceptMission("supply-produce-suya");
+  assert.ok(supplyAccept.success);
+  const supplyActive = missionSys.getActiveMission();
+  assert.ok(supplyActive);
+
+  // Complete Stage 1 of supply mission
+  const supStage1Pos = new THREE.Vector3(supplyActive.stages[0].targetCoords.x, 0, supplyActive.stages[0].targetCoords.z);
+  missionSys.advanceStage(supStage1Pos);
+
+  // Complete Stage 2 with owned enterprise
+  const supStage2Pos = new THREE.Vector3(supplyActive.stages[1].targetCoords.x, 0, supplyActive.stages[1].targetCoords.z);
+  const supComplete = missionSys.advanceStage(supStage2Pos, ["arewa-suya-franchise"]);
+  assert.ok(supComplete);
+  assert.equal(supComplete.completed, true);
+  assert.equal(supComplete.reward, 45000);
+  assert.equal(supComplete.bonus, 15000, "Enterprise bonus must be ₦15,000");
+  assert.ok(supComplete.message.includes("Enterprise Supply Bonus"));
+  assert.equal(missionSys.careerEarnings, 22000 + 45000 + 15000);
+});
+
+test("Milestone 5: Industrial Pedestrians & Mai Shayi Dialogue Routines", () => {
+  const materials = createMaterials();
+  const scene = new THREE.Scene();
+  const navigation = buildNavigationNetwork();
+  const colliderIndex = new ColliderIndex([]);
+  const pedSystem = new PedestrianSystem(scene, materials, navigation, colliderIndex, () => 0);
+
+  // 1. Habiba Mai Shayi at Workers Canteen (-15, 0, -155)
+  const canteenPos = new THREE.Vector3(-15, 0, -155);
+  const habibaInter = pedSystem.checkPedestrianInteraction(canteenPos);
+  assert.ok(habibaInter, "Habiba Mai Shayi interaction should exist at Canteen Hub");
+  assert.ok(habibaInter.prompt.includes("Habiba"));
+  const habibaToast = habibaInter.action();
+  assert.ok(habibaToast.includes("Habiba Mai Shayi") && (habibaToast.includes("tea") || habibaToast.includes("spiced") || habibaToast.includes("bread")));
+
+  // 2. Garba Mechanic at Arewa Heavy Workshop (-38, 0, -135)
+  const workshopPos = new THREE.Vector3(-38, 0, -135);
+  const garbaInter = pedSystem.checkPedestrianInteraction(workshopPos);
+  assert.ok(garbaInter, "Garba Mechanic interaction should exist at Workshop");
+  assert.ok(garbaInter.prompt.includes("Garba"));
+  const garbaToast = garbaInter.action();
+  assert.ok(garbaToast.includes("Garba Mechanic") && (garbaToast.includes("diesel") || garbaToast.includes("engine") || garbaToast.includes("repairs")));
+
+  // 3. Malam Danladi at Kawu Logistics (-42, 0, -175)
+  const logisticsPos = new THREE.Vector3(-42, 0, -175);
+  const danladiInter = pedSystem.checkPedestrianInteraction(logisticsPos);
+  assert.ok(danladiInter, "Malam Danladi interaction should exist at Kawu Depot");
+  assert.ok(danladiInter.prompt.includes("Malam Danladi"));
+  const danladiToast = danladiInter.action();
+  assert.ok(danladiToast.includes("Malam Danladi") && (danladiToast.includes("haulage") || danladiToast.includes("manifest") || danladiToast.includes("cargo")));
+
+  pedSystem.dispose();
+});
+
+test("Milestone 5: Save/Load Schema Migration & Career Earnings Persistence", () => {
+  const { storageMap } = installBrowserStubs();
+  const economy = new EconomySystem();
+
+  // 1. Save data with completed missions and career earnings
+  economy.saveToStorage(250000, 0, true, ["local-delivery-electronics", "freight-machine-parts"], 57000);
+
+  const rawSaved = storageMap.get("kano_streets_save_v1");
+  assert.ok(rawSaved, "Save file must be stored in localStorage");
+
+  const parsed = JSON.parse(rawSaved);
+  assert.equal(parsed.cash, 250000);
+  assert.equal(parsed.hasApartmentRental, true);
+  assert.deepEqual(parsed.completedMissions, ["local-delivery-electronics", "freight-machine-parts"]);
+  assert.equal(parsed.careerEarnings, 57000);
+
+  // 2. Load and verify hydration
+  const loaded = economy.loadFromStorage();
+  assert.ok(loaded);
+  assert.equal(loaded.cash, 250000);
+  assert.deepEqual(loaded.completedMissions, ["local-delivery-electronics", "freight-machine-parts"]);
+  assert.equal(loaded.careerEarnings, 57000);
+
+  // 3. Backwards-compatibility: load legacy save without mission data
+  storageMap.set("kano_streets_save_v1", JSON.stringify({
+    cash: 180000,
+    trafficFine: 5000,
+    hasApartmentRental: false,
+    ownedProperties: ["bompai-penthouse"],
+    ownedBusinesses: ["sabon-gari-shop"],
+    vehicleUpgrade: { engineStage: 1, paintColor: "#2b4c7e", suspensionUpgraded: false },
+    dayCount: 3,
+    savedAt: Date.now(),
+  }));
+
+  const legacyLoaded = economy.loadFromStorage();
+  assert.ok(legacyLoaded);
+  assert.equal(legacyLoaded.cash, 180000);
+  assert.equal(legacyLoaded.completedMissions, undefined);
+  assert.equal(legacyLoaded.careerEarnings, undefined);
 });

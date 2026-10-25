@@ -45,6 +45,14 @@ function App() {
     viewportRef.current?.setGPSTarget(id);
   }, []);
 
+  const acceptMission = useCallback((id: string) => {
+    return viewportRef.current?.acceptMission(id) ?? false;
+  }, []);
+
+  const cancelMission = useCallback(() => {
+    return viewportRef.current?.cancelMission() ?? false;
+  }, []);
+
   const receiveSnapshot = useCallback((next: GameSnapshot) => {
     setSnapshot((current) => {
       if (
@@ -63,7 +71,9 @@ function App() {
         current.featuredContact === next.featuredContact &&
         current.dailyIncome === next.dailyIncome &&
         current.dayCount === next.dayCount &&
-        current.gpsTarget === next.gpsTarget
+        current.gpsTarget === next.gpsTarget &&
+        current.activeMission === next.activeMission &&
+        current.availableMissionsCount === next.availableMissionsCount
       ) {
         return current;
       }
@@ -100,6 +110,8 @@ function App() {
         dailyIncome={snapshot.dailyIncome}
         dayCount={snapshot.dayCount}
         gpsTarget={snapshot.gpsTarget}
+        activeMission={snapshot.activeMission}
+        availableMissionsCount={snapshot.availableMissionsCount}
         graphicsQuality={graphicsQuality}
         onStart={start}
         onPause={pause}
@@ -107,6 +119,8 @@ function App() {
         onReset={reset}
         onControlKey={setControlKey}
         onSetGPSTarget={setGPSTarget}
+        onAcceptMission={acceptMission}
+        onCancelMission={cancelMission}
         onQualityChange={setGraphicsQuality}
       />
     </main>

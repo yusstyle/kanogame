@@ -29,7 +29,7 @@ export type PlotAsset = {
 };
 
 export type GameMode = "on-foot" | "driving";
-export type VehicleType = "sedan" | "keke";
+export type VehicleType = "sedan" | "keke" | "van" | "pickup" | "minibus" | "truck";
 
 export type GameScreen = "menu" | "playing" | "paused";
 
@@ -37,6 +37,53 @@ export type InteriorId = "house" | "apartment" | "church" | "police-post" | "res
 
 export type PropertyId = "unit-2b" | "bompai-penthouse" | "albaraka-villa";
 export type BusinessId = "sabon-gari-shop" | "arewa-suya-franchise" | "cyber-hub-station";
+
+export type MissionCategory =
+  | "local_delivery"
+  | "freight"
+  | "passenger"
+  | "workshop"
+  | "business_supply";
+
+export type MissionState = "available" | "in_progress" | "completed" | "failed";
+
+export interface MissionStage {
+  step: number;
+  instruction: string;
+  targetName: string;
+  targetCoords: { x: number; z: number };
+  targetRadius: number;
+  actionPrompt: string;
+  completionToast: string;
+}
+
+export interface CareerMission {
+  id: string;
+  title: string;
+  category: MissionCategory;
+  district: string;
+  description: string;
+  recommendedVehicle: VehicleType;
+  reward: number;
+  enterpriseBonusId?: BusinessId;
+  bonusAmount?: number;
+  stages: MissionStage[];
+  currentStageIndex: number;
+  state: MissionState;
+}
+
+export interface ActiveMissionInfo {
+  id: string;
+  title: string;
+  category: MissionCategory;
+  instruction: string;
+  targetName: string;
+  targetCoords: { x: number; z: number };
+  distanceMeters: number;
+  reward: number;
+  step: number;
+  totalSteps: number;
+}
 
 export interface PropertyInfo {
   id: PropertyId;
@@ -99,6 +146,8 @@ export type GameSnapshot = {
   dailyIncome?: number;
   dayCount?: number;
   gpsTarget?: string | null;
+  activeMission?: ActiveMissionInfo | null;
+  availableMissionsCount?: number;
 };
 
 export type GameMaterials = {

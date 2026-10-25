@@ -17,6 +17,7 @@ import {
   createPoliceStation,
   createSabonGariPlaza,
 } from "./modernDistrict";
+import { createIndustrialDistrict } from "./industrialDistrict";
 import type { BuildingKind, Collider, GameMaterials } from "./types";
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
@@ -598,10 +599,11 @@ function addNorthernExpansionGateway(root: THREE.Group, materials: GameMaterials
   }
 
   const barrierMat = materials.karotaYellow || materials.clay;
-  for (const bx of [-7.5, -2.5, 2.5, 7.5]) {
-    addBox(group, barrierMat, bx, 0.5, 3.0, 3.8, 0.9, 0.3);
-    addBox(group, materials.black, bx, 0.5, 3.16, 3.4, 0.3, 0.05);
-    colliders.push({ x: bx, z: gateZ + 3.0, halfX: 2.0, halfZ: 0.3, height: 1.1 });
+  // Position safety barriers on the sidewalk sides to allow clear roadway access to Kawu Industrial Park
+  for (const bx of [-10.5, 10.5]) {
+    addBox(group, barrierMat, bx, 0.5, 3.0, 3.2, 0.9, 0.3);
+    addBox(group, materials.black, bx, 0.5, 3.16, 2.8, 0.3, 0.05);
+    colliders.push({ x: bx, z: gateZ + 3.0, halfX: 1.6, halfZ: 0.3, height: 1.1 });
   }
 }
 
@@ -786,7 +788,7 @@ export function createWorld(materials: GameMaterials): WorldResult {
         }
 
         const selector = (xi * 7 + zi * 11 + slot * 5 + variant) % 12;
-        let kind: BuildingKind;
+        let kind: BuildingKind = "modern";
         switch (district) {
           case "dala":
             kind = selector % 5 === 0 ? "modern" : "traditional";
@@ -799,6 +801,9 @@ export function createWorld(materials: GameMaterials): WorldResult {
             break;
           case "residential":
             kind = selector % 3 === 0 ? "traditional" : "modern";
+            break;
+          default:
+            kind = "commercial";
             break;
         }
 
@@ -904,6 +909,10 @@ export function createWorld(materials: GameMaterials): WorldResult {
   addKanoRoadsideProps(root, materials, colliders, 18, -22, 0);
   addAutoTuningWorkshop(root, materials, colliders);
   addNorthernExpansionGateway(root, materials, colliders);
+
+  const industrial = createIndustrialDistrict(materials);
+  root.add(industrial.root);
+  colliders.push(...industrial.colliders);
 
   const trees: [number, number, number, boolean][] = [];
   for (const road of ROAD_LAYOUT.filter((item) => item.arterial)) {

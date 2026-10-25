@@ -695,3 +695,471 @@ export function createMotorcycleModel(
 
   return { root, frontFork, frontWheel, rearWheel };
 }
+
+export type UsableVehicleModel = {
+  root: THREE.Group;
+  wheels: THREE.Group[];
+  frontWheels: THREE.Group[];
+  body: THREE.Group;
+};
+
+// 1. Commercial Delivery Van (Kano Rapid Logistics)
+export function createDeliveryVanModel(
+  materials: GameMaterials,
+  bodyColorHex = "#eceae1",
+  accentColorHex = "#1a4f3a",
+  plateText = "KN 582 KMC",
+): UsableVehicleModel {
+  const root = new THREE.Group();
+  root.name = "delivery-van-root";
+  const body = new THREE.Group();
+  root.add(body);
+
+  const vanBody = new THREE.MeshPhysicalMaterial({
+    color: bodyColorHex,
+    roughness: 0.38,
+    metalness: 0.18,
+    clearcoat: 0.2,
+  });
+  const vanStripe = new THREE.MeshStandardMaterial({
+    color: accentColorHex,
+    roughness: 0.45,
+    metalness: 0.15,
+  });
+  const rubber = new THREE.MeshStandardMaterial({ color: "#242524", roughness: 0.96 });
+  const steelRim = new THREE.MeshStandardMaterial({ color: "#a5a298", roughness: 0.42, metalness: 0.45 });
+  const lamp = new THREE.MeshStandardMaterial({ color: "#fff0c8", emissive: "#997d40", emissiveIntensity: 0.5 });
+  const tailLamp = new THREE.MeshStandardMaterial({ color: "#8b2015", emissive: "#5a120b", emissiveIntensity: 0.4 });
+  const plateMat = makeSignMaterial(plateText, "#e0d8c1");
+  const logoMat = makeSignMaterial("KANO RAPID LOGISTICS\nINTRA-CITY EXPRESS", "#1a4f3a");
+
+  // Lower chassis frame & underbody
+  addBox(body, materials.black, 0, 0.45, 0, 2.05, 0.28, 4.6);
+  // Main Van Cabin & Enclosed Cargo Box
+  addBox(body, vanBody, 0, 1.25, -0.25, 2.02, 1.35, 3.25); // Cargo box
+  addBox(body, vanBody, 0, 1.05, 1.55, 1.98, 0.95, 1.25); // Front cab
+  // Sloped aerodynamic windshield nose
+  const hood = addBox(body, vanBody, 0, 0.95, 1.95, 1.95, 0.42, 0.65);
+  hood.rotation.x = -0.15;
+
+  // Commercial Livery Vinyl Stripes along both sides
+  for (const side of [-1, 1]) {
+    addBox(body, vanStripe, side * 1.02, 1.15, -0.25, 0.03, 0.28, 3.2);
+    addBox(body, logoMat, side * 1.025, 1.45, -0.3, 0.02, 0.42, 1.6);
+    // Side sliding door track & handle
+    addBox(body, materials.darkTrim, side * 1.02, 0.85, 0.15, 0.02, 0.85, 1.15, false);
+    addBox(body, materials.metal, side * 1.035, 1.05, 0.65, 0.03, 0.06, 0.14);
+    // Cab side windows
+    addBox(body, materials.glass, side * 1.0, 1.32, 1.45, 0.04, 0.48, 0.72, false);
+    // Side mirrors
+    addBox(body, materials.black, side * 1.18, 1.28, 1.65, 0.28, 0.18, 0.12);
+  }
+
+  // Windshield
+  const windshield = addBox(body, materials.glass, 0, 1.38, 1.82, 1.78, 0.55, 0.08, false);
+  windshield.rotation.x = -0.42;
+
+  // Rear twin cargo split-doors
+  addBox(body, materials.darkTrim, 0, 1.22, -1.89, 1.88, 1.25, 0.04, false);
+  addBox(body, materials.metal, 0.08, 1.15, -1.92, 0.06, 0.35, 0.04); // Vertical rear door lock latch
+  // Rear glass panes
+  for (const rx of [-0.48, 0.48]) {
+    addBox(body, materials.glass, rx, 1.48, -1.895, 0.58, 0.42, 0.02, false);
+  }
+
+  // Front bumper, grille, headlights
+  addBox(body, materials.darkTrim, 0, 0.52, 2.32, 2.05, 0.35, 0.22);
+  addBox(body, materials.black, 0, 0.75, 2.33, 1.45, 0.28, 0.08); // Grille
+  for (const s of [-1, 1]) {
+    addBox(body, lamp, s * 0.85, 0.78, 2.33, 0.28, 0.22, 0.06); // Headlights
+    addBox(body, tailLamp, s * 0.88, 0.82, -1.91, 0.18, 0.38, 0.05); // Rear taillight bars
+  }
+
+  // License plates
+  addBox(body, plateMat, 0, 0.52, 2.44, 0.52, 0.18, 0.02);
+  addBox(body, plateMat, 0, 0.58, -1.92, 0.52, 0.18, 0.02);
+
+  // Wheels
+  const wheels: THREE.Group[] = [];
+  const frontWheels: THREE.Group[] = [];
+  const wheelPositions = [
+    [-0.88, 0.36, 1.4],
+    [0.88, 0.36, 1.4],
+    [-0.88, 0.36, -1.2],
+    [0.88, 0.36, -1.2],
+  ];
+
+  wheelPositions.forEach(([x, y, z]) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, y, z);
+    root.add(pivot);
+
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.24, 16), rubber);
+    tire.rotation.z = Math.PI / 2;
+    tire.castShadow = true;
+    pivot.add(tire);
+
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.25, 12), steelRim);
+    hub.rotation.z = Math.PI / 2;
+    pivot.add(hub);
+
+    wheels.push(pivot);
+    if (z > 0) frontWheels.push(pivot);
+  });
+
+  return { root, wheels, frontWheels, body };
+}
+
+// 2. Heavy-Duty Work Pickup Truck (Hilux style)
+export function createPickupTruckModel(
+  materials: GameMaterials,
+  bodyColorHex = "#1c3c2e",
+  plateText = "KN 301 PKP",
+): UsableVehicleModel {
+  const root = new THREE.Group();
+  root.name = "pickup-truck-root";
+  const body = new THREE.Group();
+  root.add(body);
+
+  const truckBody = new THREE.MeshPhysicalMaterial({
+    color: bodyColorHex,
+    roughness: 0.35,
+    metalness: 0.25,
+    clearcoat: 0.25,
+  });
+  const bullBarMat = new THREE.MeshStandardMaterial({ color: "#1e2022", roughness: 0.4, metalness: 0.6 });
+  const rubber = new THREE.MeshStandardMaterial({ color: "#222322", roughness: 0.96 });
+  const alloyRim = new THREE.MeshStandardMaterial({ color: "#b8b5aa", roughness: 0.35, metalness: 0.55 });
+  const lamp = new THREE.MeshStandardMaterial({ color: "#fff2ce", emissive: "#a28248", emissiveIntensity: 0.55 });
+  const tailLamp = new THREE.MeshStandardMaterial({ color: "#921a10", emissive: "#65140e", emissiveIntensity: 0.45 });
+  const bedLiner = new THREE.MeshStandardMaterial({ color: "#181818", roughness: 0.95 });
+  const plateMat = makeSignMaterial(plateText, "#e0d8c1");
+
+  // Heavy steel chassis rails
+  addBox(body, materials.black, 0, 0.48, 0, 2.0, 0.28, 4.9);
+  // Dual-Cab Cabin
+  addBox(body, truckBody, 0, 1.25, 0.42, 1.96, 0.95, 2.2);
+  // Hood & Front Grille
+  const hood = addBox(body, truckBody, 0, 0.98, 1.82, 1.94, 0.45, 1.25);
+  hood.rotation.x = -0.06;
+
+  // Front Heavy Bull Bar / Push Bumper
+  addBox(body, bullBarMat, 0, 0.62, 2.48, 2.05, 0.38, 0.18);
+  addBox(body, bullBarMat, 0, 0.95, 2.45, 1.65, 0.08, 0.08); // Top hoop
+  for (const bx of [-0.65, 0.65]) {
+    addBox(body, bullBarMat, bx, 0.8, 2.46, 0.08, 0.38, 0.08); // Vertical uprights
+  }
+
+  // Cabin Glazing & Side Doors
+  const windshield = addBox(body, materials.glass, 0, 1.45, 1.38, 1.72, 0.55, 0.08, false);
+  windshield.rotation.x = -0.38;
+  const rearGlass = addBox(body, materials.glass, 0, 1.45, -0.65, 1.68, 0.45, 0.06, false);
+
+  for (const side of [-1, 1]) {
+    // Side door windows (front and rear double-cab windows)
+    addBox(body, materials.glass, side * 0.96, 1.42, 0.72, 0.04, 0.42, 0.62, false);
+    addBox(body, materials.glass, side * 0.96, 1.42, 0.05, 0.04, 0.42, 0.58, false);
+    // Tubular steel side steps
+    addBox(body, bullBarMat, side * 1.08, 0.42, 0.35, 0.12, 0.06, 1.85);
+    // Mirrors
+    addBox(body, bullBarMat, side * 1.15, 1.32, 1.28, 0.22, 0.14, 0.12);
+  }
+
+  // Headache Rack / Roll Bar behind Cab
+  addBox(body, bullBarMat, 0, 1.72, -0.72, 1.78, 0.08, 0.08);
+  for (const rx of [-0.85, 0.85]) {
+    addBox(body, bullBarMat, rx, 1.25, -0.72, 0.08, 0.85, 0.08);
+  }
+
+  // Open Rear Cargo Bed with Ribbed Bed Liner & Tailgate
+  addBox(body, bedLiner, 0, 0.68, -1.55, 1.82, 0.12, 1.75); // Bed floor
+  addBox(body, truckBody, -0.92, 0.98, -1.55, 0.14, 0.58, 1.75); // Left bed wall
+  addBox(body, truckBody, 0.92, 0.98, -1.55, 0.14, 0.58, 1.75); // Right bed wall
+  addBox(body, truckBody, 0, 0.98, -2.42, 1.96, 0.58, 0.12); // Drop tailgate
+  addBox(body, materials.darkTrim, 0, 1.12, -2.49, 0.35, 0.08, 0.04); // Tailgate handle
+  addBox(body, materials.metal, 0, 0.52, -2.48, 1.98, 0.18, 0.18); // Rear bumper
+
+  // Lamps
+  for (const s of [-1, 1]) {
+    addBox(body, lamp, s * 0.82, 0.86, 2.42, 0.26, 0.22, 0.06); // Dual front headlights
+    addBox(body, tailLamp, s * 0.92, 0.98, -2.49, 0.14, 0.42, 0.04); // Vertical rear lamps
+  }
+
+  // Plates
+  addBox(body, plateMat, 0, 0.52, 2.58, 0.52, 0.18, 0.02);
+  addBox(body, plateMat, 0, 0.52, -2.58, 0.52, 0.18, 0.02);
+
+  // High-clearance all-terrain wheels
+  const wheels: THREE.Group[] = [];
+  const frontWheels: THREE.Group[] = [];
+  const wheelPositions = [
+    [-0.92, 0.42, 1.62],
+    [0.92, 0.42, 1.62],
+    [-0.92, 0.42, -1.58],
+    [0.92, 0.42, -1.58],
+  ];
+
+  wheelPositions.forEach(([x, y, z]) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, y, z);
+    root.add(pivot);
+
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.40, 0.40, 0.28, 16), rubber);
+    tire.rotation.z = Math.PI / 2;
+    tire.castShadow = true;
+    pivot.add(tire);
+
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.29, 12), alloyRim);
+    hub.rotation.z = Math.PI / 2;
+    pivot.add(hub);
+
+    wheels.push(pivot);
+    if (z > 0) frontWheels.push(pivot);
+  });
+
+  return { root, wheels, frontWheels, body };
+}
+
+// 3. Passenger Commuter Minibus (Nigerian Danfo)
+export function createMinibusModel(
+  materials: GameMaterials,
+  bodyColorHex = "#dfa824",
+  plateText = "KN 844 DNF",
+): UsableVehicleModel {
+  const root = new THREE.Group();
+  root.name = "commuter-minibus-root";
+  const body = new THREE.Group();
+  root.add(body);
+
+  const busBody = new THREE.MeshPhysicalMaterial({
+    color: bodyColorHex,
+    roughness: 0.42,
+    metalness: 0.14,
+    clearcoat: 0.18,
+  });
+  const busStripe = new THREE.MeshStandardMaterial({ color: "#163a24", roughness: 0.5 });
+  const rubber = new THREE.MeshStandardMaterial({ color: "#222322", roughness: 0.96 });
+  const busRim = new THREE.MeshStandardMaterial({ color: "#9e9a8f", roughness: 0.44, metalness: 0.42 });
+  const lamp = new THREE.MeshStandardMaterial({ color: "#fff2ce", emissive: "#a28248", emissiveIntensity: 0.55 });
+  const tailLamp = new THREE.MeshStandardMaterial({ color: "#8b1e15", emissive: "#58120b", emissiveIntensity: 0.4 });
+  const routeBoardMat = makeSignMaterial("SABON GARI · BOMPAI · KAWU INDUSTRIAL\nFARE: ₦300", "#163a24");
+  const plateMat = makeSignMaterial(plateText, "#e0d8c1");
+
+  // Underbody
+  addBox(body, materials.black, 0, 0.45, 0, 2.1, 0.28, 5.1);
+  // Main Minibus Passenger Body
+  addBox(body, busBody, 0, 1.35, 0, 2.06, 1.48, 5.0);
+
+  // Twin Dark-Green Danfo Speed Stripes along lower flank
+  for (const side of [-1, 1]) {
+    addBox(body, busStripe, side * 1.04, 0.92, 0, 0.03, 0.18, 4.95);
+    addBox(body, busStripe, side * 1.04, 1.15, 0, 0.03, 0.18, 4.95);
+
+    // Side passenger windows (3 large panoramic panes)
+    for (let w = -1; w <= 1; w++) {
+      addBox(body, materials.glass, side * 1.02, 1.62, w * 1.1 - 0.2, 0.04, 0.52, 0.92, false);
+    }
+    // Front driver & conductor windows
+    addBox(body, materials.glass, side * 1.02, 1.58, 1.62, 0.04, 0.52, 0.78, false);
+    // Extended bus side mirrors
+    addBox(body, materials.black, side * 1.22, 1.42, 1.95, 0.32, 0.24, 0.14);
+  }
+
+  // Front Curved Windshield
+  const windshield = addBox(body, materials.glass, 0, 1.62, 2.18, 1.88, 0.65, 0.08, false);
+  windshield.rotation.x = -0.28;
+
+  // Route Signboard mounted above windshield
+  addBox(body, routeBoardMat, 0, 2.05, 2.08, 1.65, 0.26, 0.06);
+
+  // Roof Luggage Rack with strapped spare tire
+  addBox(body, materials.metal, 0, 2.22, -0.4, 1.65, 0.06, 3.2);
+  for (const rx of [-0.8, 0.8]) {
+    addBox(body, materials.metal, rx, 2.28, -0.4, 0.06, 0.12, 3.2);
+  }
+  const spareTire = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.22, 12), rubber);
+  spareTire.rotation.x = Math.PI / 2;
+  spareTire.position.set(0, 2.32, -0.5);
+  body.add(spareTire);
+
+  // Interior passenger bench seats (visible through windows)
+  for (let row = -1.2; row <= 0.8; row += 0.95) {
+    addBox(body, materials.wood, 0, 1.02, row, 1.65, 0.28, 0.42);
+    addBox(body, materials.black, 0, 1.32, row - 0.18, 1.65, 0.35, 0.08);
+  }
+
+  // Front chrome grille, bumper & lights
+  addBox(body, materials.darkTrim, 0, 0.52, 2.55, 2.08, 0.35, 0.18);
+  addBox(body, materials.metal, 0, 0.82, 2.54, 1.45, 0.28, 0.08); // Grille
+  for (const s of [-1, 1]) {
+    addBox(body, lamp, s * 0.85, 0.85, 2.54, 0.28, 0.22, 0.06);
+    addBox(body, tailLamp, s * 0.88, 0.95, -2.52, 0.18, 0.38, 0.04);
+  }
+
+  // Plates
+  addBox(body, plateMat, 0, 0.52, 2.65, 0.52, 0.18, 0.02);
+  addBox(body, plateMat, 0, 0.58, -2.54, 0.52, 0.18, 0.02);
+
+  // Wheels
+  const wheels: THREE.Group[] = [];
+  const frontWheels: THREE.Group[] = [];
+  const wheelPositions = [
+    [-0.92, 0.38, 1.55],
+    [0.92, 0.38, 1.55],
+    [-0.92, 0.38, -1.45],
+    [0.92, 0.38, -1.45],
+  ];
+
+  wheelPositions.forEach(([x, y, z]) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, y, z);
+    root.add(pivot);
+
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.37, 0.37, 0.25, 16), rubber);
+    tire.rotation.z = Math.PI / 2;
+    tire.castShadow = true;
+    pivot.add(tire);
+
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.26, 12), busRim);
+    hub.rotation.z = Math.PI / 2;
+    pivot.add(hub);
+
+    wheels.push(pivot);
+    if (z > 0) frontWheels.push(pivot);
+  });
+
+  return { root, wheels, frontWheels, body };
+}
+
+// 4. Small Freight Haulage Truck (Cab-over Canter/Elf style)
+export function createFreightTruckModel(
+  materials: GameMaterials,
+  cabColorHex = "#264875",
+  plateText = "KN 119 TRK",
+): UsableVehicleModel {
+  const root = new THREE.Group();
+  root.name = "freight-truck-root";
+  const body = new THREE.Group();
+  root.add(body);
+
+  const cabBody = new THREE.MeshPhysicalMaterial({
+    color: cabColorHex,
+    roughness: 0.38,
+    metalness: 0.22,
+    clearcoat: 0.2,
+  });
+  const chassisSteel = new THREE.MeshStandardMaterial({ color: "#1c1d1e", roughness: 0.7, metalness: 0.7 });
+  const timberBed = new THREE.MeshStandardMaterial({ color: "#7a5328", roughness: 0.85 });
+  const rubber = new THREE.MeshStandardMaterial({ color: "#222322", roughness: 0.96 });
+  const truckRim = new THREE.MeshStandardMaterial({ color: "#928e82", roughness: 0.4, metalness: 0.45 });
+  const lamp = new THREE.MeshStandardMaterial({ color: "#fff2ce", emissive: "#a28248", emissiveIntensity: 0.55 });
+  const tailLamp = new THREE.MeshStandardMaterial({ color: "#8b1e15", emissive: "#58120b", emissiveIntensity: 0.4 });
+  const plateMat = makeSignMaterial(plateText, "#e0d8c1");
+  const freightDecalMat = makeSignMaterial("KAWU INTERSTATE FREIGHT\nMAX LOAD: 4.5 TONNES", "#264875");
+
+  // Heavy steel ladder chassis
+  addBox(body, chassisSteel, 0, 0.58, -0.4, 1.95, 0.35, 6.2);
+  // Cylindrical diesel tank (right side) & air tanks (left side)
+  addCyl(body, chassisSteel, 0.85, 0.55, -0.4, 0.24, 0.24, 1.25);
+  addBox(body, chassisSteel, -0.85, 0.55, -0.4, 0.42, 0.32, 0.85);
+
+  // Cab-over-engine driver pod
+  addBox(body, cabBody, 0, 1.62, 2.05, 2.15, 1.65, 1.85);
+  // Wide wrap-around high panoramic windshield
+  const windshield = addBox(body, materials.glass, 0, 1.82, 2.92, 1.95, 0.68, 0.08, false);
+  windshield.rotation.x = -0.15;
+  // Cab side windows
+  for (const side of [-1, 1]) {
+    addBox(body, materials.glass, side * 1.08, 1.82, 2.15, 0.04, 0.55, 0.82, false);
+    // Vertical side grab handles & mirrors
+    addBox(body, materials.metal, side * 1.12, 1.45, 1.62, 0.04, 0.65, 0.04);
+    addBox(body, materials.black, side * 1.28, 1.72, 2.65, 0.25, 0.42, 0.12);
+    // Company logo door decal
+    addBox(body, freightDecalMat, side * 1.09, 1.28, 2.05, 0.02, 0.35, 0.85);
+  }
+
+  // Cab roof clearance marker lights (amber & green)
+  for (let cl = -0.8; cl <= 0.8; cl += 0.4) {
+    addBox(body, lamp, cl, 2.48, 2.78, 0.12, 0.06, 0.08);
+  }
+
+  // Front steel bumper, grille & headlights
+  addBox(body, chassisSteel, 0, 0.58, 2.98, 2.25, 0.42, 0.25);
+  addBox(body, materials.black, 0, 1.05, 2.98, 1.65, 0.38, 0.08);
+  for (const s of [-1, 1]) {
+    addBox(body, lamp, s * 0.92, 0.88, 2.99, 0.32, 0.24, 0.06);
+    // Heavy rubber mudflaps with white chevrons
+    addBox(body, rubber, s * 0.88, 0.42, -2.85, 0.45, 0.52, 0.04);
+  }
+
+  // Timber & steel drop-side freight flatbed ($3.8\text{m} \times 2.3\text{m}$)
+  addBox(body, timberBed, 0, 0.95, -0.95, 2.25, 0.14, 4.0); // Flatbed floor
+  addBox(body, timberBed, -1.12, 1.25, -0.95, 0.08, 0.52, 4.0); // Left drop-side board
+  addBox(body, timberBed, 1.12, 1.25, -0.95, 0.08, 0.52, 4.0); // Right drop-side board
+  addBox(body, timberBed, 0, 1.25, -2.94, 2.25, 0.52, 0.08); // Rear drop tailgate
+  // Heavy steel headboard behind cab
+  addBox(body, chassisSteel, 0, 1.62, 1.05, 2.25, 1.25, 0.08);
+
+  // Cargo Load: Stacked wooden shipping crates and strapped freight pallets
+  addBox(body, materials.wood, -0.45, 1.45, -0.2, 0.95, 0.85, 1.1);
+  addBox(body, materials.wood, 0.45, 1.45, -0.2, 0.88, 0.85, 1.1);
+  addBox(body, materials.wood, 0, 1.35, -1.5, 1.75, 0.65, 1.2);
+  addBox(body, materials.cloth, 0, 1.78, -1.5, 1.82, 0.25, 1.25); // Heavy canvas cargo tarp
+
+  // Rear bumper, tail lamps, plates
+  addBox(body, chassisSteel, 0, 0.58, -2.96, 2.15, 0.22, 0.15);
+  for (const s of [-1, 1]) {
+    addBox(body, tailLamp, s * 0.85, 0.62, -3.05, 0.28, 0.18, 0.04);
+  }
+  addBox(body, plateMat, 0, 0.58, 3.12, 0.52, 0.18, 0.02);
+  addBox(body, plateMat, 0, 0.58, -3.05, 0.52, 0.18, 0.02);
+
+  // 6 Heavy-Duty Wheels (Front 2 + Tandem Rear Dual Wheels on each side)
+  const wheels: THREE.Group[] = [];
+  const frontWheels: THREE.Group[] = [];
+
+  // Front wheels
+  for (const x of [-0.95, 0.95]) {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, 0.42, 2.1);
+    root.add(pivot);
+
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.28, 16), rubber);
+    tire.rotation.z = Math.PI / 2;
+    tire.castShadow = true;
+    pivot.add(tire);
+
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.29, 12), truckRim);
+    hub.rotation.z = Math.PI / 2;
+    pivot.add(hub);
+
+    wheels.push(pivot);
+    frontWheels.push(pivot);
+  }
+
+  // Tandem rear dual wheels (4 wheels at rear: 2 left, 2 right)
+  for (const z of [-1.5, -2.3]) {
+    for (const x of [-0.98, 0.98]) {
+      const pivot = new THREE.Group();
+      pivot.position.set(x, 0.42, z);
+      root.add(pivot);
+
+      // Dual tire assembly
+      for (const dx of [-0.08, 0.08]) {
+        const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.22, 16), rubber);
+        tire.rotation.z = Math.PI / 2;
+        tire.position.x = dx;
+        tire.castShadow = true;
+        pivot.add(tire);
+      }
+
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.4, 12), truckRim);
+      hub.rotation.z = Math.PI / 2;
+      pivot.add(hub);
+
+      wheels.push(pivot);
+    }
+  }
+
+  return { root, wheels, frontWheels, body };
+}

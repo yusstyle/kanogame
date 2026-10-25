@@ -1,5 +1,5 @@
 export type RoadAxis = "x" | "z";
-export type DistrictId = "dala" | "sabon-gari" | "airport-road" | "residential";
+export type DistrictId = "dala" | "sabon-gari" | "airport-road" | "residential" | "industrial";
 
 export type RoadSpec = {
   axis: RoadAxis;
@@ -31,6 +31,7 @@ export const ROAD_LAYOUT: RoadSpec[] = [
 ];
 
 export function getDistrict(x: number, z: number): DistrictId {
+  if (z <= -120) return "industrial";
   if (x < 0 && z < 0) return "dala";
   if (x < 0 && z >= 0) return "sabon-gari";
   if (x >= 0 && z < 0) return "airport-road";
@@ -43,6 +44,7 @@ export function getDistrictLabel(district: DistrictId) {
     case "sabon-gari": return "SABON GARI";
     case "airport-road": return "AIRPORT ROAD";
     case "residential": return "RESIDENTIAL QUARTER";
+    case "industrial": return "KAWU INDUSTRIAL & LOGISTICS DISTRICT";
   }
 }
 

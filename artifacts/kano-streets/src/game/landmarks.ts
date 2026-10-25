@@ -4,7 +4,7 @@ export interface LandmarkLocation {
   district: string;
   x: number;
   z: number;
-  category: "civic" | "commercial" | "residence" | "worship" | "security";
+  category: "civic" | "commercial" | "residence" | "worship" | "security" | "industrial";
   description: string;
 }
 
@@ -134,6 +134,60 @@ export const KANO_LANDMARKS: LandmarkLocation[] = [
     z: -126,
     category: "civic",
     description: "Northern highway artery leading to Kano Ring Road and Kawu Industrial Park.",
+  },
+  {
+    id: "kawu-freight-terminal",
+    name: "Kawu Central Freight Terminal & Logistics Depot",
+    district: "KAWU INDUSTRIAL",
+    x: -42,
+    z: -175,
+    category: "industrial",
+    description: "Primary interstate haulage depot with roll-up loading bays, freight docks, and pallet staging.",
+  },
+  {
+    id: "dawanau-grain-depot",
+    name: "Dawanau Grain & Wholesale Produce Depot",
+    district: "KAWU INDUSTRIAL",
+    x: 45,
+    z: -175,
+    category: "industrial",
+    description: "Agricultural distribution warehouse with covered loading bays, burlap grain stacks, and weighbridge.",
+  },
+  {
+    id: "arewa-heavy-workshop",
+    name: "Arewa Heavy Vehicle Repairs & Fleet Workshop",
+    district: "KAWU INDUSTRIAL",
+    x: -38,
+    z: -135,
+    category: "industrial",
+    description: "Commercial truck fleet workshop with inspection pits, engine gantry crane, and oil drum storage.",
+  },
+  {
+    id: "container-yard",
+    name: "Kano Inland Container Yard & Customs Gatehouse",
+    district: "KAWU INDUSTRIAL",
+    x: 42,
+    z: -135,
+    category: "industrial",
+    description: "Intermodal freight terminal with stacked 20ft/40ft shipping containers and security checkpoint.",
+  },
+  {
+    id: "workers-canteen",
+    name: "Industrial Workers Canteen & Mai Shayi Hub",
+    district: "KAWU INDUSTRIAL",
+    x: -15,
+    z: -155,
+    category: "industrial",
+    description: "Roadside canteen serving factory crew and haulage drivers with hot tea, spiced bread, and masa.",
+  },
+  {
+    id: "logistics-dispatch-board",
+    name: "Kawu Logistics Dispatch & Career Mission Board",
+    district: "KAWU INDUSTRIAL",
+    x: -8,
+    z: -140,
+    category: "industrial",
+    description: "Central haulage contracts office and delivery dispatch manifest board.",
   },
 ];
 

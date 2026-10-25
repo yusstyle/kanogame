@@ -545,6 +545,135 @@
   color: #6fe5a8;
 }
 
+.ks-hud-mission-btn {
+  border-color: rgba(111, 229, 168, 0.4);
+}
+
+.ks-hud-mission-btn:hover {
+  background: rgba(111, 229, 168, 0.2);
+  border-color: #6fe5a8;
+}
+
+.ks-hud-mission-btn .ks-key {
+  border-color: rgba(111, 229, 168, 0.6);
+  color: #6fe5a8;
+}
+
+.ks-mission-chip {
+  position: absolute;
+  top: clamp(68px, 9.5vh, 88px);
+  right: clamp(180px, 20vw, 320px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border: 1px solid rgba(111, 229, 168, 0.6);
+  border-left: 3px solid #6fe5a8;
+  background: rgba(20, 29, 27, 0.9);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+  animation: ks-fade-in 0.2s ease-out;
+  max-width: min(440px, 80vw);
+}
+
+.ks-mission-tag {
+  padding: 2px 5px;
+  border-radius: 2px;
+  background: rgba(111, 229, 168, 0.2);
+  color: #6fe5a8;
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.ks-mission-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ks-mission-info strong {
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: #6fe5a8;
+}
+
+.ks-mission-info span {
+  font-size: 9px;
+  color: #eeddbb;
+}
+
+.ks-mission-info small {
+  font-size: 7.5px;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 0.05em;
+}
+
+.ks-mission-cancel {
+  margin-left: 6px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.ks-mission-cancel:hover {
+  color: #ff6b6b;
+}
+
+.ks-mission-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.ks-veh-tag {
+  padding: 2px 6px;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  border-radius: 2px;
+  background: rgba(228, 160, 110, 0.2);
+  color: #e4a06e;
+}
+
+.ks-bonus-tag {
+  padding: 2px 6px;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  border-radius: 2px;
+  background: rgba(235, 180, 50, 0.25);
+  color: #f7ca55;
+}
+
+.ks-mission-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.ks-mission-payout {
+  display: flex;
+  flex-direction: column;
+}
+
+.ks-mission-payout small {
+  font-size: 7.5px;
+  color: rgba(244, 238, 223, 0.6);
+  letter-spacing: 0.1em;
+}
+
+.ks-mission-payout strong {
+  font-size: 13px;
+  color: #6fe5a8;
+}
+
 @media (max-width: 680px) {
   .ks-menu { padding: 22px 23px 18px; }
   .ks-menu-content { margin-top: clamp(64px, 13vh, 100px); }

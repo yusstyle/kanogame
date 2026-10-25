@@ -188,6 +188,66 @@ const NPC_ROUTINE_PROFILES = [
       "If you are looking for long-term real estate, the modern residential villas are top quality.",
     ],
   },
+  {
+    name: "Aliyu Sambo",
+    role: "worker" as NPCRole,
+    destinationName: "Kawu Central Freight Terminal",
+    destX: -42,
+    destZ: -175,
+    dialogues: [
+      "Sannu! Shift is busy at Kawu Terminal Bay 02 today. Loading interstate bulk cargo for Kaduna.",
+      "Check the dispatch bulletin board by the highway entrance if you want delivery contracts!",
+      "Always inspect your cargo straps before driving on the ring road highway.",
+    ],
+  },
+  {
+    name: "Malam Danladi",
+    role: "worker" as NPCRole,
+    destinationName: "Kano Container Yard & Customs Gatehouse",
+    destX: 42,
+    destZ: -135,
+    dialogues: [
+      "Barkade! Ensure your freight manifests are stamped before entering the container yard.",
+      "Interstate trade is booming. Freight trucks arrive day and night from Lagos and Port Harcourt.",
+      "Heavy trucks must weigh in at Dawanau weighbridge platform before departure.",
+    ],
+  },
+  {
+    name: "Garba Mechanic",
+    role: "worker" as NPCRole,
+    destinationName: "Arewa Heavy Vehicle Repairs Workshop",
+    destX: -38,
+    destZ: -135,
+    dialogues: [
+      "Ina kwana! Replacing a heavy diesel transmission today. Big torque engines need careful maintenance.",
+      "If you need suspension upgrades or engine work, Sani Vulcanizer and our workshop have you covered.",
+      "Drive gently over the industrial drainage gratings so you do not damage your tie rods!",
+    ],
+  },
+  {
+    name: "Bala Driver",
+    role: "worker" as NPCRole,
+    destinationName: "Industrial Workers Canteen",
+    destX: -15,
+    destZ: -155,
+    dialogues: [
+      "Just hauled grain sacks from Dawanau wholesale depot. Time for hot tea and sweet bread at the canteen!",
+      "The northern highway past the gateway is so smooth now. Great connection to the city center.",
+      "A good commercial delivery van or pickup truck can make you serious money in Kano.",
+    ],
+  },
+  {
+    name: "Habiba Mai Shayi",
+    role: "trader" as NPCRole,
+    destinationName: "Industrial Workers Canteen",
+    destX: -15,
+    destZ: -155,
+    dialogues: [
+      "Maraba! Fresh spiced tea, fried eggs, and warm Kano bread ready for hard-working drivers!",
+      "Industrial logistics never sleeps! We keep the tea kettles boiling all day and night.",
+      "Eat well and drive safely on the roads. May your trade be blessed with great profit!",
+    ],
+  },
 ];
 
 const VENDOR_PROFILES = [
@@ -219,7 +279,7 @@ export class PedestrianSystem {
 
   public setQuality(quality: GraphicsQuality) {
     this.quality = quality;
-    const targetCount = quality === "performance" ? 8 : quality === "balanced" ? 14 : 20;
+    const targetCount = quality === "performance" ? 12 : quality === "balanced" ? 16 : 22;
 
     const enableShadows = quality === "quality";
     this.pedestrians.forEach((p) => {
@@ -233,7 +293,7 @@ export class PedestrianSystem {
     if (this.pedestrians.length < targetCount) {
       this.spawnAdditionalWalkers(targetCount - this.pedestrians.length);
     } else if (this.pedestrians.length > targetCount) {
-      const walkers = this.pedestrians.filter((p) => p.state !== "vendor");
+      const walkers = this.pedestrians.filter((p) => p.state === "walking");
       while (this.pedestrians.length > targetCount && walkers.length > 0) {
         const removed = walkers.pop();
         if (removed) {
@@ -274,8 +334,115 @@ export class PedestrianSystem {
 
   private spawnCrowd() {
     this.spawnMarketVendors();
-    const initialWalkerCount = this.quality === "performance" ? 4 : this.quality === "balanced" ? 9 : 15;
+    this.spawnIndustrialWorkers();
+    const initialWalkerCount = this.quality === "performance" ? 2 : this.quality === "balanced" ? 6 : 12;
     this.spawnAdditionalWalkers(initialWalkerCount);
+  }
+
+  private spawnIndustrialWorkers() {
+    const industrialWorkers = [
+      {
+        name: "Habiba Mai Shayi",
+        role: "trader" as NPCRole,
+        x: -15,
+        z: -155,
+        yaw: 0,
+        destinationName: "Industrial Workers Canteen & Mai Shayi Hub",
+        cry: "Maraba! Fresh spiced tea, fried eggs, and warm Kano bread ready for hard-working drivers!",
+        dialogues: [
+          "Maraba! Fresh spiced tea, fried eggs, and warm Kano bread ready for hard-working drivers!",
+          "Industrial logistics never sleeps! We keep the tea kettles boiling all day and night for the shift crews.",
+          "Eat well and drive safely on the northern highway. May your trade be blessed with great profit!",
+        ],
+      },
+      {
+        name: "Garba Mechanic",
+        role: "craftsman" as NPCRole,
+        x: -38,
+        z: -135,
+        yaw: Math.PI * 0.5,
+        destinationName: "Arewa Heavy Vehicle Repairs Workshop",
+        cry: "Heavy diesel engines, gearboxes, and suspension overhauls! Master Garba handles all fleet repairs!",
+        dialogues: [
+          "Heavy diesel engines, gearboxes, and suspension overhauls! Master Garba handles all fleet repairs!",
+          "Those freight trucks carry 30 tons of produce across Nigeria. Keep their injectors clean!",
+          "Sani over on the ring road is a genius with carburetors, but for heavy haulage diesel, we do it here.",
+        ],
+      },
+      {
+        name: "Malam Danladi",
+        role: "clerk" as NPCRole,
+        x: -42,
+        z: -175,
+        yaw: Math.PI,
+        destinationName: "Kawu Central Freight Terminal",
+        cry: "Interstate haulage manifests and cargo consignment clearing! Verify your freight documents!",
+        dialogues: [
+          "Interstate haulage manifests and cargo consignment clearing! Verify your freight documents!",
+          "We load grain, machinery, and textiles for Kaduna, Abuja, and Lagos daily. Keep to your dispatch times!",
+          "If you are looking for driving contracts, check the Dispatch Board near the entrance gate.",
+        ],
+      },
+      {
+        name: "Aliyu Sambo",
+        role: "trader" as NPCRole,
+        x: 45,
+        z: -175,
+        yaw: -Math.PI * 0.5,
+        destinationName: "Dawanau Grain & Produce Wholesale Depot",
+        cry: "Wholesale millet, sorghum, and northern suya spice consignments direct from Dawanau growers!",
+        dialogues: [
+          "Wholesale millet, sorghum, and northern suya spice consignments direct from Dawanau growers!",
+          "Dawanau is the largest grain market in West Africa. Millions in produce move through here every week.",
+          "Supplying the local restaurants like Arewa Suya Lounge keeps the city fed and business booming.",
+        ],
+      },
+      {
+        name: "Bala Driver",
+        role: "driver" as NPCRole,
+        x: 42,
+        z: -135,
+        yaw: 0,
+        destinationName: "Kano Inland Container Yard",
+        cry: "Container freight cleared and inspected! Waiting for the next heavy haulage dispatch.",
+        dialogues: [
+          "Container freight cleared and inspected! Waiting for the next heavy haulage dispatch.",
+          "Driving a 6-wheeler haulage truck through Kano traffic takes real patience and skill.",
+          "Check your air brakes and tire pressure before you hit the highway heading south.",
+        ],
+      },
+    ];
+
+    industrialWorkers.forEach((worker, index) => {
+      const palette = NPC_PALETTES[(index + 3) % NPC_PALETTES.length];
+      const model = createPedestrianModel(this.materials, palette);
+      const y = this.surfaceHeight(worker.x, worker.z);
+
+      model.root.position.set(worker.x, y, worker.z);
+      model.root.rotation.y = worker.yaw;
+      this.root.add(model.root);
+
+      this.pedestrians.push({
+        id: `industrial_worker_${index}`,
+        name: worker.name,
+        role: worker.role,
+        model,
+        position: new THREE.Vector3(worker.x, y, worker.z),
+        yaw: worker.yaw,
+        speed: 0,
+        state: "visiting",
+        stateTimer: 0,
+        currentWaypoint: null,
+        targetWaypoint: null,
+        destinationName: worker.destinationName,
+        destinationPoint: new THREE.Vector3(worker.x, y, worker.z),
+        dialogues: worker.dialogues,
+        vendorCry: worker.cry,
+        walkPhase: index * 1.7,
+        personalSpeed: 0,
+        lookSeed: index * 3.1,
+      });
+    });
   }
 
   private spawnMarketVendors() {
@@ -378,8 +545,8 @@ export class PedestrianSystem {
         return {
           prompt: `Talk to ${p.name} (${p.role.toUpperCase()})`,
           action: () => {
-            if (p.state === "vendor") {
-              return `${p.name} (Trader): '${p.vendorCry || "Welcome to my stall! Best prices in Kano!"}'`;
+            if (p.vendorCry) {
+              return `${p.name} (${p.role.toUpperCase()}): '${p.vendorCry}'`;
             }
             const quote = p.dialogues[Math.floor(Math.random() * p.dialogues.length)];
             return `${p.name} (${p.role.toUpperCase()}): '${quote}' [Destination: ${p.destinationName}]`;

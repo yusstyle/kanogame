@@ -9,6 +9,8 @@ export interface SaveData {
   ownedBusinesses: BusinessId[];
   dayCount: number;
   vehicleUpgrade: VehicleUpgrade;
+  completedMissions?: string[];
+  careerEarnings?: number;
   savedAt: number;
 }
 
@@ -222,7 +224,13 @@ export class EconomySystem {
     return list;
   }
 
-  public saveToStorage(cash: number, trafficFine: number, hasApartmentRental: boolean): boolean {
+  public saveToStorage(
+    cash: number,
+    trafficFine: number,
+    hasApartmentRental: boolean,
+    completedMissions?: string[],
+    careerEarnings?: number,
+  ): boolean {
     if (typeof window === "undefined" || !window.localStorage) return false;
     try {
       const data: SaveData = {
@@ -234,6 +242,8 @@ export class EconomySystem {
         ownedBusinesses: this.getOwnedBusinessesList(),
         dayCount: this.dayCount,
         vehicleUpgrade: { ...this.vehicleUpgrade },
+        completedMissions: completedMissions ?? [],
+        careerEarnings: careerEarnings ?? 0,
         savedAt: Date.now(),
       };
       window.localStorage.setItem("kano_streets_save_v1", JSON.stringify(data));
@@ -249,7 +259,7 @@ export class EconomySystem {
       const raw = window.localStorage.getItem("kano_streets_save_v1");
       if (!raw) return null;
       const data = JSON.parse(raw) as SaveData;
-      if (!data || data.version !== 1) return null;
+      if (!data || (data.version !== undefined && data.version !== 1)) return null;
 
       // Restore owned properties & businesses
       if (Array.isArray(data.ownedProperties)) {

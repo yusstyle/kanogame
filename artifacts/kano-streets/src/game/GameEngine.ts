@@ -3,9 +3,14 @@ import {
   createCarModel,
   createKekeModel,
   createPlayerModel,
+  createDeliveryVanModel,
+  createPickupTruckModel,
+  createMinibusModel,
+  createFreightTruckModel,
   type CarModel,
   type KekeModel,
   type PlayerModel,
+  type UsableVehicleModel,
 } from "./actors";
 import { loadGLTFModel, loadHumanoidCharacter } from "./assetManifest";
 import { BuildingInteriorManager } from "./BuildingInteriors";
@@ -20,10 +25,15 @@ import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, Soc
 import { SocialSystem } from "./socialSystem";
 import { EconomySystem } from "./economySystem";
 import { KANO_LANDMARKS, getNearestLandmark } from "./landmarks";
+import { MissionSystem } from "./missionSystem";
 
 const PLAYER_START = new THREE.Vector3(-4, 0, -4);
 const CAR_START = new THREE.Vector3(-2, 0, -8);
 const KEKE_START = new THREE.Vector3(6, 0, -8);
+const VAN_START = new THREE.Vector3(-30, 0, -165);
+const PICKUP_START = new THREE.Vector3(22, 0, -135);
+const MINIBUS_START = new THREE.Vector3(-12, 0, -145);
+const TRUCK_START = new THREE.Vector3(32, 0, -180);
 type GameEngineCallbacks = {
   onSnapshot: (snapshot: GameSnapshot) => void;
   onPause: () => void;
@@ -94,11 +104,37 @@ export class GameEngine {
   private kekeYaw = 0;
   private kekeSpeed = 0;
   private kekeWheelSpin = 0;
+
+  private vanPosition = VAN_START.clone();
+  private vanYaw = 0;
+  private vanSpeed = 0;
+  private vanWheelSpin = 0;
+
+  private pickupPosition = PICKUP_START.clone();
+  private pickupYaw = 0;
+  private pickupSpeed = 0;
+  private pickupWheelSpin = 0;
+
+  private minibusPosition = MINIBUS_START.clone();
+  private minibusYaw = 0;
+  private minibusSpeed = 0;
+  private minibusWheelSpin = 0;
+
+  private truckPosition = TRUCK_START.clone();
+  private truckYaw = 0;
+  private truckSpeed = 0;
+  private truckWheelSpin = 0;
+
   private walkPhase = 0;
   private wheelSpin = 0;
   private readonly interiorManager: BuildingInteriorManager;
   public readonly socialSystem = new SocialSystem();
   public readonly economy = new EconomySystem();
+  public readonly missionSystem = new MissionSystem();
+  private van!: UsableVehicleModel;
+  private pickup!: UsableVehicleModel;
+  private minibus!: UsableVehicleModel;
+  private truck!: UsableVehicleModel;
   private cash = 150000;
   private trafficFine = 0;
   private hasApartmentRental = false;
@@ -139,6 +175,9 @@ export class GameEngine {
       this.cash = saved.cash;
       this.trafficFine = saved.trafficFine;
       this.hasApartmentRental = saved.hasApartmentRental;
+      if (saved.completedMissions) {
+        this.missionSystem.loadProgress(saved.completedMissions, saved.careerEarnings ?? 0);
+      }
     }
     this.world = createWorld(this.materials);
     this.colliderIndex = new ColliderIndex(this.world.colliders);
@@ -182,6 +221,38 @@ export class GameEngine {
       KEKE_START.z,
     );
     this.scene.add(this.keke.root);
+
+    this.van = createDeliveryVanModel(this.materials);
+    this.van.root.position.set(
+      this.vanPosition.x,
+      this.surfaceHeight(this.vanPosition.x, this.vanPosition.z),
+      this.vanPosition.z,
+    );
+    this.scene.add(this.van.root);
+
+    this.pickup = createPickupTruckModel(this.materials);
+    this.pickup.root.position.set(
+      this.pickupPosition.x,
+      this.surfaceHeight(this.pickupPosition.x, this.pickupPosition.z),
+      this.pickupPosition.z,
+    );
+    this.scene.add(this.pickup.root);
+
+    this.minibus = createMinibusModel(this.materials);
+    this.minibus.root.position.set(
+      this.minibusPosition.x,
+      this.surfaceHeight(this.minibusPosition.x, this.minibusPosition.z),
+      this.minibusPosition.z,
+    );
+    this.scene.add(this.minibus.root);
+
+    this.truck = createFreightTruckModel(this.materials);
+    this.truck.root.position.set(
+      this.truckPosition.x,
+      this.surfaceHeight(this.truckPosition.x, this.truckPosition.z),
+      this.truckPosition.z,
+    );
+    this.scene.add(this.truck.root);
 
     void this.loadAssets();
 
@@ -280,7 +351,7 @@ export class GameEngine {
     }
     this.sunLight.intensity = 0.4 + dayFactor * 1.5;
     const targetPos = this.mode === "driving"
-      ? (this.activeVehicle === "keke" ? this.kekePosition : this.carPosition)
+      ? this.getActiveVehiclePosition()
       : this.playerPosition;
     this.sunLight.position.set(targetPos.x - 44, 62, targetPos.z - 34);
     this.sunLight.target.position.set(targetPos.x, targetPos.y, targetPos.z);
@@ -433,10 +504,26 @@ export class GameEngine {
     this.kekePosition.copy(KEKE_START);
     this.kekeYaw = 0;
     this.kekeSpeed = 0;
+    this.vanPosition.copy(VAN_START);
+    this.vanYaw = 0;
+    this.vanSpeed = 0;
+    this.pickupPosition.copy(PICKUP_START);
+    this.pickupYaw = 0;
+    this.pickupSpeed = 0;
+    this.minibusPosition.copy(MINIBUS_START);
+    this.minibusYaw = 0;
+    this.minibusSpeed = 0;
+    this.truckPosition.copy(TRUCK_START);
+    this.truckYaw = 0;
+    this.truckSpeed = 0;
     this.player.root.visible = true;
     this.player.playAction("idle", 0.1);
     this.car.root.visible = true;
     this.keke.root.visible = true;
+    this.van.root.visible = true;
+    this.pickup.root.visible = true;
+    this.minibus.root.visible = true;
+    this.truck.root.visible = true;
     this.keys.clear();
     this.statusMessage = "Returned to the starting junction";
     this.updateTransform();
@@ -515,8 +602,37 @@ export class GameEngine {
   }
 
   private handleInteract() {
+    // 1. Check Mission Checkpoint Interaction (active mission step - works on foot or in vehicle)
+    const activeTarget = this.mode === "driving" ? this.getActiveVehiclePosition() : this.playerPosition;
+    const missionInter = this.missionSystem.checkMissionInteraction(activeTarget);
+    if (missionInter) {
+      const outcome = this.missionSystem.advanceStage(activeTarget, this.economy.getOwnedBusinessesList());
+      if (outcome) {
+        this.statusMessage = outcome.message;
+        if (outcome.completed) {
+          this.cash += outcome.reward + outcome.bonus;
+          this.economy.saveToStorage(
+            this.cash,
+            this.trafficFine,
+            this.hasApartmentRental,
+            this.missionSystem.getCompletedMissionsList(),
+            this.missionSystem.careerEarnings,
+          );
+        }
+        this.pushSnapshot(true);
+        return;
+      }
+    }
+
     if (this.mode === "driving") {
       this.toggleVehicle();
+      return;
+    }
+
+    // Check Kawu Logistics Dispatch Board at (-8, 0, -140)
+    if (this.playerPosition.distanceTo(new THREE.Vector3(-8, 0, -140)) <= 3.4) {
+      this.statusMessage = "Kawu Logistics Dispatch Board: Press [J] or click MISSIONS to accept contracts!";
+      this.pushSnapshot(true);
       return;
     }
 
@@ -708,25 +824,34 @@ export class GameEngine {
 
   private toggleVehicle() {
     if (this.mode === "on-foot") {
-      const distCar = this.playerPosition.distanceTo(this.carPosition);
-      const distKeke = this.playerPosition.distanceTo(this.kekePosition);
-      if (distCar <= 4.7 && distCar <= distKeke) {
-        this.activeVehicle = "sedan";
+      const candidates: { type: VehicleType; name: string; pos: THREE.Vector3; maxDist: number }[] = [
+        { type: "sedan", name: "Sedan", pos: this.carPosition, maxDist: 4.7 },
+        { type: "keke", name: "Keke Napep", pos: this.kekePosition, maxDist: 4.7 },
+        { type: "van", name: "Delivery Van", pos: this.vanPosition, maxDist: 4.8 },
+        { type: "pickup", name: "Pickup Truck", pos: this.pickupPosition, maxDist: 4.8 },
+        { type: "minibus", name: "Passenger Minibus", pos: this.minibusPosition, maxDist: 5.0 },
+        { type: "truck", name: "Freight Truck", pos: this.truckPosition, maxDist: 5.5 },
+      ];
+
+      const enterable = candidates
+        .map((c) => ({ ...c, dist: this.playerPosition.distanceTo(c.pos) }))
+        .filter((c) => c.dist <= c.maxDist)
+        .sort((a, b) => a.dist - b.dist);
+
+      if (enterable.length > 0) {
+        const chosen = enterable[0];
+        this.activeVehicle = chosen.type;
         this.mode = "driving";
-        this.carSpeed = 0;
+        if (chosen.type === "sedan") this.carSpeed = 0;
+        else if (chosen.type === "keke") this.kekeSpeed = 0;
+        else if (chosen.type === "van") this.vanSpeed = 0;
+        else if (chosen.type === "pickup") this.pickupSpeed = 0;
+        else if (chosen.type === "minibus") this.minibusSpeed = 0;
+        else if (chosen.type === "truck") this.truckSpeed = 0;
+
         this.player.playAction("drive", 0.1);
         this.player.root.visible = false;
-        this.statusMessage = "You are driving the Sedan";
-        this.pushSnapshot(true);
-        return;
-      }
-      if (distKeke <= 4.7) {
-        this.activeVehicle = "keke";
-        this.mode = "driving";
-        this.kekeSpeed = 0;
-        this.player.playAction("drive", 0.1);
-        this.player.root.visible = false;
-        this.statusMessage = "You are riding the Keke Napep";
+        this.statusMessage = `You are driving the ${chosen.name}`;
         this.pushSnapshot(true);
         return;
       }
@@ -735,48 +860,19 @@ export class GameEngine {
       return;
     }
 
-    if (this.activeVehicle === "keke") {
-      const right = new THREE.Vector3(Math.cos(this.kekeYaw), 0, -Math.sin(this.kekeYaw));
-      const candidates = [
-        this.kekePosition.clone().addScaledVector(right, 1.45),
-        this.kekePosition.clone().addScaledVector(right, -1.45),
-      ];
-      const safeExit = candidates.find(
-        (candidate) =>
-          !this.collides(candidate.x, candidate.z, 0.45) &&
-          !this.overlapsKeke(candidate.x, candidate.z, 0.45) &&
-          !this.overlapsCar(candidate.x, candidate.z, 0.45) &&
-          candidate.distanceTo(this.kekePosition) > 1.2,
-      );
-      if (!safeExit) {
-        this.statusMessage = "There is not enough clear space to exit here";
-        this.pushSnapshot(true);
-        return;
-      }
-
-      this.playerPosition.copy(safeExit);
-      this.playerYaw = this.kekeYaw;
-      this.kekeSpeed = 0;
-      this.mode = "on-foot";
-      this.player.playAction("idle", 0.2);
-      this.player.root.visible = true;
-      this.statusMessage = "Exited safely";
-      this.updateTransform();
-      this.pushSnapshot(true);
-      return;
-    }
-
-    const right = new THREE.Vector3(Math.cos(this.carYaw), 0, -Math.sin(this.carYaw));
+    // Exiting active vehicle
+    const vPos = this.getActiveVehiclePosition();
+    const vYaw = this.getActiveVehicleYaw();
+    const right = new THREE.Vector3(Math.cos(vYaw), 0, -Math.sin(vYaw));
+    const offset = this.activeVehicle === "truck" ? 2.2 : this.activeVehicle === "minibus" || this.activeVehicle === "van" ? 1.9 : 1.75;
     const candidates = [
-      this.carPosition.clone().addScaledVector(right, 1.75),
-      this.carPosition.clone().addScaledVector(right, -1.75),
+      vPos.clone().addScaledVector(right, offset),
+      vPos.clone().addScaledVector(right, -offset),
     ];
     const safeExit = candidates.find(
       (candidate) =>
         !this.collides(candidate.x, candidate.z, 0.48) &&
-        !this.overlapsCar(candidate.x, candidate.z, 0.48) &&
-        !this.overlapsKeke(candidate.x, candidate.z, 0.48) &&
-        candidate.distanceTo(this.carPosition) > 1.5,
+        candidate.distanceTo(vPos) > 1.2,
     );
     if (!safeExit) {
       this.statusMessage = "There is not enough clear space to exit here";
@@ -785,8 +881,14 @@ export class GameEngine {
     }
 
     this.playerPosition.copy(safeExit);
-    this.playerYaw = this.carYaw;
-    this.carSpeed = 0;
+    this.playerYaw = vYaw;
+    if (this.activeVehicle === "sedan") this.carSpeed = 0;
+    else if (this.activeVehicle === "keke") this.kekeSpeed = 0;
+    else if (this.activeVehicle === "van") this.vanSpeed = 0;
+    else if (this.activeVehicle === "pickup") this.pickupSpeed = 0;
+    else if (this.activeVehicle === "minibus") this.minibusSpeed = 0;
+    else if (this.activeVehicle === "truck") this.truckSpeed = 0;
+
     this.mode = "on-foot";
     this.player.playAction("idle", 0.2);
     this.player.root.visible = true;
@@ -816,7 +918,7 @@ export class GameEngine {
       else this.updateCar(dt);
 
       const activeVehPos = this.mode === "driving"
-        ? (this.activeVehicle === "keke" ? this.kekePosition : this.carPosition)
+        ? this.getActiveVehiclePosition()
         : null;
 
       this.trafficSystem.update(dt, this.playerPosition, activeVehPos);
@@ -928,12 +1030,20 @@ export class GameEngine {
   private updateCar(dt: number) {
     if (this.activeVehicle === "keke") {
       this.updateKeke(dt);
+    } else if (this.activeVehicle === "van") {
+      this.updateVan(dt);
+    } else if (this.activeVehicle === "pickup") {
+      this.updatePickup(dt);
+    } else if (this.activeVehicle === "minibus") {
+      this.updateMinibus(dt);
+    } else if (this.activeVehicle === "truck") {
+      this.updateTruck(dt);
     } else {
       this.updateSedan(dt);
     }
 
-    const vehPos = this.activeVehicle === "keke" ? this.kekePosition : this.carPosition;
-    const vehSpeed = Math.abs(this.activeVehicle === "keke" ? this.kekeSpeed : this.carSpeed) * 3.6;
+    const vehPos = this.getActiveVehiclePosition();
+    const vehSpeed = Math.abs(this.getActiveVehicleSpeed()) * 3.6;
     if (this.trafficFine === 0 && vehPos.distanceTo(new THREE.Vector3(20, 0, -9.5)) <= 8.5 && vehSpeed > 15) {
       this.trafficFine = 5000;
       this.statusMessage = "KAROTA Traffic Citation: Failed to stop at checkpoint! ₦5,000 penalty registered.";
@@ -1053,6 +1163,297 @@ export class GameEngine {
     this.keke.root.rotation.y = this.kekeYaw;
   }
 
+  public getActiveVehiclePosition(): THREE.Vector3 {
+    switch (this.activeVehicle) {
+      case "keke": return this.kekePosition;
+      case "van": return this.vanPosition;
+      case "pickup": return this.pickupPosition;
+      case "minibus": return this.minibusPosition;
+      case "truck": return this.truckPosition;
+      default: return this.carPosition;
+    }
+  }
+
+  public getActiveVehicleYaw(): number {
+    switch (this.activeVehicle) {
+      case "keke": return this.kekeYaw;
+      case "van": return this.vanYaw;
+      case "pickup": return this.pickupYaw;
+      case "minibus": return this.minibusYaw;
+      case "truck": return this.truckYaw;
+      default: return this.carYaw;
+    }
+  }
+
+  public getActiveVehicleSpeed(): number {
+    switch (this.activeVehicle) {
+      case "keke": return this.kekeSpeed;
+      case "van": return this.vanSpeed;
+      case "pickup": return this.pickupSpeed;
+      case "minibus": return this.minibusSpeed;
+      case "truck": return this.truckSpeed;
+      default: return this.carSpeed;
+    }
+  }
+
+  private boxCollidesAt(x: number, z: number, yaw: number, halfWidth: number, halfLength: number) {
+    const cosine = Math.cos(yaw);
+    const sine = Math.sin(yaw);
+    const absCosine = Math.abs(cosine);
+    const absSine = Math.abs(sine);
+    const broadphaseRadius = Math.max(
+      halfWidth * absCosine + halfLength * absSine,
+      halfWidth * absSine + halfLength * absCosine,
+    );
+
+    const corners = [
+      [-halfWidth, -halfLength],
+      [halfWidth, -halfLength],
+      [halfWidth, halfLength],
+      [-halfWidth, halfLength],
+    ];
+
+    const worldCorners = corners.map(([cornerX, cornerZ]) => [
+      x + cornerX * cosine + cornerZ * sine,
+      z - cornerX * sine + cornerZ * cosine,
+    ]);
+
+    const nearbyColliders = this.colliderIndex.query(x, z, broadphaseRadius + 1);
+    for (const collider of nearbyColliders) {
+      const minX = collider.x - collider.halfX;
+      const maxX = collider.x + collider.halfX;
+      const minZ = collider.z - collider.halfZ;
+      const maxZ = collider.z + collider.halfZ;
+
+      for (const [wx, wz] of worldCorners) {
+        if (wx >= minX && wx <= maxX && wz >= minZ && wz <= maxZ) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private updateVan(dt: number) {
+    const throttle = this.keys.has("w");
+    const braking = this.keys.has("s");
+    const handbrake = this.keys.has(" ");
+    const steer = (this.keys.has("d") ? 1 : 0) - (this.keys.has("a") ? 1 : 0);
+    const engineMultiplier = 1 + this.economy.vehicleUpgrade.engineStage * 0.22;
+    const accel = 7.2 * engineMultiplier;
+    const brakeAccel = 14.5;
+    const reverseAccel = 3.8;
+
+    if (throttle) {
+      this.vanSpeed += (this.vanSpeed < 0 ? brakeAccel : accel) * dt;
+    } else if (braking) {
+      this.vanSpeed -= (this.vanSpeed > 0 ? brakeAccel : reverseAccel) * dt;
+    } else {
+      this.vanSpeed *= Math.exp(-0.75 * dt);
+      if (Math.abs(this.vanSpeed) < 0.035) this.vanSpeed = 0;
+    }
+
+    if (handbrake) {
+      this.vanSpeed *= Math.exp(-4.0 * dt);
+      if (Math.abs(this.vanSpeed) < 0.12) this.vanSpeed = 0;
+    }
+
+    const topSpeed = 16.5 * engineMultiplier;
+    this.vanSpeed = THREE.MathUtils.clamp(this.vanSpeed, -5.5, topSpeed);
+    const steeringFactor = THREE.MathUtils.clamp(Math.abs(this.vanSpeed) / 3, 0, 1);
+    this.vanYaw += steer * 0.88 * steeringFactor * dt * (this.vanSpeed >= 0 ? 1 : -1);
+    this.vanYaw = THREE.MathUtils.euclideanModulo(this.vanYaw + Math.PI, Math.PI * 2) - Math.PI;
+
+    const previous = this.vanPosition.clone();
+    this.vanPosition.x += Math.sin(this.vanYaw) * this.vanSpeed * dt;
+    this.vanPosition.z += Math.cos(this.vanYaw) * this.vanSpeed * dt;
+    if (this.boxCollidesAt(this.vanPosition.x, this.vanPosition.z, this.vanYaw, 1.05, 2.3)) {
+      this.vanPosition.copy(previous);
+      this.vanSpeed = -this.vanSpeed * 0.12;
+      this.statusMessage = "The Delivery Van contacted an obstacle";
+    }
+
+    this.vanWheelSpin += (this.vanSpeed * dt) / 0.36;
+    this.van.wheels.forEach((w) => {
+      if (w.children[0]) w.children[0].rotation.x = this.vanWheelSpin;
+    });
+    const steeringAngle = steer * 0.34 * steeringFactor;
+    this.van.frontWheels.forEach((w) => {
+      w.rotation.y = steeringAngle;
+    });
+    this.van.root.position.set(
+      this.vanPosition.x,
+      this.surfaceHeight(this.vanPosition.x, this.vanPosition.z),
+      this.vanPosition.z,
+    );
+    this.van.root.rotation.y = this.vanYaw;
+  }
+
+  private updatePickup(dt: number) {
+    const throttle = this.keys.has("w");
+    const braking = this.keys.has("s");
+    const handbrake = this.keys.has(" ");
+    const steer = (this.keys.has("d") ? 1 : 0) - (this.keys.has("a") ? 1 : 0);
+    const engineMultiplier = 1 + this.economy.vehicleUpgrade.engineStage * 0.22;
+    const accel = 8.5 * engineMultiplier;
+    const brakeAccel = 16.0;
+    const reverseAccel = 4.5;
+
+    if (throttle) {
+      this.pickupSpeed += (this.pickupSpeed < 0 ? brakeAccel : accel) * dt;
+    } else if (braking) {
+      this.pickupSpeed -= (this.pickupSpeed > 0 ? brakeAccel : reverseAccel) * dt;
+    } else {
+      this.pickupSpeed *= Math.exp(-0.72 * dt);
+      if (Math.abs(this.pickupSpeed) < 0.035) this.pickupSpeed = 0;
+    }
+
+    if (handbrake) {
+      this.pickupSpeed *= Math.exp(-4.2 * dt);
+      if (Math.abs(this.pickupSpeed) < 0.12) this.pickupSpeed = 0;
+    }
+
+    const topSpeed = 19.5 * engineMultiplier;
+    this.pickupSpeed = THREE.MathUtils.clamp(this.pickupSpeed, -6.5, topSpeed);
+    const steeringFactor = THREE.MathUtils.clamp(Math.abs(this.pickupSpeed) / 3, 0, 1);
+    this.pickupYaw += steer * 1.02 * steeringFactor * dt * (this.pickupSpeed >= 0 ? 1 : -1);
+    this.pickupYaw = THREE.MathUtils.euclideanModulo(this.pickupYaw + Math.PI, Math.PI * 2) - Math.PI;
+
+    const previous = this.pickupPosition.clone();
+    this.pickupPosition.x += Math.sin(this.pickupYaw) * this.pickupSpeed * dt;
+    this.pickupPosition.z += Math.cos(this.pickupYaw) * this.pickupSpeed * dt;
+    if (this.boxCollidesAt(this.pickupPosition.x, this.pickupPosition.z, this.pickupYaw, 1.05, 2.5)) {
+      this.pickupPosition.copy(previous);
+      this.pickupSpeed = -this.pickupSpeed * 0.12;
+      this.statusMessage = "The Pickup Truck contacted an obstacle";
+    }
+
+    this.pickupWheelSpin += (this.pickupSpeed * dt) / 0.40;
+    this.pickup.wheels.forEach((w) => {
+      if (w.children[0]) w.children[0].rotation.x = this.pickupWheelSpin;
+    });
+    const steeringAngle = steer * 0.38 * steeringFactor;
+    this.pickup.frontWheels.forEach((w) => {
+      w.rotation.y = steeringAngle;
+    });
+    this.pickup.root.position.set(
+      this.pickupPosition.x,
+      this.surfaceHeight(this.pickupPosition.x, this.pickupPosition.z),
+      this.pickupPosition.z,
+    );
+    this.pickup.root.rotation.y = this.pickupYaw;
+  }
+
+  private updateMinibus(dt: number) {
+    const throttle = this.keys.has("w");
+    const braking = this.keys.has("s");
+    const handbrake = this.keys.has(" ");
+    const steer = (this.keys.has("d") ? 1 : 0) - (this.keys.has("a") ? 1 : 0);
+    const engineMultiplier = 1 + this.economy.vehicleUpgrade.engineStage * 0.22;
+    const accel = 6.5 * engineMultiplier;
+    const brakeAccel = 13.5;
+    const reverseAccel = 3.5;
+
+    if (throttle) {
+      this.minibusSpeed += (this.minibusSpeed < 0 ? brakeAccel : accel) * dt;
+    } else if (braking) {
+      this.minibusSpeed -= (this.minibusSpeed > 0 ? brakeAccel : reverseAccel) * dt;
+    } else {
+      this.minibusSpeed *= Math.exp(-0.78 * dt);
+      if (Math.abs(this.minibusSpeed) < 0.035) this.minibusSpeed = 0;
+    }
+
+    if (handbrake) {
+      this.minibusSpeed *= Math.exp(-3.8 * dt);
+      if (Math.abs(this.minibusSpeed) < 0.12) this.minibusSpeed = 0;
+    }
+
+    const topSpeed = 15.2 * engineMultiplier;
+    this.minibusSpeed = THREE.MathUtils.clamp(this.minibusSpeed, -5.0, topSpeed);
+    const steeringFactor = THREE.MathUtils.clamp(Math.abs(this.minibusSpeed) / 3, 0, 1);
+    this.minibusYaw += steer * 0.80 * steeringFactor * dt * (this.minibusSpeed >= 0 ? 1 : -1);
+    this.minibusYaw = THREE.MathUtils.euclideanModulo(this.minibusYaw + Math.PI, Math.PI * 2) - Math.PI;
+
+    const previous = this.minibusPosition.clone();
+    this.minibusPosition.x += Math.sin(this.minibusYaw) * this.minibusSpeed * dt;
+    this.minibusPosition.z += Math.cos(this.minibusYaw) * this.minibusSpeed * dt;
+    if (this.boxCollidesAt(this.minibusPosition.x, this.minibusPosition.z, this.minibusYaw, 1.05, 2.6)) {
+      this.minibusPosition.copy(previous);
+      this.minibusSpeed = -this.minibusSpeed * 0.12;
+      this.statusMessage = "The Minibus contacted an obstacle";
+    }
+
+    this.minibusWheelSpin += (this.minibusSpeed * dt) / 0.37;
+    this.minibus.wheels.forEach((w) => {
+      if (w.children[0]) w.children[0].rotation.x = this.minibusWheelSpin;
+    });
+    const steeringAngle = steer * 0.32 * steeringFactor;
+    this.minibus.frontWheels.forEach((w) => {
+      w.rotation.y = steeringAngle;
+    });
+    this.minibus.root.position.set(
+      this.minibusPosition.x,
+      this.surfaceHeight(this.minibusPosition.x, this.minibusPosition.z),
+      this.minibusPosition.z,
+    );
+    this.minibus.root.rotation.y = this.minibusYaw;
+  }
+
+  private updateTruck(dt: number) {
+    const throttle = this.keys.has("w");
+    const braking = this.keys.has("s");
+    const handbrake = this.keys.has(" ");
+    const steer = (this.keys.has("d") ? 1 : 0) - (this.keys.has("a") ? 1 : 0);
+    const engineMultiplier = 1 + this.economy.vehicleUpgrade.engineStage * 0.22;
+    const accel = 5.2 * engineMultiplier;
+    const brakeAccel = 12.5;
+    const reverseAccel = 3.0;
+
+    if (throttle) {
+      this.truckSpeed += (this.truckSpeed < 0 ? brakeAccel : accel) * dt;
+    } else if (braking) {
+      this.truckSpeed -= (this.truckSpeed > 0 ? brakeAccel : reverseAccel) * dt;
+    } else {
+      this.truckSpeed *= Math.exp(-0.82 * dt);
+      if (Math.abs(this.truckSpeed) < 0.035) this.truckSpeed = 0;
+    }
+
+    if (handbrake) {
+      this.truckSpeed *= Math.exp(-3.6 * dt);
+      if (Math.abs(this.truckSpeed) < 0.12) this.truckSpeed = 0;
+    }
+
+    const topSpeed = 13.8 * engineMultiplier;
+    this.truckSpeed = THREE.MathUtils.clamp(this.truckSpeed, -4.5, topSpeed);
+    const steeringFactor = THREE.MathUtils.clamp(Math.abs(this.truckSpeed) / 3, 0, 1);
+    this.truckYaw += steer * 0.68 * steeringFactor * dt * (this.truckSpeed >= 0 ? 1 : -1);
+    this.truckYaw = THREE.MathUtils.euclideanModulo(this.truckYaw + Math.PI, Math.PI * 2) - Math.PI;
+
+    const previous = this.truckPosition.clone();
+    this.truckPosition.x += Math.sin(this.truckYaw) * this.truckSpeed * dt;
+    this.truckPosition.z += Math.cos(this.truckYaw) * this.truckSpeed * dt;
+    if (this.boxCollidesAt(this.truckPosition.x, this.truckPosition.z, this.truckYaw, 1.15, 3.2)) {
+      this.truckPosition.copy(previous);
+      this.truckSpeed = -this.truckSpeed * 0.12;
+      this.statusMessage = "The Freight Truck contacted an obstacle";
+    }
+
+    this.truckWheelSpin += (this.truckSpeed * dt) / 0.42;
+    this.truck.wheels.forEach((w) => {
+      if (w.children[0]) w.children[0].rotation.x = this.truckWheelSpin;
+    });
+    const steeringAngle = steer * 0.28 * steeringFactor;
+    this.truck.frontWheels.forEach((w) => {
+      w.rotation.y = steeringAngle;
+    });
+    this.truck.root.position.set(
+      this.truckPosition.x,
+      this.surfaceHeight(this.truckPosition.x, this.truckPosition.z),
+      this.truckPosition.z,
+    );
+    this.truck.root.rotation.y = this.truckYaw;
+  }
+
   private moveCircle(position: THREE.Vector3, dx: number, dz: number, radius: number) {
     if (this.interiorManager.activeInterior) {
       const nextX = position.x + dx;
@@ -1071,7 +1472,7 @@ export class GameEngine {
 
     const nextZ = THREE.MathUtils.clamp(
       position.z + dz,
-      -this.world.bounds + radius,
+      -230 + radius,
       this.world.bounds - radius,
     );
     if (!this.collides(position.x, nextZ, radius)) position.z = nextZ;
@@ -1217,12 +1618,45 @@ export class GameEngine {
   private updateCamera(dt: number) {
     const isDriving = this.mode === "driving";
     const isIndoors = Boolean(this.interiorManager.activeInterior);
-    const vehiclePos = this.activeVehicle === "keke" ? this.kekePosition : this.carPosition;
-    const vehicleYaw = this.activeVehicle === "keke" ? this.kekeYaw : this.carYaw;
+    const vehiclePos = this.getActiveVehiclePosition();
+    const vehicleYaw = this.getActiveVehicleYaw();
+
+    let distance = 6.35;
+    let targetY = this.playerPosition.y + (isIndoors ? 1.4 : 1.25);
+    if (isDriving) {
+      switch (this.activeVehicle) {
+        case "truck":
+          distance = 11.2;
+          targetY = 1.55;
+          break;
+        case "minibus":
+          distance = 9.6;
+          targetY = 1.35;
+          break;
+        case "van":
+          distance = 9.0;
+          targetY = 1.25;
+          break;
+        case "pickup":
+          distance = 8.8;
+          targetY = 1.15;
+          break;
+        case "keke":
+          distance = 5.8;
+          targetY = 0.95;
+          break;
+        default:
+          distance = 8.3;
+          targetY = 1.0;
+          break;
+      }
+    } else if (isIndoors) {
+      distance = 3.0;
+    }
+
     const target = isDriving
-      ? new THREE.Vector3(vehiclePos.x, 1.0, vehiclePos.z)
-      : new THREE.Vector3(this.playerPosition.x, this.playerPosition.y + (isIndoors ? 1.4 : 1.25), this.playerPosition.z);
-    const distance = isDriving ? (this.activeVehicle === "keke" ? 5.8 : 8.3) : (isIndoors ? 3.0 : 6.35);
+      ? new THREE.Vector3(vehiclePos.x, targetY, vehiclePos.z)
+      : new THREE.Vector3(this.playerPosition.x, targetY, this.playerPosition.z);
     const followYaw = isDriving ? vehicleYaw + this.cameraYaw : this.cameraYaw;
     const heightPitch = isIndoors ? Math.min(this.cameraPitch, 0.45) : this.cameraPitch;
     const direction = new THREE.Vector3(
@@ -1284,6 +1718,30 @@ export class GameEngine {
       this.kekePosition.z,
     );
     this.keke.root.rotation.y = this.kekeYaw;
+    this.van.root.position.set(
+      this.vanPosition.x,
+      this.surfaceHeight(this.vanPosition.x, this.vanPosition.z),
+      this.vanPosition.z,
+    );
+    this.van.root.rotation.y = this.vanYaw;
+    this.pickup.root.position.set(
+      this.pickupPosition.x,
+      this.surfaceHeight(this.pickupPosition.x, this.pickupPosition.z),
+      this.pickupPosition.z,
+    );
+    this.pickup.root.rotation.y = this.pickupYaw;
+    this.minibus.root.position.set(
+      this.minibusPosition.x,
+      this.surfaceHeight(this.minibusPosition.x, this.minibusPosition.z),
+      this.minibusPosition.z,
+    );
+    this.minibus.root.rotation.y = this.minibusYaw;
+    this.truck.root.position.set(
+      this.truckPosition.x,
+      this.surfaceHeight(this.truckPosition.x, this.truckPosition.z),
+      this.truckPosition.z,
+    );
+    this.truck.root.rotation.y = this.truckYaw;
   }
 
   private pushSnapshot(force: boolean) {
@@ -1293,7 +1751,21 @@ export class GameEngine {
 
     let interactionPrompt: string | null = null;
     if (this.mode === "driving") {
-      interactionPrompt = this.activeVehicle === "keke" ? "Exit Keke Napep" : "Exit Sedan";
+      const activeVehPos = this.getActiveVehiclePosition();
+      const missionInter = this.missionSystem.checkMissionInteraction(activeVehPos);
+      if (missionInter) {
+        interactionPrompt = missionInter.prompt;
+      } else {
+        const exitLabels: Record<VehicleType, string> = {
+          sedan: "Exit Sedan",
+          keke: "Exit Keke Napep",
+          van: "Exit Delivery Van",
+          pickup: "Exit Pickup Truck",
+          minibus: "Exit Passenger Minibus",
+          truck: "Exit Freight Truck",
+        };
+        interactionPrompt = exitLabels[this.activeVehicle] ?? "Exit Vehicle";
+      }
     } else if (this.interiorManager.activeInterior) {
       const activeZone = this.interiorManager.getActiveZone();
       if (activeZone) {
@@ -1312,11 +1784,24 @@ export class GameEngine {
         }
       }
     } else {
+      // 1. Check Mission Checkpoint Interaction on foot
+      const missionInter = this.missionSystem.checkMissionInteraction(this.playerPosition);
+      if (missionInter) {
+        interactionPrompt = missionInter.prompt;
+      }
+
+      // Check Kawu Logistics Dispatch Board at (-8, 0, -140)
+      if (!interactionPrompt && this.playerPosition.distanceTo(new THREE.Vector3(-8, 0, -140)) <= 3.4) {
+        interactionPrompt = "Logistics Dispatch Board: Press [J] or click MISSIONS for Contracts";
+      }
+
       // Check outdoor doors
-      for (const [, zone] of this.interiorManager.interiors.entries()) {
-        if (this.playerPosition.distanceTo(zone.outdoorDoorPosition) <= 3.4) {
-          interactionPrompt = `Enter ${zone.name}`;
-          break;
+      if (!interactionPrompt) {
+        for (const [, zone] of this.interiorManager.interiors.entries()) {
+          if (this.playerPosition.distanceTo(zone.outdoorDoorPosition) <= 3.4) {
+            interactionPrompt = `Enter ${zone.name}`;
+            break;
+          }
         }
       }
       // Check ATM
@@ -1365,21 +1850,26 @@ export class GameEngine {
       }
       // Check vehicles
       if (!interactionPrompt) {
-        const distCar = this.playerPosition.distanceTo(this.carPosition);
-        const distKeke = this.playerPosition.distanceTo(this.kekePosition);
-        if (distCar <= 4.7 && distCar <= distKeke) {
-          interactionPrompt = "Drive Sedan";
-        } else if (distKeke <= 4.7) {
-          interactionPrompt = "Ride Keke Napep";
+        const vehOptions: { type: VehicleType; prompt: string; pos: THREE.Vector3; dist: number; maxDist: number }[] = [
+          { type: "sedan", prompt: "Drive Sedan", pos: this.carPosition, dist: this.playerPosition.distanceTo(this.carPosition), maxDist: 4.7 },
+          { type: "keke", prompt: "Ride Keke Napep", pos: this.kekePosition, dist: this.playerPosition.distanceTo(this.kekePosition), maxDist: 4.7 },
+          { type: "van", prompt: "Drive Delivery Van", pos: this.vanPosition, dist: this.playerPosition.distanceTo(this.vanPosition), maxDist: 4.8 },
+          { type: "pickup", prompt: "Drive Pickup Truck", pos: this.pickupPosition, dist: this.playerPosition.distanceTo(this.pickupPosition), maxDist: 4.8 },
+          { type: "minibus", prompt: "Drive Passenger Minibus", pos: this.minibusPosition, dist: this.playerPosition.distanceTo(this.minibusPosition), maxDist: 5.0 },
+          { type: "truck", prompt: "Drive Freight Truck", pos: this.truckPosition, dist: this.playerPosition.distanceTo(this.truckPosition), maxDist: 5.5 },
+        ];
+        const enterable = vehOptions.filter((v) => v.dist <= v.maxDist).sort((a, b) => a.dist - b.dist);
+        if (enterable.length > 0) {
+          interactionPrompt = enterable[0].prompt;
         }
       }
     }
 
     const location = this.mode === "driving"
-      ? (this.activeVehicle === "keke" ? this.kekePosition : this.carPosition)
+      ? this.getActiveVehiclePosition()
       : this.playerPosition;
     const currentSpeed = this.mode === "driving"
-      ? (this.activeVehicle === "keke" ? Math.abs(this.kekeSpeed) * 3.6 : Math.abs(this.carSpeed) * 3.6)
+      ? Math.abs(this.getActiveVehicleSpeed()) * 3.6
       : 0;
 
     const activeZone = this.interiorManager.getActiveZone();
@@ -1401,6 +1891,10 @@ export class GameEngine {
       featuredContact = this.socialSystem.getContact(this.featuredContactId) ?? null;
     }
 
+    const activeMissionInfo = this.missionSystem.getActiveMissionSnapshot(
+      this.mode === "driving" ? this.getActiveVehiclePosition() : this.playerPosition,
+    );
+
     this.callbacks.onSnapshot({
       mode: this.mode,
       vehicleType: this.activeVehicle,
@@ -1420,6 +1914,8 @@ export class GameEngine {
       dailyIncome: this.economy.getDailyNetIncome(),
       dayCount: this.economy.dayCount,
       gpsTarget: this.gpsTargetLandmark,
+      activeMission: activeMissionInfo,
+      availableMissionsCount: this.missionSystem.getAvailableMissions().length,
     });
   }
 
@@ -1446,6 +1942,35 @@ export class GameEngine {
       return outcome;
     }
     return null;
+  }
+
+  public acceptMission(id: string): boolean {
+    const res = this.missionSystem.acceptMission(id);
+    this.statusMessage = res.message;
+    if (res.success) {
+      const active = this.missionSystem.getActiveMission();
+      if (active) {
+        const stage = active.stages[active.currentStageIndex];
+        this.statusMessage = `Accepted Contract: ${active.title}. Checkpoint: ${stage.instruction}`;
+      }
+    }
+    this.pushSnapshot(true);
+    return res.success;
+  }
+
+  public cancelMission(): boolean {
+    const res = this.missionSystem.cancelActiveMission();
+    this.statusMessage = res.message;
+    this.pushSnapshot(true);
+    return res.success;
+  }
+
+  public getAvailableMissions() {
+    return this.missionSystem.getAvailableMissions();
+  }
+
+  public getMissionSystem(): MissionSystem {
+    return this.missionSystem;
   }
 
   private lerpAngle(from: number, to: number, alpha: number) {

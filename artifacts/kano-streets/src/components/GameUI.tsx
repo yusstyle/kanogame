@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import './GameUI.css';
 import TouchControls from './TouchControls';
-import type { SocialContact, VehicleType } from '../game/types';
+import type { ActiveMissionInfo, SocialContact, VehicleType } from '../game/types';
 import { KANO_LANDMARKS } from '../game/landmarks';
+import { CAREER_MISSIONS_CATALOG } from '../game/missionSystem';
 
 export type Screen = 'menu' | 'playing' | 'paused';
 export type Mode = 'on-foot' | 'driving';
@@ -28,6 +29,8 @@ export interface GameUIProps {
   dailyIncome?: number;
   dayCount?: number;
   gpsTarget?: string | null;
+  activeMission?: ActiveMissionInfo | null;
+  availableMissionsCount?: number;
   graphicsQuality: GraphicsQuality;
   onStart: () => void;
   onPause: () => void;
@@ -35,6 +38,8 @@ export interface GameUIProps {
   onReset: () => void;
   onControlKey: (key: string, pressed: boolean) => void;
   onSetGPSTarget?: (id: string | null) => void;
+  onAcceptMission?: (id: string) => boolean;
+  onCancelMission?: () => boolean;
   onQualityChange: (quality: GraphicsQuality) => void;
 }
 
@@ -72,6 +77,8 @@ export default function GameUI({
   dailyIncome,
   dayCount,
   gpsTarget,
+  activeMission,
+  availableMissionsCount,
   graphicsQuality,
   onStart,
   onPause,
@@ -79,9 +86,26 @@ export default function GameUI({
   onReset,
   onControlKey,
   onSetGPSTarget,
+  onAcceptMission,
+  onCancelMission,
   onQualityChange,
 }: GameUIProps) {
   const [showDirectory, setShowDirectory] = useState(false);
+  const [showMissions, setShowMissions] = useState(false);
+
+  useEffect(() => {
+    if (screen !== 'playing') return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'm' || e.key === 'M') {
+        setShowDirectory((prev) => !prev);
+      } else if (e.key === 'j' || e.key === 'J') {
+        setShowMissions((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [screen]);
 
   if (screen === 'menu') {
     return (
@@ -151,6 +175,14 @@ export default function GameUI({
               <Key>M</Key>
               <span>DIRECTORY</span>
             </button>
+            <button
+              className="ks-hud-directory-btn ks-hud-mission-btn"
+              onClick={() => setShowMissions(!showMissions)}
+              aria-label="Toggle Kawu Logistics Dispatch Board"
+            >
+              <Key>J</Key>
+              <span>MISSIONS{availableMissionsCount ? ` (${availableMissionsCount})` : ''}</span>
+            </button>
             <span className="ks-pause-hint"><Key>ESC</Key><span>PAUSE</span></span>
           </header>
 
@@ -165,6 +197,24 @@ export default function GameUI({
                 className="ks-gps-clear"
                 onClick={() => onSetGPSTarget?.(null)}
                 title="Clear GPS waypoint"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {activeMission && (
+            <div className="ks-mission-chip" role="status">
+              <span className="ks-mission-tag">{activeMission.category.replace('_', ' ').toUpperCase()}</span>
+              <div className="ks-mission-info">
+                <strong>{activeMission.title} · Step {activeMission.step}/{activeMission.totalSteps}</strong>
+                <span>{activeMission.instruction}</span>
+                <small>Target: {activeMission.targetName} ({activeMission.distanceMeters}m) · Reward: ₦{activeMission.reward.toLocaleString()}</small>
+              </div>
+              <button
+                className="ks-mission-cancel"
+                onClick={() => onCancelMission?.()}
+                title="Abandon contract"
               >
                 ✕
               </button>
@@ -231,8 +281,39 @@ export default function GameUI({
           </div>
 
           <div className="ks-mode-chip" aria-live="polite">
-            <span className={`ks-mode-symbol ${mode}`} aria-hidden="true">{mode === 'driving' ? (vehicleType === 'keke' ? 'K' : 'D') : '·'}</span>
-            <span className="ks-mode-copy"><small>YOU ARE</small><strong>{mode === 'driving' ? (vehicleType === 'keke' ? 'RIDING KEKE' : 'DRIVING SEDAN') : 'ON FOOT'}</strong></span>
+            <span className={`ks-mode-symbol ${mode}`} aria-hidden="true">
+              {mode === 'driving'
+                ? (vehicleType === 'keke'
+                  ? 'K'
+                  : vehicleType === 'van'
+                  ? 'V'
+                  : vehicleType === 'pickup'
+                  ? 'P'
+                  : vehicleType === 'minibus'
+                  ? 'M'
+                  : vehicleType === 'truck'
+                  ? 'T'
+                  : 'D')
+                : '·'}
+            </span>
+            <span className="ks-mode-copy">
+              <small>YOU ARE</small>
+              <strong>
+                {mode === 'driving'
+                  ? (vehicleType === 'keke'
+                    ? 'RIDING KEKE'
+                    : vehicleType === 'van'
+                    ? 'DRIVING VAN'
+                    : vehicleType === 'pickup'
+                    ? 'DRIVING PICKUP'
+                    : vehicleType === 'minibus'
+                    ? 'DRIVING DANFO'
+                    : vehicleType === 'truck'
+                    ? 'DRIVING TRUCK'
+                    : 'DRIVING SEDAN')
+                  : 'ON FOOT'}
+              </strong>
+            </span>
             {mode === 'driving' && (
               <span className="ks-speed"><strong>{Math.max(0, Math.round(speedKmh))}</strong><small>KM/H</small></span>
             )}
@@ -290,6 +371,68 @@ export default function GameUI({
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showMissions && (
+            <div className="ks-directory-layer" role="dialog" aria-modal="true" aria-labelledby="ks-missions-title">
+              <div className="ks-directory-panel ks-mission-board-panel">
+                <div className="ks-directory-header">
+                  <div>
+                    <div className="ks-edition">KAWU CENTRAL LOGISTICS &amp; FREIGHT DISPATCH</div>
+                    <h2 id="ks-missions-title">Commercial Career Contracts</h2>
+                  </div>
+                  <button className="ks-directory-close" onClick={() => setShowMissions(false)}>✕</button>
+                </div>
+                <div className="ks-directory-list">
+                  {CAREER_MISSIONS_CATALOG.map((mission) => {
+                    const isCurrentActive = activeMission?.id === mission.id;
+                    return (
+                      <div key={mission.id} className="ks-directory-card ks-mission-card">
+                        <div className="ks-card-main">
+                          <div className="ks-mission-card-tags">
+                            <span className={`ks-cat-tag ${mission.category}`}>
+                              {mission.category.replace('_', ' ').toUpperCase()}
+                            </span>
+                            <span className="ks-veh-tag">
+                              RECOMMENDED: {mission.recommendedVehicle.toUpperCase()}
+                            </span>
+                            {mission.bonusAmount && (
+                              <span className="ks-bonus-tag">
+                                +₦{mission.bonusAmount.toLocaleString()} ENTERPRISE BONUS
+                              </span>
+                            )}
+                          </div>
+                          <h3>{mission.title}</h3>
+                          <p>{mission.description}</p>
+                          <small className="ks-card-coords">Route: {mission.district} · {mission.stagesCount} Stages</small>
+                        </div>
+                        <div className="ks-card-actions ks-mission-card-actions">
+                          <div className="ks-mission-payout">
+                            <small>CONTRACT VALUE</small>
+                            <strong>₦{mission.reward.toLocaleString()}</strong>
+                          </div>
+                          {isCurrentActive ? (
+                            <button className="ks-gps-btn active" disabled>
+                              Active Contract ✓
+                            </button>
+                          ) : (
+                            <button
+                              className="ks-gps-btn"
+                              onClick={() => {
+                                onAcceptMission?.(mission.id);
+                                setShowMissions(false);
+                              }}
+                            >
+                              Accept Contract ↗
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
