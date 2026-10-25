@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import type { GameEngine } from "../game/GameEngine";
-import type { GameScreen, GameSnapshot, GraphicsQuality } from "../game/types";
+import type { CareerPathChoice, GameScreen, GameSnapshot, GraphicsQuality } from "../game/types";
 
 export type GameViewportHandle = {
   requestPointerLock: () => void;
@@ -15,6 +15,10 @@ export type GameViewportHandle = {
   setGPSTarget: (id: string | null) => void;
   acceptMission: (id: string) => boolean;
   cancelMission: () => boolean;
+  examineStoryIndenture: () => boolean;
+  chooseStoryInvestigation: (choice: "elders" | "bank") => unknown;
+  chooseStoryCareer: (choice: CareerPathChoice) => unknown;
+  resolveStoryChapter1: () => unknown;
 };
 
 type GameViewportProps = {
@@ -47,6 +51,10 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
         setGPSTarget: (id) => engineRef.current?.setGPSTarget(id),
         acceptMission: (id) => engineRef.current?.acceptMission(id) ?? false,
         cancelMission: () => engineRef.current?.cancelMission() ?? false,
+        examineStoryIndenture: () => engineRef.current?.examineStoryIndenture() ?? false,
+        chooseStoryInvestigation: (choice) => engineRef.current?.chooseStoryInvestigation(choice),
+        chooseStoryCareer: (choice) => engineRef.current?.chooseStoryCareer(choice),
+        resolveStoryChapter1: () => engineRef.current?.resolveStoryChapter1(),
       }),
       [],
     );

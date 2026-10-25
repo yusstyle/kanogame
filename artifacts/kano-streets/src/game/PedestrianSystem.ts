@@ -291,11 +291,19 @@ export class PedestrianSystem {
     });
 
     if (this.pedestrians.length < targetCount) {
-      this.spawnAdditionalWalkers(targetCount - this.pedestrians.length);
+      if (quality !== "performance" && !this.pedestrians.some((p) => p.id.startsWith("historic_npc_"))) {
+        this.spawnHistoricCharacters();
+      }
+      if (this.pedestrians.length < targetCount) {
+        this.spawnAdditionalWalkers(targetCount - this.pedestrians.length);
+      }
     } else if (this.pedestrians.length > targetCount) {
-      const walkers = this.pedestrians.filter((p) => p.state === "walking");
-      while (this.pedestrians.length > targetCount && walkers.length > 0) {
-        const removed = walkers.pop();
+      const cullable = [
+        ...this.pedestrians.filter((p) => p.state === "walking"),
+        ...this.pedestrians.filter((p) => p.id.startsWith("historic_npc_")),
+      ];
+      while (this.pedestrians.length > targetCount && cullable.length > 0) {
+        const removed = cullable.pop();
         if (removed) {
           const idx = this.pedestrians.indexOf(removed);
           if (idx !== -1) {
@@ -335,8 +343,115 @@ export class PedestrianSystem {
   private spawnCrowd() {
     this.spawnMarketVendors();
     this.spawnIndustrialWorkers();
+    this.spawnHistoricCharacters();
     const initialWalkerCount = this.quality === "performance" ? 2 : this.quality === "balanced" ? 6 : 12;
     this.spawnAdditionalWalkers(initialWalkerCount);
+  }
+
+  private spawnHistoricCharacters() {
+    const historicCharacters = [
+      {
+        name: "Malam Kabiru Dan-Kano",
+        role: "resident" as NPCRole,
+        x: -85,
+        z: -68,
+        yaw: 0,
+        destinationName: "Alhaji Dan-Kano Ancestral Trading House",
+        cry: "Assalamu Alaikum. May the blessings of peace rest upon our ancestral home.",
+        dialogues: [
+          "Assalamu Alaikum, my son. The ancient foundations of our family were laid right here in the shadow of Dala Hill.",
+          "Our ancestors held the trans-Saharan trade routes. We must secure our rightful title before modern speculators strip the compound.",
+          "Take this 1968 Indenture. Consult the Dandali Clan Elders or the Arewa Bank ledgers to confirm our heritage.",
+        ],
+      },
+      {
+        name: "Balarabe Craftsman",
+        role: "trader" as NPCRole,
+        x: -75,
+        z: -85,
+        yaw: Math.PI * 0.5,
+        destinationName: "Kasuwar Kurmi Leather & Brass Workshop",
+        cry: "Finest hand-tanned Kano leather, embossed wallets, and brass filigree! Kasuwar Kurmi quality!",
+        dialogues: [
+          "Marhaba! For over five hundred years, artisans in Kurmi have carved calabashes and beaten brass with these very tools.",
+          "This tanned goat leather was dyed at Kofar Mata. Real vegetal tanning lasts a century without cracking.",
+          "Our craftsmanship is celebrated across the Sahel. Trade with honor and your name will outlive you.",
+        ],
+      },
+      {
+        name: "Maimuna Mai Masa",
+        role: "trader" as NPCRole,
+        x: -72,
+        z: -72,
+        yaw: 0,
+        destinationName: "Dandali Community Square Food Stall",
+        cry: "Hot crispy Masa rice cakes and spicy pepper sauce! Fresh from the earthen pan!",
+        dialogues: [
+          "Sannu! Masa is best eaten steaming hot off the charcoal griddle with yaji pepper and honey.",
+          "The elders gather under the shade of this grand neem tree every afternoon to settle neighborhood disputes.",
+          "A full stomach brings clear thoughts. Sit on the clay dakali and taste authentic Kano tradition.",
+        ],
+      },
+      {
+        name: "Master Isa Dyer",
+        role: "trader" as NPCRole,
+        x: -68,
+        z: -105,
+        yaw: -Math.PI * 0.5,
+        destinationName: "Kofar Mata Historic Dye Pits",
+        cry: "True natural indigo! Tie-dyed cotton and royal robes steeped in centuries-old earthen pits!",
+        dialogues: [
+          "The indigo pits of Kofar Mata have fermented natural dye from ash, potash, and indigo leaves since 1498 CE.",
+          "Dip the cotton three times for sky blue, eight times for royal Saharan indigo that shines like bronze.",
+          "Tourists and merchants travel from all corners of the world to study our ancient pit chemistry.",
+        ],
+      },
+      {
+        name: "Sarkin Pawa Dan-Ladi",
+        role: "trader" as NPCRole,
+        x: -78,
+        z: -78,
+        yaw: Math.PI,
+        destinationName: "Dandali Meat & Kilishi Drying Court",
+        cry: "Thin sun-dried Kilishi beef spiced with ground peanuts and ginger! Prepared by the masters of Kano!",
+        dialogues: [
+          "Barkade! Good Kilishi requires lean beef sliced wafer-thin, marinated in kuli-kuli paste, and sun-dried on reed mats.",
+          "Kilishi fed the desert camel caravans for months without spoiling. It is the food of conquerors and traders.",
+          "Take a parcel for your journey across the city. No road trip in Kano is complete without it.",
+        ],
+      },
+    ];
+
+    historicCharacters.forEach((npc, index) => {
+      const palette = NPC_PALETTES[(index + 1) % NPC_PALETTES.length];
+      const model = createPedestrianModel(this.materials, palette);
+      const y = this.surfaceHeight(npc.x, npc.z);
+
+      model.root.position.set(npc.x, y, npc.z);
+      model.root.rotation.y = npc.yaw;
+      this.root.add(model.root);
+
+      this.pedestrians.push({
+        id: `historic_npc_${index}`,
+        name: npc.name,
+        role: npc.role,
+        model,
+        position: new THREE.Vector3(npc.x, y, npc.z),
+        yaw: npc.yaw,
+        speed: 0,
+        state: "visiting",
+        stateTimer: 0,
+        currentWaypoint: null,
+        targetWaypoint: null,
+        destinationName: npc.destinationName,
+        destinationPoint: new THREE.Vector3(npc.x, y, npc.z),
+        dialogues: npc.dialogues,
+        vendorCry: npc.cry,
+        walkPhase: index * 1.5,
+        personalSpeed: 0,
+        lookSeed: index * 2.7,
+      });
+    });
   }
 
   private spawnIndustrialWorkers() {

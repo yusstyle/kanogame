@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import GameUI from "./components/GameUI";
 import GameViewport, { type GameViewportHandle } from "./components/GameViewport";
-import type { GameScreen, GameSnapshot, GraphicsQuality } from "./game/types";
+import type { CareerPathChoice, GameScreen, GameSnapshot, GraphicsQuality } from "./game/types";
 
 const INITIAL_SNAPSHOT: GameSnapshot = {
   mode: "on-foot",
@@ -53,6 +53,22 @@ function App() {
     return viewportRef.current?.cancelMission() ?? false;
   }, []);
 
+  const examineIndenture = useCallback(() => {
+    return viewportRef.current?.examineStoryIndenture() ?? false;
+  }, []);
+
+  const chooseInvestigation = useCallback((choice: "elders" | "bank") => {
+    return viewportRef.current?.chooseStoryInvestigation(choice);
+  }, []);
+
+  const chooseCareer = useCallback((choice: CareerPathChoice) => {
+    return viewportRef.current?.chooseStoryCareer(choice);
+  }, []);
+
+  const resolveChapter1 = useCallback(() => {
+    return viewportRef.current?.resolveStoryChapter1();
+  }, []);
+
   const receiveSnapshot = useCallback((next: GameSnapshot) => {
     setSnapshot((current) => {
       if (
@@ -73,7 +89,12 @@ function App() {
         current.dayCount === next.dayCount &&
         current.gpsTarget === next.gpsTarget &&
         current.activeMission === next.activeMission &&
-        current.availableMissionsCount === next.availableMissionsCount
+        current.availableMissionsCount === next.availableMissionsCount &&
+        current.playerCoords?.x === next.playerCoords?.x &&
+        current.playerCoords?.z === next.playerCoords?.z &&
+        current.playerHeading === next.playerHeading &&
+        current.storyInfo?.stageName === next.storyInfo?.stageName &&
+        current.storyInfo?.currentObjective === next.storyInfo?.currentObjective
       ) {
         return current;
       }
@@ -112,6 +133,9 @@ function App() {
         gpsTarget={snapshot.gpsTarget}
         activeMission={snapshot.activeMission}
         availableMissionsCount={snapshot.availableMissionsCount}
+        playerCoords={snapshot.playerCoords}
+        playerHeading={snapshot.playerHeading}
+        storyInfo={snapshot.storyInfo}
         graphicsQuality={graphicsQuality}
         onStart={start}
         onPause={pause}
@@ -121,6 +145,10 @@ function App() {
         onSetGPSTarget={setGPSTarget}
         onAcceptMission={acceptMission}
         onCancelMission={cancelMission}
+        onExamineIndenture={examineIndenture}
+        onChooseInvestigation={chooseInvestigation}
+        onChooseCareer={chooseCareer}
+        onResolveChapter1={resolveChapter1}
         onQualityChange={setGraphicsQuality}
       />
     </main>

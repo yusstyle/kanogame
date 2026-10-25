@@ -127,6 +127,47 @@ export type SocialContact = {
   avatarSeed?: number;
 };
 
+export type InvestigationChoice = "elders" | "bank" | null;
+export type CareerPathChoice = "transport" | "trading" | "technology" | "property" | null;
+
+export interface StoryProgressData {
+  chapter: number;
+  stage: number;
+  cluesFound: string[];
+  investigationChoice: InvestigationChoice;
+  careerPath: CareerPathChoice;
+  careerPathChoice?: CareerPathChoice;
+  indentureDiscovered?: boolean;
+  elderTrust?: number;
+  completed: boolean;
+  rewardClaimed: boolean;
+  timestamp?: number;
+}
+
+export interface StorySnapshotInfo {
+  chapter: number;
+  chapterTitle: string;
+  stage: number;
+  stageTitle: string;
+  stageName?: string;
+  objective: string;
+  currentObjective?: string;
+  instruction: string;
+  targetName: string;
+  targetCoords: { x: number; z: number };
+  targetLandmarkId?: string;
+  distanceMeters: number;
+  canInvestigate?: boolean;
+  canChooseCareer?: boolean;
+  isComplete?: boolean;
+  indentureDiscovered?: boolean;
+  investigationChoice: InvestigationChoice;
+  careerPath: CareerPathChoice;
+  careerPathChoice?: CareerPathChoice;
+  completed: boolean;
+  canInspectIndenture: boolean;
+}
+
 export type GameSnapshot = {
   mode: GameMode;
   vehicleType?: VehicleType | null;
@@ -148,6 +189,9 @@ export type GameSnapshot = {
   gpsTarget?: string | null;
   activeMission?: ActiveMissionInfo | null;
   availableMissionsCount?: number;
+  playerCoords?: { x: number; z: number };
+  playerHeading?: number;
+  storyInfo?: StorySnapshotInfo | null;
 };
 
 export type GameMaterials = {

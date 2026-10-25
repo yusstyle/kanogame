@@ -18,6 +18,7 @@ import {
   createSabonGariPlaza,
 } from "./modernDistrict";
 import { createIndustrialDistrict } from "./industrialDistrict";
+import { createHistoricDistrict } from "./historicDistrict";
 import type { BuildingKind, Collider, GameMaterials } from "./types";
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
@@ -755,6 +756,12 @@ export function createWorld(materials: GameMaterials): WorldResult {
       const blockZ = blockCenters[zi];
       const district = getDistrict(blockX, blockZ);
 
+      // Historic Kano District (Dala Hill, Kofar Dala Gate, Kurmi Market, Dan-Kano Compound, Dye Pits, Dandali Square)
+      if (xi === 0 && zi === 0) {
+        createHistoricDistrict(root, materials, colliders);
+        continue;
+      }
+
       // Open-air market plaza in Sabon Gari
       if (xi === 1 && zi === 2) {
         addMarketPlaza(root, materials, colliders, blockX, blockZ);
@@ -947,6 +954,7 @@ export function createWorld(materials: GameMaterials): WorldResult {
   });
 
   addStreetSign(root, colliders, -130, -15, "DALA · OLD KANO", 0);
+  addStreetSign(root, colliders, -62, -78, "HISTORIC KANO · KOFAR DALA · KURMI MARKET ↗", Math.PI / 2);
   addStreetSign(root, colliders, -15, 130, "SABON GARI", Math.PI / 2);
   addStreetSign(root, colliders, 78, -130, "AIRPORT ROAD", 0);
   addStreetSign(root, colliders, 130, 15, "RESIDENTIAL QUARTER", -Math.PI / 2);

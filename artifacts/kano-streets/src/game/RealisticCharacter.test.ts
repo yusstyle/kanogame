@@ -22,6 +22,10 @@ import { buildNavigationNetwork } from "./navigation";
 import { ColliderIndex } from "./ColliderIndex";
 import { getDistrict, getDistrictLabel } from "./layout";
 import { MissionSystem, CAREER_MISSIONS_CATALOG } from "./missionSystem";
+import { StorySystem, INDENTURE_1968 } from "./storySystem";
+import { createHistoricDistrict } from "./historicDistrict";
+import { createWorld } from "./world";
+import { toSvgX, toSvgY } from "../components/CityMapModal";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1137,4 +1141,243 @@ test("Milestone 5: Save/Load Schema Migration & Career Earnings Persistence", ()
   assert.equal(legacyLoaded.cash, 180000);
   assert.equal(legacyLoaded.completedMissions, undefined);
   assert.equal(legacyLoaded.careerEarnings, undefined);
+});
+
+
+// ============================================================================
+// MILESTONE 6: HISTORIC KANO, OPEN-WORLD MAP & BUSINESS EMPIRE STORY TESTS
+// ============================================================================
+
+test("Milestone 6: Historic Kano District & Spatial Architecture", () => {
+  installBrowserStubs();
+  const materials = createMaterials();
+  const root = new THREE.Group();
+  const colliders: any[] = [];
+
+  const district = createHistoricDistrict(root, materials, colliders);
+  assert.ok(district, "Historic Kano district group should be created");
+  assert.equal(district.name, "historic-kano-district");
+  assert.ok(district.children.length >= 6, "District should contain 6 primary historic sectors");
+
+  // Verify colliders registered
+  assert.ok(colliders.length > 25, `Historic district should generate substantial collision bodies (got ${colliders.length})`);
+
+  // Verify Dala Hill colliders
+  const dalaColliders = colliders.filter((c) => Math.hypot(c.x - (-95), c.z - (-95)) < 15);
+  assert.ok(dalaColliders.length >= 3, "Dala Hill sandstone tiers should have dedicated colliders");
+
+  // Verify Kofar Dala Gate colliders & vehicle clearance
+  const gateColliders = colliders.filter((c) => Math.hypot(c.x - (-62), c.z - (-93)) < 16);
+  assert.ok(gateColliders.length >= 4, "Kofar Dala Gate bastions and towers should be collidable");
+
+  // Verify full world integration
+  const world = createWorld(materials);
+  assert.ok(world.root, "World should initialize with historic district wired");
+  const historicWallCollider = world.colliders.find((c) => Math.abs(c.x - (-62)) < 1 && Math.abs(c.z - (-77.5)) < 1);
+  assert.ok(historicWallCollider, "Ancient city wall collider should be present in global world colliders");
+});
+
+test("Milestone 6: Story System 'The Unknown Legacy' Chapter 1 & Indenture Archive", () => {
+  installBrowserStubs();
+  const story = new StorySystem();
+
+  // 1. Initial Uninitiated State
+  const initial = story.getProgress();
+  assert.equal(initial.chapter, 1);
+  assert.equal(initial.stage, 0);
+  assert.equal(initial.investigationChoice, null);
+  assert.equal(initial.careerPathChoice, null);
+  assert.equal(initial.rewardClaimed, false);
+
+  // 2. 1968 Indenture Document verification
+  assert.ok(INDENTURE_1968.title.includes("1968 TRANS-SAHARAN"));
+  assert.ok(INDENTURE_1968.date.includes("1968"));
+  assert.ok(INDENTURE_1968.parties.some((p) => p.includes("Dan-Kano")));
+  assert.ok(INDENTURE_1968.seals.some((s) => s.includes("NR-68-0419")));
+  assert.ok(INDENTURE_1968.content.includes("British-West African Commercial vault"));
+
+  // 3. Stage 0 -> Stage 1: Examine Indenture
+  const examineRes = story.examineIndenture();
+  assert.equal(examineRes.success, true);
+  assert.ok(examineRes.message.includes("Malam Kabiru"));
+
+  const stage1 = story.getProgress();
+  assert.equal(stage1.stage, 1);
+  assert.equal(stage1.indentureDiscovered, true);
+  assert.ok(stage1.cluesFound.includes("1968_trans_saharan_indenture"));
+
+  const snapshot1 = story.getSnapshotInfo({ x: -85, z: -68 });
+  assert.equal(snapshot1.stage, 1);
+  assert.equal(snapshot1.canInvestigate, true);
+  assert.equal(snapshot1.canChooseCareer, false);
+});
+
+test("Milestone 6: Decision 1 (Investigation) & Decision 2 (4 Business Empire Career Paths)", () => {
+  installBrowserStubs();
+
+  // Test Decision 1 Branch A: Clan Elders
+  const storyA = new StorySystem();
+  storyA.examineIndenture();
+  const resElders = storyA.chooseInvestigation("elders");
+  assert.equal(resElders.success, true);
+  assert.equal(resElders.trustGain, 25);
+  assert.equal(storyA.getProgress().elderTrust, 35); // 10 base + 25 gain
+  assert.equal(storyA.getProgress().investigationChoice, "elders");
+
+  // Irreversibility test: cannot change once decided
+  const secondChoice = storyA.chooseInvestigation("bank");
+  assert.equal(secondChoice.success, false);
+  assert.equal(storyA.getProgress().investigationChoice, "elders");
+
+  // Test Decision 1 Branch B: Arewa Bank
+  const storyB = new StorySystem();
+  storyB.examineIndenture();
+  const resBank = storyB.chooseInvestigation("bank");
+  assert.equal(resBank.success, true);
+  assert.equal(resBank.bonusCash, 10000);
+  assert.equal(storyB.getProgress().investigationChoice, "bank");
+
+  // Test Decision 2: 4 Career Paths
+  const careerOptions: Array<"transport" | "trading" | "technology" | "property"> = [
+    "transport",
+    "trading",
+    "technology",
+    "property",
+  ];
+
+  for (const career of careerOptions) {
+    const s = new StorySystem();
+    s.examineIndenture();
+    s.chooseInvestigation("elders");
+    assert.equal(s.getProgress().stage, 2);
+
+    const careerRes = s.chooseCareerPath(career);
+    assert.equal(careerRes.success, true);
+    assert.ok(careerRes.perkDescription.length > 0);
+    assert.equal(s.getProgress().careerPathChoice, career);
+    assert.equal(s.getProgress().careerPath, career);
+    assert.equal(s.getProgress().stage, 3);
+    assert.ok(s.getProgress().cluesFound.includes(`career_foundation_${career}`));
+  }
+});
+
+test("Milestone 6: Chapter 1 Conclusion, Single Payout Guarantee & Vault Key", () => {
+  installBrowserStubs();
+  const story = new StorySystem();
+  story.examineIndenture();
+  story.chooseInvestigation("elders");
+  story.chooseCareerPath("transport");
+
+  // Complete Chapter 1
+  const resolveRes = story.resolveChapter1();
+  assert.equal(resolveRes.success, true);
+  assert.equal(resolveRes.payout, 50000);
+  assert.equal(resolveRes.storyXP, 250);
+  assert.equal(resolveRes.unlockedKey, "BRONZE_VAULT_KEY_SAHEL_1968");
+  assert.ok(resolveRes.message.includes("CHAPTER 1 COMPLETED"));
+
+  const progress = story.getProgress();
+  assert.equal(progress.stage, 4);
+  assert.equal(progress.completed, true);
+  assert.equal(progress.rewardClaimed, true);
+  assert.ok(progress.cluesFound.includes("chapter_1_secured_title"));
+
+  // SINGLE PAYOUT GUARANTEE: cannot claim ₦50,000 twice
+  const repeatResolve = story.resolveChapter1();
+  assert.equal(repeatResolve.success, true);
+  assert.equal(repeatResolve.payout, 0, "Repeated completion must yield 0 payout");
+  assert.equal(repeatResolve.storyXP, 0, "Repeated completion must yield 0 XP");
+  assert.ok(repeatResolve.message.includes("already completed"));
+});
+
+test("Milestone 6: Interactive City Map Coordinate Projections, Waypoint Calculations & Historic NPCs", () => {
+  const { storageMap } = installBrowserStubs();
+
+  // 1. Coordinate projection tests (World -> SVG Map)
+  // World bounds: X [-136, 136] -> SVG [0, 800], Z [-230, 136] -> SVG [0, 1000]
+  assert.equal(toSvgX(-136), 0);
+  assert.equal(toSvgX(136), 800);
+  assert.equal(toSvgX(0), 400);
+
+  assert.equal(toSvgY(-230), 0);
+  assert.equal(toSvgY(136), 1000);
+
+  // Dala Hill projection
+  const dalaSvgX = toSvgX(-95);
+  const dalaSvgY = toSvgY(-95);
+  assert.ok(dalaSvgX > 0 && dalaSvgX < 400, "Dala Hill should project into northwest quadrant");
+  assert.ok(dalaSvgY > 0 && dalaSvgY < 628, "Dala Hill should project above Murtala Mohammed Way");
+
+  // 2. Landmark queries & categories
+  const historicLandmarks = KANO_LANDMARKS.filter((l) => l.category === "historic");
+  assert.equal(historicLandmarks.length, 6, "Should register all 6 historic Kano landmarks");
+  assert.ok(historicLandmarks.some((l) => l.id === "dala-hill"));
+  assert.ok(historicLandmarks.some((l) => l.id === "kofar-dala-gate"));
+  assert.ok(historicLandmarks.some((l) => l.id === "dan-kano-compound"));
+  assert.ok(historicLandmarks.some((l) => l.id === "kurmi-market"));
+  assert.ok(historicLandmarks.some((l) => l.id === "kofar-mata-dye-pits"));
+  assert.ok(historicLandmarks.some((l) => l.id === "dandali-square"));
+
+  // 3. Waypoint Distance calculation
+  const playerPos = { x: -4, z: -4 };
+  const danKanoCoords = { x: -85, z: -68 };
+  const dist = Math.round(Math.hypot(danKanoCoords.x - playerPos.x, danKanoCoords.z - playerPos.z));
+  assert.equal(dist, 103, "Distance calculation between (-4, -4) and (-85, -68) should be 103m");
+
+  // 4. Historic NPCs verification in PedestrianSystem
+  const materials = createMaterials();
+  const scene = new THREE.Scene();
+  const nav = buildNavigationNetwork();
+  const colliders = new ColliderIndex([]);
+  const pedSystem = new PedestrianSystem(scene, materials, nav, colliders, () => 0);
+
+  // Malam Kabiru Dan-Kano at (-85, 0, -68)
+  const kabiruInter = pedSystem.checkPedestrianInteraction(new THREE.Vector3(-85, 0, -68));
+  assert.ok(kabiruInter, "Malam Kabiru interaction should exist at Dan-Kano Compound");
+  assert.ok(kabiruInter.prompt.includes("Malam Kabiru"));
+  const kabiruToast = kabiruInter.action();
+  assert.ok(kabiruToast.includes("Malam Kabiru") && (kabiruToast.includes("ancestral") || kabiruToast.includes("peace") || kabiruToast.includes("Assalamu")));
+
+  // Balarabe Craftsman at Kasuwar Kurmi (-75, 0, -85)
+  const kurmiInter = pedSystem.checkPedestrianInteraction(new THREE.Vector3(-75, 0, -85));
+  assert.ok(kurmiInter, "Balarabe Craftsman interaction should exist at Kurmi Market");
+  const kurmiToast = kurmiInter.action();
+  assert.ok(kurmiToast.includes("Balarabe") && (kurmiToast.includes("Kurmi") || kurmiToast.includes("leather")));
+
+  // Maimuna Mai Masa at Dandali Square (-72, 0, -72)
+  const maimunaInter = pedSystem.checkPedestrianInteraction(new THREE.Vector3(-72, 0, -72));
+  assert.ok(maimunaInter, "Maimuna interaction should exist at Dandali Square");
+  const maimunaToast = maimunaInter.action();
+  assert.ok(maimunaToast.includes("Maimuna") && (maimunaToast.includes("Masa") || maimunaToast.includes("Dandali")));
+
+  // Master Isa Dyer at Kofar Mata (-68, 0, -105)
+  const dyerInter = pedSystem.checkPedestrianInteraction(new THREE.Vector3(-68, 0, -105));
+  assert.ok(dyerInter, "Master Isa Dyer interaction should exist at Dye Pits");
+  const dyerToast = dyerInter.action();
+  assert.ok(dyerToast.includes("Master Isa") && (dyerToast.includes("indigo") || dyerToast.includes("Kofar Mata")));
+
+  pedSystem.dispose();
+
+  // 5. Economy & Story Save/Load persistence
+  const economy = new EconomySystem();
+  const storyProgressData = {
+    chapter: 1,
+    stage: 4,
+    investigationChoice: "elders" as const,
+    careerPath: "transport" as const,
+    careerPathChoice: "transport" as const,
+    indentureDiscovered: true,
+    elderTrust: 35,
+    cluesFound: ["1968_trans_saharan_indenture", "elders_oral_testimony", "career_foundation_transport", "chapter_1_secured_title"],
+    completed: true,
+    rewardClaimed: true,
+  };
+
+  economy.saveToStorage(200000, 0, true, ["freight-cotton-bales"], 75000, storyProgressData);
+  const loadedSave = economy.loadFromStorage();
+  assert.ok(loadedSave?.storyProgress);
+  assert.equal(loadedSave.storyProgress.stage, 4);
+  assert.equal(loadedSave.storyProgress.investigationChoice, "elders");
+  assert.equal(loadedSave.storyProgress.careerPathChoice, "transport");
+  assert.equal(loadedSave.storyProgress.rewardClaimed, true);
 });

@@ -1,4 +1,4 @@
-import type { PropertyId, BusinessId, PropertyInfo, BusinessInfo, VehicleUpgrade } from "./types";
+import type { PropertyId, BusinessId, PropertyInfo, BusinessInfo, VehicleUpgrade, StoryProgressData } from "./types";
 
 export interface SaveData {
   version: number;
@@ -11,6 +11,7 @@ export interface SaveData {
   vehicleUpgrade: VehicleUpgrade;
   completedMissions?: string[];
   careerEarnings?: number;
+  storyProgress?: StoryProgressData;
   savedAt: number;
 }
 
@@ -230,6 +231,7 @@ export class EconomySystem {
     hasApartmentRental: boolean,
     completedMissions?: string[],
     careerEarnings?: number,
+    storyProgress?: StoryProgressData,
   ): boolean {
     if (typeof window === "undefined" || !window.localStorage) return false;
     try {
@@ -244,6 +246,7 @@ export class EconomySystem {
         vehicleUpgrade: { ...this.vehicleUpgrade },
         completedMissions: completedMissions ?? [],
         careerEarnings: careerEarnings ?? 0,
+        storyProgress: storyProgress ? { ...storyProgress } : undefined,
         savedAt: Date.now(),
       };
       window.localStorage.setItem("kano_streets_save_v1", JSON.stringify(data));

@@ -1,10 +1,12 @@
+export type LandmarkCategory = "civic" | "commercial" | "residence" | "worship" | "security" | "industrial" | "historic";
+
 export interface LandmarkLocation {
   id: string;
   name: string;
   district: string;
   x: number;
   z: number;
-  category: "civic" | "commercial" | "residence" | "worship" | "security" | "industrial";
+  category: LandmarkCategory;
   description: string;
 }
 
@@ -188,6 +190,60 @@ export const KANO_LANDMARKS: LandmarkLocation[] = [
     z: -140,
     category: "industrial",
     description: "Central haulage contracts office and delivery dispatch manifest board.",
+  },
+  {
+    id: "dala-hill",
+    name: "Dala Hill Summit & Ancient Settlement Lookout",
+    district: "DALA · OLD KANO",
+    x: -95,
+    z: -95,
+    category: "historic",
+    description: "Historic 18m sandstone hill, birthplace of ancient Kano settlement, with stone steps and panoramic viewing terrace.",
+  },
+  {
+    id: "kofar-dala-gate",
+    name: "Kofar Dala Gate & Ancient City Wall (Badala)",
+    district: "DALA · OLD KANO",
+    x: -62,
+    z: -93,
+    category: "historic",
+    description: "Monumental defensive gate and fortified mud-brick wall with Hausa relief carvings and crenellated ramparts.",
+  },
+  {
+    id: "dan-kano-compound",
+    name: "Alhaji Dan-Kano Ancestral Compound & Zaure",
+    district: "DALA · OLD KANO",
+    x: -85,
+    z: -68,
+    category: "historic",
+    description: "Historic Hausa family compound with traditional entrance Zaure, Daurin Guga pinnacles, and ancestral merchant archives.",
+  },
+  {
+    id: "kurmi-market",
+    name: "Kasuwar Kurmi Traditional Crafts & Herb Market",
+    district: "DALA · OLD KANO",
+    x: -75,
+    z: -85,
+    category: "historic",
+    description: "15th-century historic marketplace featuring hand-tooled leather, brass metalwork, and traditional northern spices.",
+  },
+  {
+    id: "kofar-mata-dye-pits",
+    name: "Kofar Mata Ancient Indigo Dye Pits Heritage",
+    district: "DALA · OLD KANO",
+    x: -68,
+    z: -105,
+    category: "historic",
+    description: "Ancient stone-lined circular indigo dye vats, fabric drying racks, and hand-dyed textile heritage.",
+  },
+  {
+    id: "dandali-square",
+    name: "Historic Dandali Community Square & Food Hub",
+    district: "DALA · OLD KANO",
+    x: -72,
+    z: -72,
+    category: "historic",
+    description: "Vibrant neighborhood gathering square shaded by neem trees with hot Masa, Kosai, and fresh Fura da Nono food stalls.",
   },
 ];
 

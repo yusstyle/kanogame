@@ -21,11 +21,12 @@ import { buildNavigationNetwork, type NavigationNetwork } from "./navigation";
 import { PedestrianSystem } from "./PedestrianSystem";
 import { TrafficSystem } from "./TrafficSystem";
 import { createWorld } from "./world";
-import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType } from "./types";
+import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType, CareerPathChoice } from "./types";
 import { SocialSystem } from "./socialSystem";
 import { EconomySystem } from "./economySystem";
 import { KANO_LANDMARKS, getNearestLandmark } from "./landmarks";
 import { MissionSystem } from "./missionSystem";
+import { StorySystem } from "./storySystem";
 
 const PLAYER_START = new THREE.Vector3(-4, 0, -4);
 const CAR_START = new THREE.Vector3(-2, 0, -8);
@@ -131,6 +132,7 @@ export class GameEngine {
   public readonly socialSystem = new SocialSystem();
   public readonly economy = new EconomySystem();
   public readonly missionSystem = new MissionSystem();
+  public readonly storySystem = new StorySystem();
   private van!: UsableVehicleModel;
   private pickup!: UsableVehicleModel;
   private minibus!: UsableVehicleModel;
@@ -177,6 +179,9 @@ export class GameEngine {
       this.hasApartmentRental = saved.hasApartmentRental;
       if (saved.completedMissions) {
         this.missionSystem.loadProgress(saved.completedMissions, saved.careerEarnings ?? 0);
+      }
+      if (saved.storyProgress) {
+        this.storySystem.loadProgress(saved.storyProgress);
       }
     }
     this.world = createWorld(this.materials);
@@ -611,13 +616,7 @@ export class GameEngine {
         this.statusMessage = outcome.message;
         if (outcome.completed) {
           this.cash += outcome.reward + outcome.bonus;
-          this.economy.saveToStorage(
-            this.cash,
-            this.trafficFine,
-            this.hasApartmentRental,
-            this.missionSystem.getCompletedMissionsList(),
-            this.missionSystem.careerEarnings,
-          );
+          this.saveGame();
         }
         this.pushSnapshot(true);
         return;
@@ -689,7 +688,7 @@ export class GameEngine {
                 }
               }
             }
-            this.economy.saveToStorage(this.cash, this.trafficFine, this.hasApartmentRental);
+            this.saveGame();
             this.pushSnapshot(true);
             return;
           }
@@ -747,6 +746,67 @@ export class GameEngine {
       return;
     }
 
+    // Story Chapter 1: Dan-Kano Compound & Zaure at (-85, 0, -68)
+    if (this.playerPosition.distanceTo(new THREE.Vector3(-85, 0, -68)) <= 3.8) {
+      const progress = this.storySystem.getProgress();
+      if (progress.stage === 0) {
+        const res = this.storySystem.examineIndenture();
+        this.statusMessage = res.message;
+        this.saveGame();
+        this.pushSnapshot(true);
+        return;
+      } else if (progress.stage === 1) {
+        this.statusMessage = "Investigate the 1968 Indenture: Consult Dandali Elders (-72, -72) OR Arewa Bank (80, -22).";
+        this.pushSnapshot(true);
+        return;
+      } else if (progress.stage === 2) {
+        this.statusMessage = "Choose your Commercial Career Foundation in the Legacy Archive (Press [M] -> Legacy).";
+        this.pushSnapshot(true);
+        return;
+      } else if (progress.stage === 3) {
+        const res = this.storySystem.resolveChapter1();
+        if (res.payout > 0) {
+          this.cash += res.payout;
+          this.gameScore += res.storyXP;
+        }
+        this.statusMessage = res.message;
+        this.saveGame();
+        this.pushSnapshot(true);
+        return;
+      } else {
+        this.statusMessage = "Dan-Kano Ancestral Compound: Title registered. The Bronze Sahel Vault Key remains in your archive.";
+        this.pushSnapshot(true);
+        return;
+      }
+    }
+
+    // Story Chapter 1: Dandali Clan Elders at (-72, 0, -72)
+    if (this.playerPosition.distanceTo(new THREE.Vector3(-72, 0, -72)) <= 3.8) {
+      const progress = this.storySystem.getProgress();
+      if (progress.stage === 1 && progress.investigationChoice === null) {
+        const res = this.storySystem.chooseInvestigation("elders");
+        this.statusMessage = res.message;
+        this.saveGame();
+        this.pushSnapshot(true);
+        return;
+      }
+    }
+
+    // Story Chapter 1: Arewa Commercial Bank Auditor at (80, 0, -22)
+    if (this.playerPosition.distanceTo(new THREE.Vector3(80, 0, -22)) <= 3.8) {
+      const progress = this.storySystem.getProgress();
+      if (progress.stage === 1 && progress.investigationChoice === null) {
+        const res = this.storySystem.chooseInvestigation("bank");
+        if (res.bonusCash > 0) {
+          this.cash += res.bonusCash;
+        }
+        this.statusMessage = res.message;
+        this.saveGame();
+        this.pushSnapshot(true);
+        return;
+      }
+    }
+
     // Check outdoor Sabon Gari Commercial Complex Shop at (-22, 0, 45.2)
     if (this.playerPosition.distanceTo(new THREE.Vector3(-22, 0, 45.2)) <= 2.8) {
       const biz = this.economy.businesses.get("sabon-gari-shop");
@@ -757,7 +817,7 @@ export class GameEngine {
         this.statusMessage = res.message;
         if (res.success) {
           this.cash -= res.cost;
-          this.economy.saveToStorage(this.cash, this.trafficFine, this.hasApartmentRental);
+          this.saveGame();
         }
       }
       this.pushSnapshot(true);
@@ -774,7 +834,7 @@ export class GameEngine {
         this.statusMessage = res.message;
         if (res.success) {
           this.cash -= res.cost;
-          this.economy.saveToStorage(this.cash, this.trafficFine, this.hasApartmentRental);
+          this.saveGame();
         }
       }
       this.pushSnapshot(true);
@@ -791,7 +851,7 @@ export class GameEngine {
         this.statusMessage = res.message;
         if (res.success) {
           this.cash -= res.cost;
-          this.economy.saveToStorage(this.cash, this.trafficFine, this.hasApartmentRental);
+          this.saveGame();
         }
       }
       this.pushSnapshot(true);
@@ -804,7 +864,7 @@ export class GameEngine {
       this.statusMessage = res.message;
       if (res.success) {
         this.cash -= res.cost;
-        this.economy.saveToStorage(this.cash, this.trafficFine, this.hasApartmentRental);
+        this.saveGame();
       }
       this.pushSnapshot(true);
       return;
@@ -911,7 +971,7 @@ export class GameEngine {
       if (dayOutcome.cashDelta !== 0) {
         this.cash += dayOutcome.cashDelta;
         this.statusMessage = dayOutcome.message;
-        this.economy.saveToStorage(this.cash, this.trafficFine, this.hasApartmentRental);
+        this.saveGame();
       }
 
       if (this.mode === "on-foot") this.updatePlayer(dt, now);
@@ -1818,6 +1878,34 @@ export class GameEngine {
           interactionPrompt = "Talk to KAROTA Officer";
         }
       }
+      // Check Story Triggers
+      if (!interactionPrompt) {
+        if (this.playerPosition.distanceTo(new THREE.Vector3(-85, 0, -68)) <= 3.8) {
+          const progress = this.storySystem.getProgress();
+          if (progress.stage === 0) {
+            interactionPrompt = "Malam Kabiru: Receive 1968 Indenture";
+          } else if (progress.stage === 1) {
+            interactionPrompt = "Dan-Kano Zaure: Investigate Indenture (Elders or Bank)";
+          } else if (progress.stage === 2) {
+            interactionPrompt = "Dan-Kano Zaure: Select Commercial Foundation";
+          } else if (progress.stage === 3) {
+            interactionPrompt = "Dan-Kano Zaure: Complete Chapter 1 & Claim Title";
+          } else {
+            interactionPrompt = "Dan-Kano Zaure: Story Chapter 1 Secured";
+          }
+        } else if (this.playerPosition.distanceTo(new THREE.Vector3(-72, 0, -72)) <= 3.8) {
+          const progress = this.storySystem.getProgress();
+          if (progress.stage === 1 && progress.investigationChoice === null) {
+            interactionPrompt = "Dandali Elders: Investigate 1968 Indenture (+25 Trust)";
+          }
+        } else if (this.playerPosition.distanceTo(new THREE.Vector3(80, 0, -22)) <= 3.8) {
+          const progress = this.storySystem.getProgress();
+          if (progress.stage === 1 && progress.investigationChoice === null) {
+            interactionPrompt = "Arewa Bank: Audit 1968 Ledger (+₦10,000 Credit)";
+          }
+        }
+      }
+
       // Check outdoor shops / properties
       if (!interactionPrompt) {
         if (this.playerPosition.distanceTo(new THREE.Vector3(-22, 0, 45.2)) <= 2.8) {
@@ -1916,6 +2004,12 @@ export class GameEngine {
       gpsTarget: this.gpsTargetLandmark,
       activeMission: activeMissionInfo,
       availableMissionsCount: this.missionSystem.getAvailableMissions().length,
+      playerCoords: {
+        x: Math.round(location.x * 10) / 10,
+        z: Math.round(location.z * 10) / 10,
+      },
+      playerHeading: this.mode === "driving" ? this.getActiveVehicleYaw() : this.playerYaw,
+      storyInfo: this.storySystem.getSnapshotInfo({ x: location.x, z: location.z }),
     });
   }
 
@@ -1971,6 +2065,60 @@ export class GameEngine {
 
   public getMissionSystem(): MissionSystem {
     return this.missionSystem;
+  }
+
+  public saveGame(): boolean {
+    return this.economy.saveToStorage(
+      this.cash,
+      this.trafficFine,
+      this.hasApartmentRental,
+      this.missionSystem.getCompletedMissionsList(),
+      this.missionSystem.careerEarnings,
+      this.storySystem.getProgress(),
+    );
+  }
+
+  public getStorySystem(): StorySystem {
+    return this.storySystem;
+  }
+
+  public examineStoryIndenture(): boolean {
+    const res = this.storySystem.examineIndenture();
+    this.statusMessage = res.message;
+    this.saveGame();
+    this.pushSnapshot(true);
+    return res.success;
+  }
+
+  public chooseStoryInvestigation(choice: "elders" | "bank") {
+    const res = this.storySystem.chooseInvestigation(choice);
+    if (res.success && res.bonusCash > 0) {
+      this.cash += res.bonusCash;
+    }
+    this.statusMessage = res.message;
+    this.saveGame();
+    this.pushSnapshot(true);
+    return res;
+  }
+
+  public chooseStoryCareer(choice: CareerPathChoice) {
+    const res = this.storySystem.chooseCareerPath(choice);
+    this.statusMessage = res.message;
+    this.saveGame();
+    this.pushSnapshot(true);
+    return res;
+  }
+
+  public resolveStoryChapter1() {
+    const res = this.storySystem.resolveChapter1();
+    if (res.success && res.payout > 0) {
+      this.cash += res.payout;
+      this.gameScore += res.storyXP;
+    }
+    this.statusMessage = res.message;
+    this.saveGame();
+    this.pushSnapshot(true);
+    return res;
   }
 
   private lerpAngle(from: number, to: number, alpha: number) {

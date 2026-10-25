@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import './GameUI.css';
 import TouchControls from './TouchControls';
-import type { ActiveMissionInfo, SocialContact, VehicleType } from '../game/types';
+import type { ActiveMissionInfo, CareerPathChoice, SocialContact, StorySnapshotInfo, VehicleType } from '../game/types';
 import { KANO_LANDMARKS } from '../game/landmarks';
 import { CAREER_MISSIONS_CATALOG } from '../game/missionSystem';
+import CityMapModal from './CityMapModal';
 
 export type Screen = 'menu' | 'playing' | 'paused';
 export type Mode = 'on-foot' | 'driving';
@@ -31,6 +32,9 @@ export interface GameUIProps {
   gpsTarget?: string | null;
   activeMission?: ActiveMissionInfo | null;
   availableMissionsCount?: number;
+  playerCoords?: { x: number; z: number };
+  playerHeading?: number;
+  storyInfo?: StorySnapshotInfo | null;
   graphicsQuality: GraphicsQuality;
   onStart: () => void;
   onPause: () => void;
@@ -40,6 +44,10 @@ export interface GameUIProps {
   onSetGPSTarget?: (id: string | null) => void;
   onAcceptMission?: (id: string) => boolean;
   onCancelMission?: () => boolean;
+  onExamineIndenture?: () => boolean;
+  onChooseInvestigation?: (choice: "elders" | "bank") => unknown;
+  onChooseCareer?: (choice: CareerPathChoice) => unknown;
+  onResolveChapter1?: () => unknown;
   onQualityChange: (quality: GraphicsQuality) => void;
 }
 
@@ -79,6 +87,9 @@ export default function GameUI({
   gpsTarget,
   activeMission,
   availableMissionsCount,
+  playerCoords,
+  playerHeading,
+  storyInfo,
   graphicsQuality,
   onStart,
   onPause,
@@ -88,6 +99,10 @@ export default function GameUI({
   onSetGPSTarget,
   onAcceptMission,
   onCancelMission,
+  onExamineIndenture,
+  onChooseInvestigation,
+  onChooseCareer,
+  onResolveChapter1,
   onQualityChange,
 }: GameUIProps) {
   const [showDirectory, setShowDirectory] = useState(false);
@@ -185,6 +200,23 @@ export default function GameUI({
             </button>
             <span className="ks-pause-hint"><Key>ESC</Key><span>PAUSE</span></span>
           </header>
+
+          {storyInfo && (
+            <div
+              className="ks-story-chip"
+              role="status"
+              onClick={() => setShowDirectory(true)}
+              title="Click or press [M] to open City Map & Story Archive"
+              style={{ cursor: "pointer" }}
+            >
+              <span className="ks-story-chip-tag">STORY: CH.1</span>
+              <div className="ks-story-chip-info">
+                <strong>{storyInfo.stageName}</strong>
+                <span>{storyInfo.currentObjective}</span>
+              </div>
+              <span className="ks-story-chip-hint">Press [M]</span>
+            </div>
+          )}
 
           {activeGpsLandmark && (
             <div className="ks-gps-chip" role="status">
@@ -340,40 +372,18 @@ export default function GameUI({
           {statusMessage && <div className="ks-status-message" role="status">{statusMessage}</div>}
 
           {showDirectory && (
-            <div className="ks-directory-layer" role="dialog" aria-modal="true" aria-labelledby="ks-dir-title">
-              <div className="ks-directory-panel">
-                <div className="ks-directory-header">
-                  <div>
-                    <div className="ks-edition">KANO URBAN DIRECTORY</div>
-                    <h2 id="ks-dir-title">City Landmarks &amp; GPS Navigation</h2>
-                  </div>
-                  <button className="ks-directory-close" onClick={() => setShowDirectory(false)}>✕</button>
-                </div>
-                <div className="ks-directory-list">
-                  {KANO_LANDMARKS.map((lm) => (
-                    <div key={lm.id} className="ks-directory-card">
-                      <div className="ks-card-main">
-                        <span className={`ks-cat-tag ${lm.category}`}>{lm.category.toUpperCase()}</span>
-                        <h3>{lm.name}</h3>
-                        <p>{lm.description}</p>
-                        <small className="ks-card-coords">{lm.district} · Coord: ({lm.x}, {lm.z})</small>
-                      </div>
-                      <div className="ks-card-actions">
-                        {gpsTarget === lm.id ? (
-                          <button className="ks-gps-btn active" onClick={() => onSetGPSTarget?.(null)}>
-                            Active Waypoint ✓
-                          </button>
-                        ) : (
-                          <button className="ks-gps-btn" onClick={() => { onSetGPSTarget?.(lm.id); setShowDirectory(false); }}>
-                            Set GPS Pin ↗
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <CityMapModal
+              onClose={() => setShowDirectory(false)}
+              playerCoords={playerCoords}
+              playerHeading={playerHeading}
+              gpsTarget={gpsTarget}
+              onSetGPSTarget={onSetGPSTarget}
+              storyInfo={storyInfo}
+              onExamineIndenture={onExamineIndenture}
+              onChooseInvestigation={onChooseInvestigation}
+              onChooseCareer={onChooseCareer}
+              onResolveChapter1={onResolveChapter1}
+            />
           )}
 
           {showMissions && (
