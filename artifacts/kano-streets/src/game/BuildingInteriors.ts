@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { makeSignMaterial } from "./materials";
 import type { Collider, GameMaterials, InteriorId, PropertyId, BusinessId } from "./types";
+import { PROPERTY_REGISTRY } from "./propertyRegistry";
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
 const unitCyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
@@ -43,6 +44,19 @@ function addCyl(
   return mesh;
 }
 
+export interface InteractiveDoor {
+  id: string;
+  name: string;
+  interiorId: InteriorId;
+  doorMesh: THREE.Mesh;
+  pivotGroup: THREE.Group;
+  isOpen: boolean;
+  closedYaw: number;
+  openYaw: number;
+  collider: Collider;
+  position: THREE.Vector3;
+}
+
 export interface InteriorZone {
   id: InteriorId;
   name: string;
@@ -54,6 +68,7 @@ export interface InteriorZone {
   exitPoint: THREE.Vector3;
   outdoorDoorPosition: THREE.Vector3;
   outdoorDoorYaw: number;
+  lights?: THREE.PointLight[];
   checkInteraction?: (
     playerPos: THREE.Vector3,
     state: {
@@ -85,18 +100,154 @@ export class BuildingInteriorManager {
   public activeInterior: InteriorId | null = null;
   public outdoorSavedPosition = new THREE.Vector3(-4, 0, -4);
   public outdoorSavedYaw = 0;
+  public interactiveDoors: InteractiveDoor[] = [];
+  public lightsOn = true;
 
   constructor(private readonly materials: GameMaterials) {
     this.root.name = "building-interiors-root";
     this.buildHouseInterior();
     this.buildApartmentInterior();
+    this.buildPenthouseInterior();
     this.buildChurchInterior();
     this.buildPolicePostInterior();
     this.buildRestaurantInterior();
     this.buildGamingHubInterior();
   }
 
-  // 1. Modern Villa Interior (Al-Baraka Villa)
+  private addInteractiveDoor(
+    parent: THREE.Group,
+    interiorId: InteriorId,
+    id: string,
+    name: string,
+    x: number,
+    y: number,
+    z: number,
+    w: number,
+    h: number,
+    d: number,
+    material: THREE.Material,
+    worldCx: number,
+    worldCz: number,
+    swingOutwards = false,
+    colliders?: Collider[],
+  ): InteractiveDoor {
+    const pivot = new THREE.Group();
+    pivot.position.set(x - w / 2, y, z);
+    parent.add(pivot);
+
+    const doorMesh = new THREE.Mesh(unitBox, material);
+    doorMesh.position.set(w / 2, h / 2, 0);
+    doorMesh.scale.set(w, h, d);
+    doorMesh.castShadow = true;
+    doorMesh.receiveShadow = true;
+    pivot.add(doorMesh);
+
+    // Brass handle
+    const handle = new THREE.Mesh(unitBox, this.materials.goldTrim || this.materials.trim);
+    handle.position.set(w - 0.12, h * 0.5, 0.08);
+    handle.scale.set(0.06, 0.14, 0.12);
+    pivot.add(handle);
+
+    const collider: Collider = {
+      x: worldCx + x,
+      z: worldCz + z,
+      halfX: w / 2,
+      halfZ: 0.35,
+      height: h,
+    };
+
+    if (colliders) {
+      colliders.push(collider);
+    }
+
+    const door: InteractiveDoor = {
+      id,
+      name,
+      interiorId,
+      doorMesh,
+      pivotGroup: pivot,
+      isOpen: false,
+      closedYaw: 0,
+      openYaw: swingOutwards ? -Math.PI / 2 : Math.PI / 2,
+      collider,
+      position: new THREE.Vector3(worldCx + x, -60 + y, worldCz + z),
+    };
+
+    this.interactiveDoors.push(door);
+    return door;
+  }
+
+  public toggleDoor(doorId: string): { success: boolean; isOpen: boolean; message: string } {
+    const door = this.interactiveDoors.find((d) => d.id === doorId);
+    if (!door) return { success: false, isOpen: false, message: "Door not found" };
+
+    door.isOpen = !door.isOpen;
+    door.pivotGroup.rotation.y = door.isOpen ? door.openYaw : door.closedYaw;
+
+    // Shift collider out of way when open
+    if (door.isOpen) {
+      door.collider.x = 9999;
+    } else {
+      door.collider.x = door.position.x;
+    }
+
+    const stateWord = door.isOpen ? "opened" : "closed";
+    return { success: true, isOpen: door.isOpen, message: `${door.name} is now ${stateWord}.` };
+  }
+
+  public getNearbyDoor(playerPos: THREE.Vector3, threshold = 2.2): InteractiveDoor | null {
+    if (!this.activeInterior) return null;
+    for (const door of this.interactiveDoors) {
+      if (door.interiorId !== this.activeInterior) continue;
+      if (playerPos.distanceTo(door.position) <= threshold) {
+        return door;
+      }
+    }
+    return null;
+  }
+
+  public toggleInteriorLights(zoneId?: InteriorId): boolean {
+    const targetId = zoneId ?? this.activeInterior;
+    if (!targetId) return this.lightsOn;
+    const zone = this.interiors.get(targetId);
+    if (!zone || !zone.lights) return this.lightsOn;
+
+    this.lightsOn = !this.lightsOn;
+    const intensityFactor = this.lightsOn ? 1.0 : 0.2;
+    zone.lights.forEach((light) => {
+      light.intensity = (light.userData.baseIntensity ?? 1.8) * intensityFactor;
+    });
+    return this.lightsOn;
+  }
+
+  public getSurfaceHeight(interiorId: InteriorId, x: number, z: number): number {
+    if (interiorId === "penthouse") {
+      // Penthouse center at cx = 300, cz = 80
+      const relX = x - 300;
+      const relZ = z - 80;
+
+      // Staircase: x in [-1.5, 2.0], z in [1.0, 5.5] ascending from Floor 1 (y = -59.9) to Floor 2 (y = -56.5)
+      if (relX >= -1.5 && relX <= 2.2 && relZ >= 0.8 && relZ <= 5.8) {
+        const progress = Math.min(1, Math.max(0, (relZ - 0.8) / 4.8));
+        return -59.9 + progress * 3.4;
+      }
+
+      // Upper Mezzanine, Master Suite & Rooftop Terrace (Floor 2)
+      if (relZ >= 0.8 && (relX <= -1.5 || relX >= 2.0 || relZ >= 5.5)) {
+        return -56.5;
+      }
+
+      // Lower Level Floor 1 (Living Salon, Foyer, Kitchen)
+      return -59.9;
+    }
+
+    // Default base floor for all single-storey interiors
+    return -59.9;
+  }
+
+  // =========================================================================
+  // 1. Al-Baraka Executive Villa (Gated Northern Family Estate)
+  // =========================================================================
   private buildHouseInterior() {
     const cx = 220;
     const cy = -60;
@@ -106,107 +257,419 @@ export class BuildingInteriorManager {
     this.root.add(group);
 
     const colliders: Collider[] = [];
-    const width = 12;
-    const depth = 10;
-    const height = 3.6;
+    const lights: THREE.PointLight[] = [];
+    const width = 20;
+    const depth = 18;
+    const height = 4.0;
 
-    // Floor (Marble Tiles) & Ceiling
-    addBox(group, this.materials.tileFloor || this.materials.sidewalk, 0, 0, 0, width, 0.1, depth, false);
-    addBox(group, this.materials.white, 0, height, 0, width, 0.1, depth, false);
+    const floorMat = this.materials.tileFloor || this.materials.concrete;
+    const wallMat = this.materials.white;
+    const woodMat = this.materials.wood;
 
-    // Perimeter Walls
-    addBox(group, this.materials.white, 0, height / 2, -depth / 2, width, height, 0.2); // North
-    addBox(group, this.materials.white, 0, height / 2, depth / 2, width, height, 0.2);  // South
-    addBox(group, this.materials.white, -width / 2, height / 2, 0, 0.2, height, depth); // West
-    addBox(group, this.materials.white, width / 2, height / 2, 0, 0.2, height, depth);  // East
+    // 1. Floor & Ceiling Slabs
+    addBox(group, floorMat, 0, 0, 0, width, 0.1, depth, false);
+    addBox(group, wallMat, 0, height, 0, width, 0.1, depth, false);
 
-    // Living Room Area
-    // Large L-Shaped Sectional Sofa
-    addBox(group, this.materials.darkTrim, -2.5, 0.45, -2.2, 3.2, 0.5, 1.1);
-    addBox(group, this.materials.darkTrim, -3.6, 0.45, -0.6, 1.0, 0.5, 2.2);
-    addBox(group, this.materials.darkTrim, -2.5, 0.85, -2.65, 3.2, 0.5, 0.25);
-    addBox(group, this.materials.darkTrim, -4.0, 0.85, -0.6, 0.25, 0.5, 2.2);
-    // Coffee table
-    addBox(group, this.materials.wood, -2.4, 0.32, -0.7, 1.6, 0.35, 0.9);
-    // Decorative Kano area rug
-    addBox(group, this.materials.clothRed, -2.4, 0.06, -1.1, 3.8, 0.02, 3.2, false);
+    // 2. Perimeter Exterior Walls
+    addBox(group, wallMat, 0, height / 2, -depth / 2, width, height, 0.25); // North Wall
+    addBox(group, wallMat, 0, height / 2, depth / 2, width, height, 0.25);  // South Wall (Front)
+    addBox(group, wallMat, -width / 2, height / 2, 0, 0.25, height, depth); // West Wall
+    addBox(group, wallMat, width / 2, height / 2, 0, 0.25, height, depth);  // East Wall
 
-    // Entertainment Credenza & 65" TV
-    addBox(group, this.materials.wood, 2.8, 0.45, -4.5, 3.2, 0.6, 0.65);
-    addBox(group, this.materials.black, 2.8, 1.5, -4.6, 2.4, 1.3, 0.08); // TV Screen
-    addBox(group, this.materials.metal, 2.8, 0.8, -4.55, 0.8, 0.08, 0.15); // Soundbar
+    // 3. Front Shaded Veranda & Reception Zaure (z: 5.5 to 9.0)
+    addBox(group, this.materials.ochre, 0, 0.08, 7.2, 8.0, 0.16, 3.6, false);
+    // Sculpted Clay Seating Dakali Benches on Veranda
+    addBox(group, this.materials.clay, -3.2, 0.45, 7.2, 1.2, 0.7, 3.2);
+    addBox(group, this.materials.clay, 3.2, 0.45, 7.2, 1.2, 0.7, 3.2);
+    colliders.push(
+      { x: cx - 3.2, z: cz + 7.2, halfX: 0.6, halfZ: 1.6, height: 0.8 },
+      { x: cx + 3.2, z: cz + 7.2, halfX: 0.6, halfZ: 1.6, height: 0.8 },
+    );
 
-    // Ceiling Fan
-    addCyl(group, this.materials.metal, 0, height - 0.35, 0, 0.15, 0.4);
-    for (let i = 0; i < 4; i++) {
-      const blade = addBox(group, this.materials.wood, 0, height - 0.45, 0, 1.4, 0.02, 0.18, false);
-      blade.rotation.y = (i * Math.PI) / 2;
+    // Double Mahogany Entrance Doors
+    addBox(group, woodMat, -0.7, 1.2, depth / 2 - 0.08, 1.2, 2.4, 0.12);
+    addBox(group, woodMat, 0.7, 1.2, depth / 2 - 0.08, 1.2, 2.4, 0.12);
+
+    // 4. Grand Family Parlour (Palour) (x: -8 to 0, z: -1 to 5.5)
+    // Rich Northern Patterned Carpet
+    addBox(group, this.materials.carpetRed || this.materials.clothRed, -4.0, 0.05, 2.2, 7.2, 0.02, 6.2, false);
+    // 8-Seater Northern Modular Sectional Sofa Set
+    addBox(group, this.materials.darkTrim, -4.0, 0.48, 4.2, 5.8, 0.52, 1.1); // Back sofa
+    addBox(group, this.materials.darkTrim, -7.0, 0.48, 2.2, 1.1, 0.52, 4.8); // Left sofa
+    addBox(group, this.materials.darkTrim, -1.0, 0.48, 2.2, 1.1, 0.52, 3.2); // Right sofa
+    // Carved mahogany coffee table
+    addBox(group, woodMat, -4.0, 0.35, 2.2, 2.2, 0.38, 1.4);
+    // Brass Kano Ornamental Urns & Water Pots
+    addCyl(group, this.materials.goldTrim || this.materials.trim, -7.2, 0.55, 5.0, 0.35, 1.1);
+    addCyl(group, this.materials.goldTrim || this.materials.trim, -0.8, 0.55, 5.0, 0.35, 1.1);
+
+    // 75-inch Flat Screen Media Wall & Credenza (West Wall)
+    addBox(group, woodMat, -9.6, 0.5, 2.2, 0.6, 0.65, 4.4);
+    addBox(group, this.materials.black, -9.7, 1.8, 2.2, 0.1, 1.6, 2.8);
+
+    // 5. Formal Dining Room & Closed Family Kitchen (x: 1 to 9.5, z: 0 to 5.5)
+    // Partition Wall between Parlour and Dining
+    addBox(group, wallMat, 0.8, height / 2, 2.5, 0.2, height, 6.0);
+    // 8-Seater Solid Mahogany Dining Table & Chairs
+    addBox(group, woodMat, 5.0, 0.78, 2.8, 3.4, 0.08, 1.8);
+    for (const dx of [-1.2, 0, 1.2]) {
+      addBox(group, this.materials.darkTrim, 5.0 + dx, 0.48, 1.6, 0.45, 0.5, 0.45);
+      addBox(group, this.materials.darkTrim, 5.0 + dx, 0.48, 4.0, 0.45, 0.5, 0.45);
     }
+    // Kitchen Partition & Counters (x: 4 to 9.5, z: -1 to 0)
+    addBox(group, wallMat, 5.0, height / 2, 0, 9.5, height, 0.2);
+    addBox(group, this.materials.concrete, 6.5, 0.95, -2.5, 1.0, 1.0, 4.0);
+    addBox(group, this.materials.metal, 6.5, 1.02, -2.5, 1.1, 0.08, 4.2); // Stainless counter
+    addBox(group, this.materials.metal, 8.5, 1.3, -4.0, 1.2, 2.2, 1.0);  // Refrigerator
 
-    // Kitchenette Breakfast Bar
-    addBox(group, this.materials.concrete, 3.2, 0.95, 1.2, 0.8, 1.0, 3.4);
-    addBox(group, this.materials.darkTrim, 3.2, 1.02, 1.2, 1.0, 0.08, 3.6); // Granite top
-    addCyl(group, this.materials.wood, 2.3, 0.65, 0.2, 0.25, 0.65); // Stool 1
-    addCyl(group, this.materials.wood, 2.3, 0.65, 2.2, 0.25, 0.65); // Stool 2
+    // 6. Central Corridor Wall (z: -1 to -8)
+    addBox(group, wallMat, 0.8, height / 2, -4.5, 0.2, height, 7.0);
 
-    // Bedroom Partition Wall & Bed
-    addBox(group, this.materials.white, -1.8, height / 2, 2.6, 0.2, height, 4.6);
-    // Queen Bed
-    addBox(group, this.materials.wood, -3.8, 0.38, 2.6, 2.2, 0.45, 2.4);
-    addBox(group, this.materials.white, -3.8, 0.62, 2.6, 2.1, 0.22, 2.3); // Mattress
-    addBox(group, this.materials.cloth, -3.8, 0.68, 3.2, 2.1, 0.14, 1.2); // Blanket
-    addBox(group, this.materials.white, -3.4, 0.78, 1.7, 0.65, 0.18, 0.45); // Pillow 1
-    addBox(group, this.materials.white, -4.2, 0.78, 1.7, 0.65, 0.18, 0.45); // Pillow 2
-    addBox(group, this.materials.wood, -3.8, 1.15, 1.35, 2.4, 1.1, 0.12); // Headboard
+    // 7. Dakin Karatu (Private Study & Prayer Room) (x: -9 to -4, z: -1 to -4.5)
+    addBox(group, wallMat, -4.0, height / 2, -1.0, 10.0, height, 0.2);
+    addBox(group, wallMat, -4.0, height / 2, -4.5, 10.0, height, 0.2);
+    // Prayer Carpets & Bookshelves
+    addBox(group, this.materials.carpetRed || this.materials.cloth, -6.5, 0.05, -2.8, 3.6, 0.02, 2.4, false);
+    addBox(group, woodMat, -9.6, 1.5, -2.8, 0.5, 2.6, 2.8); // Bookcase
 
-    // Front Exit Door
-    const doorMesh = addBox(group, this.materials.wood, 0, 1.1, depth / 2 - 0.08, 1.2, 2.2, 0.1);
-    doorMesh.name = "exit-door";
-    addBox(group, this.materials.goldTrim || this.materials.trim, 0.42, 1.1, depth / 2 - 0.02, 0.08, 0.15, 0.08); // Brass handle
+    // 8. Master Bedroom Suite & Ensuite Bath (x: -9.5 to 0.5, z: -4.5 to -8.5)
+    // King-Size Bed with Padded Headboard
+    addBox(group, woodMat, -5.5, 0.45, -6.5, 2.6, 0.52, 2.8);
+    addBox(group, this.materials.white, -5.5, 0.75, -6.5, 2.4, 0.25, 2.6); // Mattress
+    addBox(group, this.materials.cloth, -5.5, 0.82, -6.0, 2.4, 0.15, 1.6); // Quilt
+    addBox(group, woodMat, -5.5, 1.4, -7.85, 2.8, 1.4, 0.15); // Headboard
+    // Ensuite Bath Partition (x: -1.5 to 0.5, z: -5.5 to -8.5)
+    addBox(group, wallMat, -1.5, height / 2, -6.5, 0.2, height, 4.0);
+    addBox(group, this.materials.tileFloor || this.materials.white, -0.5, 0.45, -7.5, 1.2, 0.6, 0.8); // Bathtub
 
-    // Indoor Warm Lighting
-    const roomLight = new THREE.PointLight("#fff0d4", 1.8, 14, 1.2);
-    roomLight.position.set(0, height - 0.6, 0);
-    group.add(roomLight);
+    // 9. Rear Compound Utility Yard & 25kVA Generator House (z: -8.8 to -12.0)
+    // Soundproof Diesel Generator
+    addBox(group, this.materials.metal, 5.5, 0.9, -8.5, 2.4, 1.5, 1.6);
+    addBox(group, this.materials.darkTrim, 5.5, 1.7, -8.5, 2.5, 0.12, 1.7); // Generator cover
+    addCyl(group, this.materials.black, 4.5, 1.9, -8.5, 0.08, 0.7); // Exhaust pipe
+    // Borehole Pressure Tank
+    addCyl(group, this.materials.bankBlue || this.materials.metal, 7.8, 1.2, -8.5, 0.5, 2.2);
 
-    const bedLight = new THREE.PointLight("#ffe0b2", 1.0, 7, 1.4);
-    bedLight.position.set(-3.8, height - 0.8, 2.6);
-    group.add(bedLight);
+    // Interactive Doors
+    this.addInteractiveDoor(group, "house", "villa_master_door", "Master Bedroom Door", -4.0, 0, -4.5, 1.1, 2.4, 0.08, woodMat, cx, cz, false, colliders);
+    this.addInteractiveDoor(group, "house", "villa_study_door", "Dakin Karatu Door", -4.0, 0, -1.0, 1.1, 2.4, 0.08, woodMat, cx, cz, false, colliders);
+    this.addInteractiveDoor(group, "house", "villa_rear_yard_door", "Rear Compound Yard Door", 0.8, 0, -8.8, 1.2, 2.4, 0.1, woodMat, cx, cz, true, colliders);
+
+    // Indoor Lighting
+    const parlourLight = new THREE.PointLight("#fff0d4", 2.4, 18, 1.2);
+    parlourLight.position.set(-4.0, height - 0.6, 2.2);
+    parlourLight.userData.baseIntensity = 2.4;
+    group.add(parlourLight);
+    lights.push(parlourLight);
+
+    const masterLight = new THREE.PointLight("#ffe0b2", 1.8, 12, 1.3);
+    masterLight.position.set(-5.5, height - 0.7, -6.5);
+    masterLight.userData.baseIntensity = 1.8;
+    group.add(masterLight);
+    lights.push(masterLight);
+
+    const diningLight = new THREE.PointLight("#fff5e6", 1.8, 12, 1.3);
+    diningLight.position.set(5.0, height - 0.6, 2.8);
+    diningLight.userData.baseIntensity = 1.8;
+    group.add(diningLight);
+    lights.push(diningLight);
 
     // Colliders (shifted to world coordinates cx, cz)
     colliders.push(
+      // Perimeter Boundary Walls
       { x: cx, z: cz - depth / 2, halfX: width / 2, halfZ: 0.3, height },
       { x: cx, z: cz + depth / 2, halfX: width / 2, halfZ: 0.3, height },
       { x: cx - width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height },
       { x: cx + width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height },
-      // Sectional sofa collider
-      { x: cx - 2.5, z: cz - 2.2, halfX: 1.7, halfZ: 0.7, height: 1.2 },
-      { x: cx - 3.6, z: cz - 0.6, halfX: 0.6, halfZ: 1.2, height: 1.2 },
-      // TV Credenza
-      { x: cx + 2.8, z: cz - 4.5, halfX: 1.7, halfZ: 0.5, height: 1.8 },
-      // Breakfast counter
-      { x: cx + 3.2, z: cz + 1.2, halfX: 0.6, halfZ: 1.8, height: 1.2 },
-      // Bedroom wall
-      { x: cx - 1.8, z: cz + 2.6, halfX: 0.2, halfZ: 2.3, height },
-      // Bed
-      { x: cx - 3.8, z: cz + 2.6, halfX: 1.2, halfZ: 1.3, height: 1.2 },
+      // Parlour Sectional Sofa
+      { x: cx - 4.0, z: cz + 4.2, halfX: 2.9, halfZ: 0.6, height: 1.2 },
+      { x: cx - 7.0, z: cz + 2.2, halfX: 0.6, halfZ: 2.4, height: 1.2 },
+      { x: cx - 1.0, z: cz + 2.2, halfX: 0.6, halfZ: 1.6, height: 1.2 },
+      // Dining Table
+      { x: cx + 5.0, z: cz + 2.8, halfX: 1.8, halfZ: 1.0, height: 1.2 },
+      // Kitchen Counter
+      { x: cx + 6.5, z: cz - 2.5, halfX: 0.6, halfZ: 2.1, height: 1.2 },
+      // Central Partition Walls
+      { x: cx + 0.8, z: cz + 2.5, halfX: 0.2, halfZ: 3.0, height },
+      { x: cx + 0.8, z: cz - 4.5, halfX: 0.2, halfZ: 3.5, height },
+      { x: cx - 4.0, z: cz - 1.0, halfX: 5.0, halfZ: 0.2, height },
+      { x: cx - 4.0, z: cz - 4.5, halfX: 5.0, halfZ: 0.2, height },
+      // Master Bed
+      { x: cx - 5.5, z: cz - 6.5, halfX: 1.4, halfZ: 1.5, height: 1.4 },
+      // 25kVA Generator House & Water Tank
+      { x: cx + 5.5, z: cz - 8.5, halfX: 1.3, halfZ: 0.9, height: 1.8 },
+      { x: cx + 7.8, z: cz - 8.5, halfX: 0.6, halfZ: 0.6, height: 2.4 },
     );
 
     this.interiors.set("house", {
       id: "house",
-      name: "Al-Baraka Modern Villa",
+      name: "Al-Baraka Executive Villa",
       districtLabel: "RESIDENTIAL QUARTER · INDOORS",
       root: group,
       colliders,
-      spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.6),
+      lights,
+      spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.8),
       spawnYaw: Math.PI,
       exitPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.1),
       outdoorDoorPosition: new THREE.Vector3(44, 0, 45),
       outdoorDoorYaw: 0,
+      checkInteraction: (pos, state) => {
+        // 1. Generator Inspection in Utility Yard at (cx + 5.5, cz - 8.5)
+        const distGen = pos.distanceTo(new THREE.Vector3(cx + 5.5, cy + 0.1, cz - 8.5));
+        if (distGen <= 2.4) {
+          return {
+            prompt: "Inspect 25kVA Soundproof Diesel Generator & Borehole",
+            action: () => ({
+              statusMessage: "Al-Baraka Generator House: 25kVA Lister-Petter soundproof generator operational. Diesel tank: 92% full. Borehole pressure: Nominal (4.2 Bar).",
+            }),
+          };
+        }
+
+        // 2. Safe / Deed Desk in Study at (cx - 6.5, cz - 2.8)
+        const distStudy = pos.distanceTo(new THREE.Vector3(cx - 6.5, cy + 0.1, cz - 2.8));
+        if (distStudy <= 2.2) {
+          if (state.ownedProperties?.includes("albaraka-villa")) {
+            return {
+              prompt: "Al-Baraka Villa: Certificate of Occupancy Safe",
+              action: () => ({
+                statusMessage: "Official Kano State Certificate of Occupancy held for Al-Baraka Executive Villa (Plot 44, Gated Residential Quarter). Freehold title verified.",
+              }),
+            };
+          }
+        }
+
+        // 3. Parlour Chandelier / Light Switch at (cx - 0.5, cz + 4.5)
+        const distSwitch = pos.distanceTo(new THREE.Vector3(cx - 0.5, cy + 0.1, cz + 4.5));
+        if (distSwitch <= 1.8) {
+          return {
+            prompt: this.lightsOn ? "Switch Off Parlour Lighting" : "Switch On Parlour Lighting",
+            action: () => {
+              const on = this.toggleInteriorLights("house");
+              return { statusMessage: on ? "Al-Baraka Villa: Warm interior illumination active." : "Al-Baraka Villa: Interior lights switched off." };
+            },
+          };
+        }
+
+        return null;
+      },
     });
   }
 
-  // 2. Multi-Storey Apartment Interior (Unit 2B - Airport View Apartments)
+  // =========================================================================
+  // 2. Multi-Storey Penthouse Interior (Bompai Heights Luxury Penthouse)
+  // =========================================================================
+  private buildPenthouseInterior() {
+    const cx = 300;
+    const cy = -60;
+    const cz = 80;
+    const group = new THREE.Group();
+    group.position.set(cx, cy, cz);
+    this.root.add(group);
+
+    const colliders: Collider[] = [];
+    const lights: THREE.PointLight[] = [];
+    const width = 18;
+    const depth = 16;
+    const totalHeight = 6.8;
+    const floor2Elevation = 3.4;
+
+    const marbleMat = this.materials.tileFloor || this.materials.white;
+    const wallMat = this.materials.white;
+    const woodMat = this.materials.wood;
+    const glassMat = this.materials.glassLit || this.materials.glass;
+    const darkMat = this.materials.darkTrim;
+
+    // 1. Lower Floor (Floor 1, y = 0) & Double-Height Ceiling Slab (y = 6.8)
+    addBox(group, marbleMat, 0, 0, 0, width, 0.1, depth, false);
+    addBox(group, wallMat, 0, totalHeight, 0, width, 0.1, depth, false);
+
+    // 2. Perimeter Walls
+    addBox(group, wallMat, 0, totalHeight / 2, -depth / 2, width, totalHeight, 0.25); // North Wall
+    addBox(group, wallMat, 0, totalHeight / 2, depth / 2, width, totalHeight, 0.25);  // South Wall (Foyer & Terrace)
+    addBox(group, wallMat, -width / 2, totalHeight / 2, 0, 0.25, totalHeight, depth); // West Wall
+    addBox(group, wallMat, width / 2, totalHeight / 2, 0, 0.25, totalHeight, depth);  // East Wall
+
+    // 3. Lower Level: Grand Foyer (z: 5.5 to 8.0, x: -2.5 to 2.5)
+    // Double Entry Doors
+    addBox(group, woodMat, -0.65, 1.2, depth / 2 - 0.08, 1.2, 2.4, 0.12);
+    addBox(group, woodMat, 0.65, 1.2, depth / 2 - 0.08, 1.2, 2.4, 0.12);
+
+    // 4. Lower Level: Panoramic Living Salon (x: -8 to 1, z: -7 to 3)
+    // Floor-to-Ceiling Panoramic Glass Window Wall on North side
+    addBox(group, glassMat, -3.5, totalHeight / 2, -depth / 2 + 0.12, 9.0, totalHeight - 0.5, 0.1);
+    // Luxury Cream Leather Sectional Suite
+    addBox(group, this.materials.white, -3.5, 0.48, -4.5, 5.4, 0.52, 1.1);
+    addBox(group, this.materials.white, -6.0, 0.48, -2.5, 1.1, 0.52, 3.8);
+    // Polished Black Marble Coffee Table
+    addBox(group, this.materials.black, -3.5, 0.35, -2.5, 2.2, 0.38, 1.2);
+    // 85-inch Entertainment Wall
+    addBox(group, darkMat, -8.7, 0.5, -2.5, 0.5, 0.65, 4.4);
+    addBox(group, this.materials.black, -8.8, 2.0, -2.5, 0.1, 1.8, 3.2);
+
+    // 5. Lower Level: Gourmet Island Kitchen & Dining Suite (x: 2 to 8, z: -7 to 0)
+    // Central Granite Chef Island
+    addBox(group, darkMat, 5.0, 0.95, -3.5, 2.2, 1.0, 3.8);
+    addBox(group, marbleMat, 5.0, 1.02, -3.5, 2.4, 0.08, 4.0); // Granite top
+    // 3 Leather Bar Stools
+    for (const dz of [-1.2, 0, 1.2]) {
+      addCyl(group, this.materials.metal, 3.4, 0.65, -3.5 + dz, 0.22, 0.65);
+    }
+    // Double-Door Stainless Refrigerator
+    addBox(group, this.materials.metal, 7.8, 1.35, -6.5, 1.4, 2.3, 1.2);
+
+    // 6. Lower Level: Guest Bedroom & Bathroom (x: 2 to 8, z: 1 to 7)
+    addBox(group, wallMat, 5.0, 3.4 / 2, 0.5, 6.0, 3.4, 0.2); // Partition wall
+    addBox(group, woodMat, 5.0, 0.45, 3.5, 2.2, 0.52, 2.4); // Guest bed
+    addBox(group, this.materials.white, 5.0, 0.72, 3.5, 2.1, 0.22, 2.3);
+
+    // 7. Grand Stepped Wooden Staircase (x: 0 to 2.2, z: 1.0 to 5.5, y: 0 to 3.4)
+    const stepCount = 10;
+    const stepDepth = 4.5 / stepCount;
+    const stepRise = floor2Elevation / stepCount;
+    for (let i = 0; i < stepCount; i++) {
+      const sy = (i + 0.5) * stepRise;
+      const sz = 1.0 + (i + 0.5) * stepDepth;
+      addBox(group, woodMat, 1.0, sy, sz, 2.0, stepRise, stepDepth);
+      colliders.push({
+        x: cx + 1.0,
+        z: cz + sz,
+        halfX: 1.0,
+        halfZ: stepDepth / 2,
+        height: sy + 1.2,
+      });
+    }
+
+    // 8. Upper Mezzanine Level Floor Slab (y = 3.4, z: 0 to 8, x: -8 to 8)
+    addBox(group, marbleMat, 0, floor2Elevation, 4.0, width, 0.15, 8.0, false);
+
+    // 9. Upper Mezzanine Gallery & Library (x: 1.5 to 8, z: 0.5 to 5.5)
+    // Safety Glass Balustrade Overlooking Living Salon Below
+    addBox(group, glassMat, 4.5, floor2Elevation + 0.6, 0.2, 6.5, 1.1, 0.08);
+    addBox(group, this.materials.metal, 4.5, floor2Elevation + 1.15, 0.2, 6.5, 0.06, 0.08);
+    // Executive Desk & Laptop
+    addBox(group, woodMat, 5.0, floor2Elevation + 0.75, 2.8, 2.4, 0.08, 1.2);
+    addBox(group, this.materials.metal, 5.0, floor2Elevation + 0.82, 2.8, 0.45, 0.04, 0.35); // Laptop
+
+    // 10. Upper Level: Master Penthouse Suite (x: -8 to -1, z: 0 to 5.5)
+    addBox(group, wallMat, -1.0, floor2Elevation + (totalHeight - floor2Elevation) / 2, 2.8, 0.2, totalHeight - floor2Elevation, 5.5);
+    // King-Size Master Bed
+    addBox(group, woodMat, -5.0, floor2Elevation + 0.45, 2.8, 2.6, 0.55, 2.8);
+    addBox(group, this.materials.white, -5.0, floor2Elevation + 0.75, 2.8, 2.4, 0.25, 2.6);
+    addBox(group, darkMat, -5.0, floor2Elevation + 1.4, 1.35, 2.8, 1.4, 0.15); // Headboard
+    // Executive Wall Safe
+    addBox(group, this.materials.metal, -8.7, floor2Elevation + 1.2, 2.8, 0.4, 0.6, 0.6);
+
+    // 11. Upper Level: Private Skyline Rooftop Terrace (z: 5.5 to 8.0, x: -8 to 8)
+    // Terrace Partition Wall & Glass Sliding Doors
+    addBox(group, wallMat, 0, floor2Elevation + (totalHeight - floor2Elevation) / 2, 5.5, width, totalHeight - floor2Elevation, 0.2);
+    // Teak Outdoor Lounge Chairs & Table
+    addBox(group, woodMat, -4.0, floor2Elevation + 0.35, 6.8, 1.8, 0.35, 1.0);
+    addBox(group, this.materials.cloth, -4.0, floor2Elevation + 0.55, 6.8, 1.6, 0.15, 0.9);
+
+    // Interactive Doors
+    this.addInteractiveDoor(group, "penthouse", "penthouse_master_door", "Master Penthouse Suite Door", -1.0, floor2Elevation, 4.5, 1.1, 2.4, 0.08, woodMat, cx, cz, false, colliders);
+    this.addInteractiveDoor(group, "penthouse", "penthouse_guest_door", "Guest Bedroom Door", 5.0, 0, 0.5, 1.1, 2.4, 0.08, woodMat, cx, cz, false, colliders);
+    this.addInteractiveDoor(group, "penthouse", "penthouse_terrace_door", "Rooftop Skyline Terrace Door", 0, floor2Elevation, 5.5, 1.4, 2.4, 0.08, glassMat, cx, cz, true, colliders);
+
+    // Luxury Chandelier & Lighting
+    const salonChandelier = new THREE.PointLight("#fff5d0", 2.8, 22, 1.1);
+    salonChandelier.position.set(-3.5, totalHeight - 1.2, -1.0);
+    salonChandelier.userData.baseIntensity = 2.8;
+    group.add(salonChandelier);
+    lights.push(salonChandelier);
+
+    const masterLight = new THREE.PointLight("#ffe0b2", 1.8, 12, 1.2);
+    masterLight.position.set(-5.0, totalHeight - 1.2, 2.8);
+    masterLight.userData.baseIntensity = 1.8;
+    group.add(masterLight);
+    lights.push(masterLight);
+
+    const kitchenLight = new THREE.PointLight("#fff0d4", 1.8, 12, 1.2);
+    kitchenLight.position.set(5.0, 3.4 - 0.5, -3.5);
+    kitchenLight.userData.baseIntensity = 1.8;
+    group.add(kitchenLight);
+    lights.push(kitchenLight);
+
+    // Colliders (shifted to world coordinates cx, cz)
+    colliders.push(
+      // Perimeter Boundary Walls
+      { x: cx, z: cz - depth / 2, halfX: width / 2, halfZ: 0.3, height: totalHeight },
+      { x: cx, z: cz + depth / 2, halfX: width / 2, halfZ: 0.3, height: totalHeight },
+      { x: cx - width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height: totalHeight },
+      { x: cx + width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height: totalHeight },
+      // Living Room Sofa & Media Wall
+      { x: cx - 3.5, z: cz - 4.5, halfX: 2.8, halfZ: 0.6, height: 1.2 },
+      { x: cx - 6.0, z: cz - 2.5, halfX: 0.6, halfZ: 2.0, height: 1.2 },
+      { x: cx - 8.7, z: cz - 2.5, halfX: 0.3, halfZ: 2.3, height: 2.2 },
+      // Kitchen Island
+      { x: cx + 5.0, z: cz - 3.5, halfX: 1.3, halfZ: 2.1, height: 1.2 },
+      // Guest Bedroom Partition & Bed
+      { x: cx + 5.0, z: cz + 0.5, halfX: 3.0, halfZ: 0.2, height: 3.4 },
+      { x: cx + 5.0, z: cz + 3.5, halfX: 1.2, halfZ: 1.3, height: 1.2 },
+      // Upper Floor Partition Wall & Master Bed
+      { x: cx - 1.0, z: cz + 2.8, halfX: 0.2, halfZ: 2.8, height: totalHeight },
+      { x: cx - 5.0, z: cz + 2.8, halfX: 1.4, halfZ: 1.5, height: totalHeight },
+      // Terrace Wall
+      { x: cx, z: cz + 5.5, halfX: width / 2, halfZ: 0.2, height: totalHeight },
+    );
+
+    this.interiors.set("penthouse", {
+      id: "penthouse",
+      name: "Bompai Heights Luxury Penthouse",
+      districtLabel: "BOMPAI AVENUE · PENTHOUSE",
+      root: group,
+      colliders,
+      lights,
+      spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.6),
+      spawnYaw: Math.PI,
+      exitPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 0.9),
+      outdoorDoorPosition: new THREE.Vector3(18, 0, 39.5),
+      outdoorDoorYaw: Math.PI,
+      checkInteraction: (pos, state) => {
+        // 1. Executive Wall Safe in Master Suite (cx - 8.7, cz + 2.8, y = -56.5)
+        const distSafe = pos.distanceTo(new THREE.Vector3(cx - 8.7, cy + floor2Elevation + 0.1, cz + 2.8));
+        if (distSafe <= 2.4) {
+          if (state.ownedProperties?.includes("bompai-penthouse")) {
+            return {
+              prompt: "Bompai Heights Penthouse: Executive Deed Safe",
+              action: () => ({
+                statusMessage: "Executive Safe: Freehold Title Deed #BH-PENT-08 verified. 12-Panel Solar Inverter Battery Bank: 100% capacity.",
+              }),
+            };
+          }
+        }
+
+        // 2. Rooftop Skyline Terrace Vista (cx, cz + 6.8, y = -56.5)
+        const distTerrace = pos.distanceTo(new THREE.Vector3(cx, cy + floor2Elevation + 0.1, cz + 6.8));
+        if (distTerrace <= 2.4) {
+          return {
+            prompt: "Look Out Across Kano City Skyline",
+            action: () => ({
+              statusMessage: "Bompai Skyline Terrace: 360° panoramic view spanning from Dala Hill to Airport Road. The ancient and modern city stretches below.",
+            }),
+          };
+        }
+
+        // 3. Penthouse Lighting Chandelier Switch (cx - 1.0, cz - 1.0)
+        const distSwitch = pos.distanceTo(new THREE.Vector3(cx - 1.0, cy + 0.1, cz - 1.0));
+        if (distSwitch <= 2.0) {
+          return {
+            prompt: this.lightsOn ? "Switch Off Penthouse Chandelier" : "Switch On Penthouse Chandelier",
+            action: () => {
+              const on = this.toggleInteriorLights("penthouse");
+              return { statusMessage: on ? "Bompai Penthouse: Luxury crystal chandelier illuminated." : "Bompai Penthouse: Lights dimmed to ambient mode." };
+            },
+          };
+        }
+
+        return null;
+      },
+    });
+  }
+
+  // =========================================================================
+  // 3. Multi-Storey Apartment Interior (Unit 2B - Airport View Apartments)
+  // =========================================================================
   private buildApartmentInterior() {
     const cx = 260;
     const cy = -60;
@@ -216,73 +679,121 @@ export class BuildingInteriorManager {
     this.root.add(group);
 
     const colliders: Collider[] = [];
-    const width = 11;
-    const depth = 9;
-    const height = 3.4;
+    const lights: THREE.PointLight[] = [];
+    const width = 14;
+    const depth = 12;
+    const height = 3.5;
 
-    // Floor & Ceiling
-    addBox(group, this.materials.tileFloor || this.materials.concrete, 0, 0, 0, width, 0.1, depth, false);
-    addBox(group, this.materials.white, 0, height, 0, width, 0.1, depth, false);
+    const floorMat = this.materials.tileFloor || this.materials.concrete;
+    const wallMat = this.materials.white;
+    const woodMat = this.materials.wood;
+    const glassMat = this.materials.glassLit || this.materials.glass;
+    const darkMat = this.materials.darkTrim;
 
-    // Walls
-    addBox(group, this.materials.white, 0, height / 2, -depth / 2, width, height, 0.2); // North
-    addBox(group, this.materials.white, 0, height / 2, depth / 2, width, height, 0.2);  // South
-    addBox(group, this.materials.white, -width / 2, height / 2, 0, 0.2, height, depth); // West
-    addBox(group, this.materials.white, width / 2, height / 2, 0, 0.2, height, depth);  // East
+    // Floor & Ceiling Slabs
+    addBox(group, floorMat, 0, 0, 0, width, 0.1, depth, false);
+    addBox(group, wallMat, 0, height, 0, width, 0.1, depth, false);
 
-    // Living Room & Balcony
-    addBox(group, this.materials.cloth, -2.2, 0.45, -2.2, 2.6, 0.5, 1.0);
-    addBox(group, this.materials.cloth, -2.2, 0.85, -2.65, 2.6, 0.5, 0.25);
-    addBox(group, this.materials.wood, -2.2, 0.3, -0.9, 1.4, 0.35, 0.8);
+    // Perimeter Walls
+    addBox(group, wallMat, 0, height / 2, -depth / 2, width, height, 0.25); // North Wall
+    addBox(group, wallMat, 0, height / 2, depth / 2, width, height, 0.25);  // South Wall (Entry)
+    addBox(group, wallMat, -width / 2, height / 2, 0, 0.25, height, depth); // West Wall
+    addBox(group, wallMat, width / 2, height / 2, 0, 0.25, height, depth);  // East Wall
 
-    // Balcony Sliding Glass Door (East Wall)
-    addBox(group, this.materials.glassLit, 5.38, 1.4, -1.5, 0.08, 2.4, 2.6);
-    addBox(group, this.materials.metal, 5.38, 1.4, -1.5, 0.12, 2.45, 0.08); // Frame divider
+    // 1. Entrance Vestibule & Hallway (z: 3.5 to 5.5, x: -1.5 to 1.5)
+    addBox(group, woodMat, 0, 1.1, depth / 2 - 0.08, 1.2, 2.2, 0.1); // Front Door
 
-    // Dining Set
-    addBox(group, this.materials.wood, 2.2, 0.74, 1.8, 1.6, 0.08, 1.2);
+    // 2. Open-Concept Living Room (x: -6.0 to 0, z: -3.5 to 2.0)
+    addBox(group, this.materials.cloth, -3.2, 0.48, -0.8, 3.4, 0.52, 1.1); // Sofa
+    addBox(group, this.materials.cloth, -5.4, 0.48, 0.6, 1.0, 0.52, 2.2);  // Sofa L-extension
+    addBox(group, woodMat, -3.2, 0.35, 0.6, 1.6, 0.36, 0.9);              // Coffee Table
+    addBox(group, this.materials.clothRed, -3.2, 0.05, 0.2, 4.0, 0.02, 3.4, false); // Area Rug
+    // Entertainment Wall
+    addBox(group, darkMat, -3.2, 0.45, -3.8, 3.4, 0.6, 0.5);
+    addBox(group, this.materials.black, -3.2, 1.6, -3.85, 2.4, 1.3, 0.08);
+
+    // 3. Private Executive Balcony (x: -6.0 to 0, z: -5.8 to -4.0)
+    addBox(group, this.materials.concrete, -3.2, 0.05, -4.8, 5.6, 0.08, 1.6, false);
+    // Balcony Metal Railing
+    addBox(group, this.materials.metal, -3.2, 0.55, -5.7, 5.6, 1.1, 0.08);
+    // Sliding Glass Door
+    addBox(group, glassMat, -3.2, 1.4, -4.0, 3.2, 2.4, 0.08);
+
+    // 4. Open-Plan Kitchen & Dining Area (x: 1.0 to 6.2, z: -3.5 to 2.0)
+    // L-Shaped Kitchen Counter & Cabinets
+    addBox(group, this.materials.concrete, 5.2, 0.95, -1.8, 1.2, 1.0, 3.6);
+    addBox(group, this.materials.metal, 5.2, 1.02, -1.8, 1.3, 0.08, 3.8); // Steel top
+    // Dining Table & Chairs
+    addBox(group, woodMat, 2.6, 0.76, 0.2, 1.8, 0.08, 1.2);
     for (const sx of [-0.65, 0.65]) {
       for (const sz of [-0.45, 0.45]) {
-        addCyl(group, this.materials.metal, 2.2 + sx, 0.36, 1.8 + sz, 0.035, 0.72);
+        addCyl(group, this.materials.metal, 2.6 + sx, 0.38, 0.2 + sz, 0.035, 0.72);
       }
     }
-    // Dining chairs
-    addBox(group, this.materials.darkTrim, 2.2, 0.45, 0.8, 0.45, 0.45, 0.45);
-    addBox(group, this.materials.darkTrim, 2.2, 0.45, 2.8, 0.45, 0.45, 0.45);
 
-    // Rental Desk / Signboard
-    const deskMat = this.materials.wood;
-    addBox(group, deskMat, 2.8, 0.5, -3.2, 1.6, 0.85, 0.9);
-    const signMat = makeSignMaterial("UNIT 2B · RENTAL DESK\n₦75,000 / MO", "#1e3c28");
-    addBox(group, signMat, 2.8, 1.35, -3.2, 1.4, 0.65, 0.08);
+    // 5. Rental Desk & Deed Inspection Station (x: 4.0, z: -3.2)
+    addBox(group, woodMat, 2.8, 0.5, -3.2, 1.8, 0.85, 0.9);
+    const signMat = makeSignMaterial("UNIT 2B · LEASE & DEED DESK\n₦75,000 / MO · ₦18,000,000 FREEHOLD", "#1e3c28");
+    addBox(group, signMat, 2.8, 1.35, -3.2, 1.6, 0.65, 0.08);
 
-    // Bedroom Partition & Bed
-    addBox(group, this.materials.white, -1.6, height / 2, 2.2, 0.2, height, 4.4);
-    addBox(group, this.materials.wood, -3.4, 0.38, 2.4, 2.0, 0.45, 2.2);
-    addBox(group, this.materials.white, -3.4, 0.62, 2.4, 1.9, 0.22, 2.1);
+    // 6. Master Bedroom (x: -6.0 to -1.0, z: 2.2 to 5.5)
+    addBox(group, wallMat, -1.0, height / 2, 3.8, 0.2, height, 3.6); // Partition Wall
+    // Queen Bed
+    addBox(group, woodMat, -3.8, 0.42, 3.8, 2.2, 0.48, 2.4);
+    addBox(group, this.materials.white, -3.8, 0.68, 3.8, 2.1, 0.22, 2.3);
+    addBox(group, darkMat, -3.8, 1.2, 5.1, 2.4, 1.2, 0.12); // Headboard
 
-    // Exit Door
-    addBox(group, this.materials.wood, 0, 1.1, depth / 2 - 0.08, 1.2, 2.2, 0.1);
+    // 7. Bathroom & Toilet (x: 1.5 to 6.2, z: 2.2 to 5.5)
+    addBox(group, wallMat, 1.2, height / 2, 3.8, 0.2, height, 3.6); // Partition Wall
+    // Vanity Sink & Mirror
+    addBox(group, this.materials.tileFloor || this.materials.white, 3.0, 0.85, 4.8, 1.2, 0.85, 0.6);
+    addBox(group, glassMat, 3.0, 1.65, 5.15, 0.9, 0.8, 0.04); // Mirror
+    // Shower Stall
+    addBox(group, glassMat, 5.0, 1.2, 3.8, 1.4, 2.4, 1.4);
 
-    // Warm Light
-    const aptLight = new THREE.PointLight("#fff5e6", 1.8, 13, 1.3);
-    aptLight.position.set(0, height - 0.6, 0);
-    group.add(aptLight);
+    // Interactive Doors
+    this.addInteractiveDoor(group, "apartment", "apt_bedroom_door", "Master Bedroom Door", -1.0, 0, 2.2, 1.1, 2.4, 0.08, woodMat, cx, cz, false, colliders);
+    this.addInteractiveDoor(group, "apartment", "apt_bathroom_door", "Bathroom Door", 1.2, 0, 2.2, 1.1, 2.4, 0.08, woodMat, cx, cz, false, colliders);
+    this.addInteractiveDoor(group, "apartment", "apt_balcony_door", "Balcony Sliding Door", -3.2, 0, -4.0, 1.4, 2.4, 0.08, glassMat, cx, cz, true, colliders);
 
+    // Warm Lighting
+    const aptLivingLight = new THREE.PointLight("#fff5e6", 2.2, 14, 1.2);
+    aptLivingLight.position.set(-3.2, height - 0.6, -0.8);
+    aptLivingLight.userData.baseIntensity = 2.2;
+    group.add(aptLivingLight);
+    lights.push(aptLivingLight);
+
+    const aptBedLight = new THREE.PointLight("#ffe0b2", 1.6, 10, 1.3);
+    aptBedLight.position.set(-3.8, height - 0.7, 3.8);
+    aptBedLight.userData.baseIntensity = 1.6;
+    group.add(aptBedLight);
+    lights.push(aptBedLight);
+
+    // Colliders (shifted to world coordinates cx, cz)
     colliders.push(
+      // Perimeter Boundary Walls
       { x: cx, z: cz - depth / 2, halfX: width / 2, halfZ: 0.3, height },
       { x: cx, z: cz + depth / 2, halfX: width / 2, halfZ: 0.3, height },
       { x: cx - width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height },
       { x: cx + width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height },
-      // Sofa
-      { x: cx - 2.2, z: cz - 2.2, halfX: 1.4, halfZ: 0.65, height: 1.1 },
-      // Dining table
-      { x: cx + 2.2, z: cz + 1.8, halfX: 0.9, halfZ: 0.7, height: 1.0 },
+      // Living Room Sofa & Media Credenza
+      { x: cx - 3.2, z: cz - 0.8, halfX: 1.8, halfZ: 0.6, height: 1.2 },
+      { x: cx - 5.4, z: cz + 0.6, halfX: 0.6, halfZ: 1.2, height: 1.2 },
+      { x: cx - 3.2, z: cz - 3.8, halfX: 1.8, halfZ: 0.3, height: 1.8 },
+      // Balcony Railing
+      { x: cx - 3.2, z: cz - 5.7, halfX: 2.8, halfZ: 0.1, height: 1.2 },
+      // Kitchen Counter
+      { x: cx + 5.2, z: cz - 1.8, halfX: 0.7, halfZ: 1.9, height: 1.2 },
+      // Dining Table
+      { x: cx + 2.6, z: cz + 0.2, halfX: 1.0, halfZ: 0.7, height: 1.1 },
       // Rental Desk
-      { x: cx + 2.8, z: cz - 3.2, halfX: 0.9, halfZ: 0.6, height: 1.8 },
-      // Bedroom Wall & Bed
-      { x: cx - 1.6, z: cz + 2.2, halfX: 0.2, halfZ: 2.3, height },
-      { x: cx - 3.4, z: cz + 2.4, halfX: 1.1, halfZ: 1.2, height: 1.1 },
+      { x: cx + 4.0, z: cz - 3.2, halfX: 1.0, halfZ: 0.6, height: 1.8 },
+      // Bedroom Partition & Bed
+      { x: cx - 1.0, z: cz + 3.8, halfX: 0.2, halfZ: 1.8, height },
+      { x: cx - 3.8, z: cz + 3.8, halfX: 1.2, halfZ: 1.3, height: 1.2 },
+      // Bathroom Partition
+      { x: cx + 1.2, z: cz + 3.8, halfX: 0.2, halfZ: 1.8, height },
+      { x: cx + 5.0, z: cz + 3.8, halfX: 0.8, halfZ: 0.8, height: 2.2 },
     );
 
     this.interiors.set("apartment", {
@@ -291,13 +802,14 @@ export class BuildingInteriorManager {
       districtLabel: "AIRPORT ROAD · APARTMENTS",
       root: group,
       colliders,
+      lights,
       spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.6),
       spawnYaw: Math.PI,
       exitPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.1),
       outdoorDoorPosition: new THREE.Vector3(48, 0, -43.5),
       outdoorDoorYaw: 0,
       checkInteraction: (pos, state) => {
-        // Distance to rental & deed desk (cx + 2.8, cz - 3.2)
+        // Distance to rental & deed desk (cx + 4.0, cz - 3.2)
         const d = pos.distanceTo(new THREE.Vector3(cx + 2.8, cy + 0.1, cz - 3.2));
         if (d <= 2.2) {
           if (state.ownedProperties?.includes("unit-2b")) {
@@ -342,7 +854,9 @@ export class BuildingInteriorManager {
     });
   }
 
-  // 3. St. Stephen's Anglican Church Interior
+  // =========================================================================
+  // 4. St. Stephen's Anglican Church Interior
+  // =========================================================================
   private buildChurchInterior() {
     const cx = 300;
     const cy = -60;
@@ -467,13 +981,13 @@ export class BuildingInteriorManager {
         const d = pos.distanceTo(new THREE.Vector3(cx, cy + 0.1, cz - depth / 2 + 4.8));
         if (d <= 2.4) {
           return {
-            prompt: "Kneel in Prayer / Church Offering (₦1,000)",
+            prompt: "Kneel in Prayer / Church Offering (Ôéª1,000)",
             action: () => {
               if (state.cash < 1000) {
                 return { statusMessage: "You offer a silent prayer of gratitude and hope." };
               }
               return {
-                statusMessage: "Offering given (₦1,000). Pastor: 'Peace and blessings be upon your household.'",
+                statusMessage: "Offering given (Ôéª1,000). Pastor: 'Peace and blessings be upon your household.'",
                 cashDelta: -1000,
               };
             },
@@ -570,14 +1084,14 @@ export class BuildingInteriorManager {
             };
           }
           return {
-            prompt: `Pay KAROTA Fine (₦${state.trafficFine.toLocaleString()}) & Clear Vehicle Notice`,
+            prompt: `Pay KAROTA Fine (Ôéª${state.trafficFine.toLocaleString()}) & Clear Vehicle Notice`,
             action: () => {
               if (state.cash < state.trafficFine) {
-                return { statusMessage: `Insufficient cash: You need ₦${state.trafficFine.toLocaleString()} to clear this fine.` };
+                return { statusMessage: `Insufficient cash: You need Ôéª${state.trafficFine.toLocaleString()} to clear this fine.` };
               }
               const fineAmount = state.trafficFine;
               return {
-                statusMessage: `Penalty Paid (₦${fineAmount}). Official KAROTA clearance receipt issued!`,
+                statusMessage: `Penalty Paid (Ôéª${fineAmount}). Official KAROTA clearance receipt issued!`,
                 cashDelta: -fineAmount,
                 clearFine: true,
               };
@@ -633,7 +1147,7 @@ export class BuildingInteriorManager {
     addBox(group, this.materials.darkTrim, counterX, 1.12, counterZ, 5.4, 0.08, 1.3);
     addBox(group, this.materials.black, counterX - 1.4, 1.3, counterZ, 0.5, 0.35, 0.4);
     addBox(group, this.materials.glassLit, counterX + 1.1, 1.35, counterZ, 2.2, 0.45, 0.7);
-    const menuSign = makeSignMaterial("AREWA KITCHEN SPECIALS · JOLLOF RICE ₦3,500 · KANO SUYA ₦2,500 · CHAPMAN ₦1,200", "#4c1a0e");
+    const menuSign = makeSignMaterial("AREWA KITCHEN SPECIALS · JOLLOF RICE Ôéª3,500 · KANO SUYA Ôéª2,500 · CHAPMAN Ôéª1,200", "#4c1a0e");
     addBox(group, menuSign, counterX, 2.8, -depth / 2 + 0.15, 6.2, 0.9, 0.08);
 
     // Chef / Server Behind Counter
@@ -703,10 +1217,10 @@ export class BuildingInteriorManager {
         const distCounter = pos.distanceTo(new THREE.Vector3(cx + counterX, cy + 0.1, cz + counterZ));
         if (distCounter <= 2.5) {
           return {
-            prompt: "Order Kano Suya & Jollof Platter (₦3,500)",
+            prompt: "Order Kano Suya & Jollof Platter (Ôéª3,500)",
             action: () => {
               if (state.cash < 3500) {
-                return { statusMessage: "Insufficient cash: You need ₦3,500 for the special platter." };
+                return { statusMessage: "Insufficient cash: You need Ôéª3,500 for the special platter." };
               }
               return {
                 statusMessage: "Delicious Kano Beef Suya & Jollof Rice served! Recharged and energized.",
@@ -733,18 +1247,18 @@ export class BuildingInteriorManager {
             return {
               prompt: "Arewa Suya Franchise Share: Active Partner",
               action: () => ({
-                statusMessage: "You are an equity partner in Arewa Suya Lounge. Yields ~₦30,000/day net profit.",
+                statusMessage: "You are an equity partner in Arewa Suya Lounge. Yields ~Ôéª30,000/day net profit.",
               }),
             };
           }
           return {
-            prompt: "Invest: Acquire Arewa Suya Franchise Share (₦1,200,000)",
+            prompt: "Invest: Acquire Arewa Suya Franchise Share (Ôéª1,200,000)",
             action: () => {
               if (state.cash < 1200000) {
-                return { statusMessage: "Insufficient capital: Arewa Suya franchise equity requires ₦1,200,000." };
+                return { statusMessage: "Insufficient capital: Arewa Suya franchise equity requires Ôéª1,200,000." };
               }
               return {
-                statusMessage: "Franchise Partnership Agreement signed! You now earn ~₦30,000/day net profit.",
+                statusMessage: "Franchise Partnership Agreement signed! You now earn ~Ôéª30,000/day net profit.",
                 cashDelta: -1200000,
                 purchasedBusiness: "arewa-suya-franchise",
               };
@@ -853,16 +1367,16 @@ export class BuildingInteriorManager {
         const distConsole = pos.distanceTo(new THREE.Vector3(cx + row1X + 0.8, cy + 0.1, cz - 0.6));
         if (distConsole <= 2.2) {
           return {
-            prompt: "Play Kano Street Drift Tournament (₦1,000 Entry)",
+            prompt: "Play Kano Street Drift Tournament (Ôéª1,000 Entry)",
             action: () => {
               if (state.cash < 1000) {
-                return { statusMessage: "Insufficient cash: You need ₦1,000 for tournament entry fee." };
+                return { statusMessage: "Insufficient cash: You need Ôéª1,000 for tournament entry fee." };
               }
               const score = Math.floor(7000 + Math.random() * 2800);
               const won = score >= 8200;
               if (won) {
                 return {
-                  statusMessage: `Championship Victory! Score: ${score.toLocaleString()} pts! Won 1st Place & ₦5,000 prize!`,
+                  statusMessage: `Championship Victory! Score: ${score.toLocaleString()} pts! Won 1st Place & Ôéª5,000 prize!`,
                   cashDelta: 4000,
                   scoreDelta: score,
                 };
@@ -893,18 +1407,18 @@ export class BuildingInteriorManager {
             return {
               prompt: "PS5 Tournament Rig Station: Active Enterprise",
               action: () => ({
-                statusMessage: "You own 2 commercial tournament PS5 stations at the Cyber Hub. Yields ~₦18,000/day net profit.",
+                statusMessage: "You own 2 commercial tournament PS5 stations at the Cyber Hub. Yields ~Ôéª18,000/day net profit.",
               }),
             };
           }
           return {
-            prompt: "Acquire Dual PS5 Tournament Rig Station (₦800,000)",
+            prompt: "Acquire Dual PS5 Tournament Rig Station (Ôéª800,000)",
             action: () => {
               if (state.cash < 800000) {
-                return { statusMessage: "Insufficient funds: Dual PS5 Tournament rig setup requires ₦800,000." };
+                return { statusMessage: "Insufficient funds: Dual PS5 Tournament rig setup requires Ôéª800,000." };
               }
               return {
-                statusMessage: "Tournament Rig stations acquired! Generating ~₦18,000/day commercial esports revenue.",
+                statusMessage: "Tournament Rig stations acquired! Generating ~Ôéª18,000/day commercial esports revenue.",
                 cashDelta: -800000,
                 purchasedBusiness: "cyber-hub-station",
               };

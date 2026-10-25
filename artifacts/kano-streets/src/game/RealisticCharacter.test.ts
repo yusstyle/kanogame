@@ -28,6 +28,19 @@ import { createWorld } from "./world";
 import { toSvgX, toSvgY } from "../components/CityMapModal";
 import { WeatherSystem, WEATHER_CONFIGS } from "./weatherSystem";
 import { AudioSystem } from "./audioSystem";
+import {
+  PROPERTY_REGISTRY,
+  getPropertyRegistryEntry,
+  getPropertyByInteriorId,
+  getPropertyByEntrance,
+} from "./propertyRegistry";
+import {
+  AuthoritativeLedger,
+  computePayloadChecksum,
+  type PlayerIdentity,
+  type TransactionRequest,
+} from "./networkProtocol";
+import { BuildingInteriorManager } from "./BuildingInteriors";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1621,4 +1634,346 @@ test("Milestone 7: Save/Load Schema Backward Compatibility with Weather & Audio 
   assert.equal(loadedLegacy.cash, 50000);
   assert.equal(loadedLegacy.weatherPreset, undefined);
   assert.equal(loadedLegacy.audioMuted, undefined);
+});
+
+// =============================================================================
+// MILESTONE 8: FULLY ENTERABLE PROPERTY OWNERSHIP & BILLION-PLAYER SCALABILITY
+// =============================================================================
+
+test("Milestone 8: Property Registry and District Spatial Anchors", () => {
+  const registeredIds = Object.keys(PROPERTY_REGISTRY);
+  assert.ok(registeredIds.includes("unit-2b"), "Airport View Unit 2B must be registered");
+  assert.ok(registeredIds.includes("bompai-penthouse"), "Bompai Penthouse must be registered");
+  assert.ok(registeredIds.includes("albaraka-villa"), "Al-Baraka Villa must be registered");
+
+  // Verify Unit 2B specs
+  const unit2b = getPropertyRegistryEntry("unit-2b");
+  assert.ok(unit2b, "Unit 2B registry entry must exist");
+  assert.equal(unit2b.interiorId, "apartment");
+  assert.equal(unit2b.purchasePrice, 18000000);
+  assert.equal(unit2b.rentMonthly, 75000);
+  assert.ok(unit2b.rooms.some((r) => r.name.includes("Balcony")), "Unit 2B must have private balcony");
+  assert.ok(unit2b.rooms.some((r) => r.name.includes("Living Room")), "Unit 2B must have living room");
+
+  // Verify Bompai Penthouse specs
+  const penthouse = getPropertyRegistryEntry("bompai-penthouse");
+  assert.ok(penthouse, "Penthouse registry entry must exist");
+  assert.equal(penthouse.interiorId, "penthouse");
+  assert.equal(penthouse.purchasePrice, 35000000);
+  assert.ok(penthouse.rooms.some((r) => r.name.includes("Grand Staircase")), "Penthouse must have grand staircase");
+  assert.ok(penthouse.rooms.some((r) => r.name.includes("Upper Mezzanine")), "Penthouse must have upper mezzanine");
+  assert.ok(penthouse.rooms.some((r) => r.name.includes("Skyline")), "Penthouse must have skyline terrace");
+
+  // Verify Al-Baraka Villa specs
+  const villa = getPropertyRegistryEntry("albaraka-villa");
+  assert.ok(villa, "Villa registry entry must exist");
+  assert.equal(villa.interiorId, "house");
+  assert.equal(villa.purchasePrice, 65000000);
+  assert.ok(villa.rooms.some((r) => r.name.includes("Zaure & Veranda")), "Villa must have Zaure veranda with Dakali");
+  assert.ok(villa.rooms.some((r) => r.name.includes("Dakin Karatu")), "Villa must have Dakin Karatu prayer/study room");
+  assert.ok(villa.rooms.some((r) => r.name.includes("Compound Utility Yard")), "Villa must have compound yard with generator");
+
+  // Test reverse lookups by interiorId and entrance coordinates
+  assert.equal(getPropertyByInteriorId("penthouse")?.id, "bompai-penthouse");
+  assert.equal(getPropertyByInteriorId("house")?.id, "albaraka-villa");
+  assert.equal(getPropertyByInteriorId("apartment")?.id, "unit-2b");
+
+  const nearPenthouseEntrance = new THREE.Vector3(18.2, 0, 39.8);
+  assert.equal(getPropertyByEntrance(nearPenthouseEntrance)?.id, "bompai-penthouse");
+
+  const nearVillaEntrance = new THREE.Vector3(44.1, 0, 44.9);
+  assert.equal(getPropertyByEntrance(nearVillaEntrance)?.id, "albaraka-villa");
+
+  const nearUnit2bEntrance = new THREE.Vector3(48.0, 0, -43.2);
+  assert.equal(getPropertyByEntrance(nearUnit2bEntrance)?.id, "unit-2b");
+});
+
+test("Milestone 8: 100% Walkable 3D Interiors, Multi-Storey Elevation & Dynamic Door Colliders", () => {
+  const materials = createMaterials();
+  const interiorManager = new BuildingInteriorManager(materials);
+
+  // 1. Verify all 7 zones initialized
+  assert.ok(interiorManager.interiors.has("house"), "Villa interior zone must exist");
+  assert.ok(interiorManager.interiors.has("apartment"), "Apartment interior zone must exist");
+  assert.ok(interiorManager.interiors.has("penthouse"), "Penthouse interior zone must exist");
+  assert.ok(interiorManager.interiors.has("church"), "Church interior zone must exist");
+  assert.ok(interiorManager.interiors.has("police-post"), "Police post interior zone must exist");
+  assert.ok(interiorManager.interiors.has("restaurant"), "Restaurant interior zone must exist");
+  assert.ok(interiorManager.interiors.has("gaming-hub"), "Gaming hub interior zone must exist");
+
+  // 2. Multi-Storey Staircase Elevation
+  // Floor 1 Living Salon: cx = 300, cz = 80, z < 80.8 -> returns -59.9
+  assert.equal(interiorManager.getSurfaceHeight("penthouse", 300, 75), -59.9, "Floor 1 salon must be base elevation");
+  // Ascending Staircase: x in [-1.5, 2.2], z in [80.8, 85.8]
+  const midStairElevation = interiorManager.getSurfaceHeight("penthouse", 300, 83.2);
+  assert.ok(midStairElevation > -59.9 && midStairElevation < -56.5, "Mid-stair elevation must be between floors");
+  // Upper Mezzanine & Rooftop Terrace: z >= 85.8 or upper rooms -> returns -56.5
+  assert.equal(interiorManager.getSurfaceHeight("penthouse", 300, 86.8), -56.5, "Upper level must be -56.5");
+
+  // 3. Interactive Door Systems & Dynamic Colliders
+  assert.ok(interiorManager.interactiveDoors.length >= 8, "Must register at least 8 interactive interior doors");
+  const masterDoor = interiorManager.interactiveDoors.find((d) => d.id === "villa_master_door");
+  assert.ok(masterDoor, "Villa master bedroom door must be registered");
+  assert.equal(masterDoor.isOpen, false, "Doors must default to closed");
+  assert.equal(masterDoor.collider.x, masterDoor.position.x, "Closed door collider must match world position");
+
+  // Toggle Door Open
+  const toggleRes1 = interiorManager.toggleDoor("villa_master_door");
+  assert.equal(toggleRes1.isOpen, true, "Door should now be open");
+  assert.equal(masterDoor.collider.x, 9999, "Open door collider must be shifted away so player can walk through");
+
+  // Toggle Door Closed
+  const toggleRes2 = interiorManager.toggleDoor("villa_master_door");
+  assert.equal(toggleRes2.isOpen, false, "Door should now be closed");
+  assert.equal(masterDoor.collider.x, masterDoor.position.x, "Closed door collider must be restored");
+
+  // Test getNearbyDoor proximity lookup
+  interiorManager.activeInterior = "house";
+  const nearPos = masterDoor.position.clone().add(new THREE.Vector3(0.5, 0, 0.5));
+  const detectedDoor = interiorManager.getNearbyDoor(nearPos, 2.0);
+  assert.equal(detectedDoor?.id, "villa_master_door", "Should detect nearby door within threshold");
+});
+
+test("Milestone 8: In-Home Interactivity, Light Switches, Wall Safe & Generator House", () => {
+  const materials = createMaterials();
+  const interiorManager = new BuildingInteriorManager(materials);
+
+  // 1. Light switch toggle test
+  const initialLightState = interiorManager.lightsOn;
+  const toggledLight = interiorManager.toggleInteriorLights("house");
+  assert.equal(toggledLight, !initialLightState, "toggleInteriorLights should flip state");
+
+  // 2. Villa Utility Yard: 25kVA Generator & Borehole
+  const villa = interiorManager.interiors.get("house");
+  assert.ok(villa?.checkInteraction, "Villa must have checkInteraction");
+  const genPos = new THREE.Vector3(220 + 5.5, -60 + 0.1, 0 - 8.5);
+  const genInter = villa.checkInteraction(genPos, { cash: 100000, trafficFine: 0, hasApartmentRental: false });
+  assert.ok(genInter, "Must detect interaction near 25kVA generator house");
+  assert.ok(genInter.prompt.includes("25kVA Soundproof Diesel Generator"));
+  const genStatus = genInter.action();
+  assert.ok(genStatus.statusMessage.includes("Lister-Petter"), "Status must report generator specs");
+  assert.ok(genStatus.statusMessage.includes("Borehole pressure"), "Status must report borehole pressure");
+
+  // 3. Penthouse: Executive Safe & Skyline Vista
+  const penthouse = interiorManager.interiors.get("penthouse");
+  assert.ok(penthouse?.checkInteraction, "Penthouse must have checkInteraction");
+  // Wall safe in master suite (cx - 8.7, cz + 2.8, y = -56.5)
+  const safePos = new THREE.Vector3(300 - 8.7, -60 + 3.4 + 0.1, 80 + 2.8);
+  const safeInter = penthouse.checkInteraction(safePos, {
+    cash: 5000000,
+    trafficFine: 0,
+    hasApartmentRental: false,
+    ownedProperties: ["bompai-penthouse"],
+  });
+  assert.ok(safeInter, "Must detect interaction near executive deed safe");
+  assert.ok(safeInter.prompt.includes("Executive Deed Safe"));
+  const safeRes = safeInter.action();
+  assert.ok(safeRes.statusMessage.includes("#BH-PENT-08"), "Must verify title deed number");
+  assert.ok(safeRes.statusMessage.includes("12-Panel Solar Inverter"), "Must report solar backup");
+
+  // Skyline Terrace Vista (cx, cz + 6.8, y = -56.5)
+  const terracePos = new THREE.Vector3(300, -60 + 3.4 + 0.1, 80 + 6.8);
+  const vistaInter = penthouse.checkInteraction(terracePos, {
+    cash: 100000,
+    trafficFine: 0,
+    hasApartmentRental: false,
+  });
+  assert.ok(vistaInter, "Must detect vista interaction on skyline terrace");
+  assert.ok(vistaInter.prompt.includes("Kano City Skyline"));
+  const vistaRes = vistaInter.action();
+  assert.ok(vistaRes.statusMessage.includes("Dala Hill"), "Vista should describe panoramic Kano view");
+});
+
+test("Milestone 8: GameEngine Door Entry Restrictions, Purchase Transitions & Safe Outdoor Exit", () => {
+  const { canvas, rendererFactory } = installBrowserStubs();
+
+  let latestSnapshot: any = null;
+  const engine = new GameEngine(
+    canvas,
+    {
+      onSnapshot: (s) => {
+        latestSnapshot = s;
+      },
+      onPause: () => {},
+    },
+    rendererFactory,
+  );
+  engine.setScreen("playing");
+
+  // 1. Approach Unit 2B front door at (48, 0, -43.5) with starting cash ₦150,000
+  // @ts-expect-error accessing private field
+  engine.playerPosition.set(48, 0, -43.5);
+  // @ts-expect-error accessing private method
+  engine.pushSnapshot(true);
+  assert.ok(latestSnapshot.interactionPrompt.includes("Lease Unit 2B Apartment"), "Prompt should invite player to lease");
+
+  // Lease Unit 2B
+  // @ts-expect-error accessing private method
+  engine.handleInteract();
+  assert.equal(latestSnapshot.cash, 150000 - 75000, "₦75,000 deducted for monthly lease");
+  assert.equal(latestSnapshot.hasApartmentRental, true, "Player now holds apartment lease");
+  assert.equal(latestSnapshot.activeInterior, "apartment", "Player successfully entered apartment interior");
+  assert.ok(latestSnapshot.location.includes("APARTMENTS"), "Location indicates inside apartment");
+
+  // Walk to exit door inside apartment and exit back outside
+  // @ts-expect-error accessing private field
+  engine.playerPosition.set(260, -59.9, 0 + 4.1);
+  // @ts-expect-error accessing private method
+  engine.handleInteract();
+  assert.equal(latestSnapshot.activeInterior, null, "Player safely exited back outside");
+  assert.equal(Math.round(latestSnapshot.playerCoords.x), 48, "Outdoor exit X coordinate preserved");
+  assert.equal(Math.round(latestSnapshot.playerCoords.z), -43, "Outdoor exit Z coordinate preserved");
+
+  // 2. Approach Bompai Penthouse at (18, 0, 39.5) with insufficient cash (₦75,000)
+  // @ts-expect-error accessing private field
+  engine.playerPosition.set(18, 0, 39.5);
+  // @ts-expect-error accessing private method
+  engine.pushSnapshot(true);
+  assert.ok(latestSnapshot.interactionPrompt.includes("For Sale"), "Prompt should indicate penthouse is for sale");
+  // @ts-expect-error accessing private method
+  engine.handleInteract();
+  assert.equal(latestSnapshot.activeInterior, null, "Player cannot enter unowned penthouse without funds");
+  assert.ok(latestSnapshot.statusMessage.includes("35,000,000"), "Status indicates ₦35M required");
+
+  // Grant player funds to purchase penthouse
+  // @ts-expect-error accessing private field
+  engine.cash = 45000000;
+  // @ts-expect-error accessing private method
+  engine.pushSnapshot(true);
+  assert.ok(latestSnapshot.interactionPrompt.includes("Purchase Bompai Heights Luxury Penthouse"), "Prompt offers purchase");
+  // @ts-expect-error accessing private method
+  engine.handleInteract();
+  assert.equal(latestSnapshot.cash, 45000000 - 35000000, "₦35M deducted for freehold Certificate of Occupancy");
+  assert.equal(latestSnapshot.activeInterior, "penthouse", "Player automatically transitions inside purchased penthouse");
+  assert.ok(latestSnapshot.ownedProperties.includes("bompai-penthouse"), "Property added to player's owned portfolio");
+
+  // Exit penthouse back outside
+  // @ts-expect-error accessing private field
+  engine.playerPosition.set(300, -59.9, 87.2);
+  // @ts-expect-error accessing private method
+  engine.handleInteract();
+  assert.equal(latestSnapshot.activeInterior, null, "Player safely exited back outdoors");
+  assert.equal(Math.round(latestSnapshot.playerCoords.x), 18, "Exit X matches Bompai door");
+
+  // 3. Approach Al-Baraka Villa at (44, 0, 45)
+  // @ts-expect-error accessing private field
+  engine.playerPosition.set(44, 0, 45);
+  // @ts-expect-error accessing private field
+  engine.cash = 70000000;
+  // @ts-expect-error accessing private method
+  engine.pushSnapshot(true);
+  assert.ok(latestSnapshot.interactionPrompt.includes("Purchase Al-Baraka Executive Villa"), "Prompt offers purchase");
+  // @ts-expect-error accessing private method
+  engine.handleInteract();
+  assert.equal(latestSnapshot.cash, 70000000 - 65000000, "₦65M deducted for freehold Certificate of Occupancy");
+  assert.equal(latestSnapshot.activeInterior, "house", "Player entered Al-Baraka Villa");
+  assert.ok(latestSnapshot.ownedProperties.includes("albaraka-villa"), "Villa added to owned portfolio");
+
+  // Exit villa back outside
+  // @ts-expect-error accessing private field
+  engine.playerPosition.set(220, -59.9, 7.9);
+  // @ts-expect-error accessing private method
+  engine.handleInteract();
+  assert.equal(latestSnapshot.activeInterior, null, "Player safely exited villa back outdoors");
+  assert.equal(Math.round(latestSnapshot.playerCoords.x), 44, "Exit X matches Villa door");
+});
+
+test("Milestone 8: Billion-Player Scalability Contracts, Authoritative Ledger & Idempotency", () => {
+  const ledger = new AuthoritativeLedger();
+
+  const player1: PlayerIdentity = {
+    playerId: "usr_018fa9c0_kano_01",
+    displayName: "Aliyu Dan-Kano",
+    homeRegion: "africa-west",
+    createdAt: Date.now(),
+    reputationScore: 100,
+  };
+
+  ledger.registerPlayer(player1, 50000000); // ₦50M wallet
+
+  // 1. Submit initial property purchase transaction
+  const txRequest1: TransactionRequest = {
+    idempotencyKey: "idemp_tx_001_bompai_purchase",
+    playerId: player1.playerId,
+    type: "property_purchase",
+    propertyId: "bompai-penthouse",
+    amount: 35000000,
+    timestamp: Date.now(),
+  };
+
+  const res1 = ledger.processTransaction(txRequest1);
+  assert.equal(res1.success, true, "Transaction should succeed");
+  assert.equal(res1.balanceAfter, 15000000, "Wallet should be reduced from ₦50M to ₦15M");
+  const deed = ledger.getPropertyTitle("bompai-penthouse");
+  assert.ok(deed, "Deed record must be generated");
+  assert.equal(deed.propertyId, "bompai-penthouse");
+  assert.equal(deed.ownerPlayerId, player1.playerId);
+  assert.ok(deed.signature.length >= 8, "Deed must carry cryptographic signature hash");
+
+  // 2. Re-submit EXACT duplicate transaction with identical idempotencyKey (network retry simulation)
+  const resDuplicate = ledger.processTransaction(txRequest1);
+  assert.equal(resDuplicate.success, true, "Idempotent response must confirm success");
+  assert.equal(resDuplicate.isDuplicate, true, "Duplicate transaction must be flagged");
+  assert.equal(resDuplicate.balanceAfter, 15000000, "Balance must NOT be deducted a second time!");
+  assert.equal(resDuplicate.receiptCode, res1.receiptCode, "Same receipt code must be returned");
+
+  // 3. Second player attempts to acquire the already owned freehold property
+  const player2: PlayerIdentity = {
+    playerId: "usr_018fa9c0_kano_02",
+    displayName: "Sani Katsina",
+    homeRegion: "africa-west",
+    createdAt: Date.now(),
+    reputationScore: 50,
+  };
+  ledger.registerPlayer(player2, 80000000);
+
+  const txRequest2: TransactionRequest = {
+    idempotencyKey: "idemp_tx_002_conflict_bompai",
+    playerId: player2.playerId,
+    type: "property_purchase",
+    propertyId: "bompai-penthouse",
+    amount: 35000000,
+    timestamp: Date.now(),
+  };
+
+  const resConflict = ledger.processTransaction(txRequest2);
+  assert.equal(resConflict.success, false, "Second purchase of exclusive freehold must be rejected");
+  assert.ok(resConflict.errorMessage?.includes("already owned"), "Error cites already owned");
+  assert.equal(ledger.getPlayerBalance(player2.playerId), 80000000, "Player 2 funds must remain untouched");
+
+  // 4. Cloud Save Payload Checksum Verification
+  const validSaveData = {
+    version: 2,
+    cash: 15000000,
+    trafficFine: 0,
+    hasApartmentRental: false,
+    ownedProperties: ["bompai-penthouse" as PropertyId],
+    ownedBusinesses: [],
+    dayCount: 5,
+    vehicleUpgrade: { engineStage: 1, paintColor: "#1a365d", suspensionUpgraded: true },
+    completedMissions: ["career_logistics_01"],
+    careerEarnings: 45000,
+    savedAt: 1729864800000,
+  };
+
+  const checksum = computePayloadChecksum(validSaveData);
+  assert.ok(checksum.length >= 8, "Checksum must be non-empty hex string");
+
+  const syncPayload = {
+    playerId: player1.playerId,
+    sequenceNumber: 14,
+    timestamp: Date.now(),
+    saveData: validSaveData,
+    checksum,
+  };
+
+  const syncResultValid = ledger.verifyCloudSavePayload(syncPayload);
+  assert.equal(syncResultValid.valid, true, "Valid cloud save sync should succeed");
+
+  // Tamper with save data without updating checksum
+  const tamperedSaveData = { ...validSaveData, cash: 999999999 };
+  const tamperedPayload = { ...syncPayload, saveData: tamperedSaveData };
+  const syncResultTampered = ledger.verifyCloudSavePayload(tamperedPayload);
+  assert.equal(syncResultTampered.valid, false, "Tampered cloud save must be rejected");
+  assert.ok(syncResultTampered.reason?.includes("Checksum mismatch"), "Rejection message must cite checksum mismatch");
 });

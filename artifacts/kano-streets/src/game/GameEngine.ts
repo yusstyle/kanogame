@@ -21,7 +21,7 @@ import { buildNavigationNetwork, type NavigationNetwork } from "./navigation";
 import { PedestrianSystem } from "./PedestrianSystem";
 import { TrafficSystem } from "./TrafficSystem";
 import { createWorld } from "./world";
-import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType, CareerPathChoice } from "./types";
+import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType, CareerPathChoice, PropertyId } from "./types";
 import { SocialSystem } from "./socialSystem";
 import { EconomySystem } from "./economySystem";
 import { KANO_LANDMARKS, getNearestLandmark } from "./landmarks";
@@ -29,6 +29,7 @@ import { MissionSystem } from "./missionSystem";
 import { StorySystem } from "./storySystem";
 import { WeatherSystem, type WeatherPreset } from "./weatherSystem";
 import { AudioSystem } from "./audioSystem";
+import { getPropertyByEntrance } from "./propertyRegistry";
 
 const PLAYER_START = new THREE.Vector3(-4, 0, -4);
 const CAR_START = new THREE.Vector3(-2, 0, -8);
@@ -692,7 +693,16 @@ export class GameEngine {
     if (this.interiorManager.activeInterior) {
       const activeZone = this.interiorManager.getActiveZone();
       if (activeZone) {
-        // Distance to exit door
+        // First check: interactive interior room doors (open/close)
+        const nearbyDoor = this.interiorManager.getNearbyDoor(this.playerPosition, 2.0);
+        if (nearbyDoor) {
+          const res = this.interiorManager.toggleDoor(nearbyDoor.id);
+          this.statusMessage = res.message;
+          this.pushSnapshot(true);
+          return;
+        }
+
+        // Second check: Distance to exit door
         const distExit = this.playerPosition.distanceTo(activeZone.exitPoint);
         if (distExit <= 2.2) {
           this.playerPosition.copy(activeZone.outdoorDoorPosition);
@@ -704,7 +714,7 @@ export class GameEngine {
           return;
         }
 
-        // Check interactive station inside
+        // Third check: interactive station inside
         if (activeZone.checkInteraction) {
           const inter = activeZone.checkInteraction(this.playerPosition, {
             cash: this.cash,
@@ -719,11 +729,18 @@ export class GameEngine {
             this.statusMessage = res.statusMessage;
             if (res.cashDelta) this.cash += res.cashDelta;
             if (res.clearFine) this.trafficFine = 0;
-            if (res.rentApartment) this.hasApartmentRental = true;
+            if (res.rentApartment) {
+              this.hasApartmentRental = true;
+              const prop = this.economy.properties.get("unit-2b");
+              if (prop) prop.isRented = true;
+            }
             if (res.scoreDelta) this.gameScore = Math.max(this.gameScore, res.scoreDelta);
             if (res.purchasedProperty) {
               const p = this.economy.properties.get(res.purchasedProperty);
-              if (p) p.isOwned = true;
+              if (p) {
+                p.isOwned = true;
+                p.isRented = false;
+              }
             }
             if (res.purchasedBusiness) {
               const b = this.economy.businesses.get(res.purchasedBusiness);
@@ -750,8 +767,81 @@ export class GameEngine {
       return;
     }
 
-    // 2. Outdoors on foot: Check entrance doors of each interior
+    // 2. Outdoors on foot: Check residential purchasable/rentable properties
+    const nearbyProperty = getPropertyByEntrance(this.playerPosition, 3.4);
+    if (nearbyProperty) {
+      if (this.isPropertyAccessible(nearbyProperty.id)) {
+        const zone = this.interiorManager.interiors.get(nearbyProperty.interiorId);
+        if (zone) {
+          this.interiorManager.outdoorSavedPosition.copy(this.playerPosition);
+          this.interiorManager.outdoorSavedYaw = this.playerYaw;
+          this.interiorManager.activeInterior = nearbyProperty.interiorId;
+          this.playerPosition.copy(zone.spawnPoint);
+          this.playerYaw = zone.spawnYaw;
+          this.statusMessage = `Entered ${nearbyProperty.name}`;
+          this.updateTransform();
+          this.pushSnapshot(true);
+          return;
+        }
+      } else {
+        // Player does not own or rent this property yet
+        if (nearbyProperty.id === "unit-2b") {
+          if (this.cash >= 75000) {
+            this.cash -= 75000;
+            this.hasApartmentRental = true;
+            const prop = this.economy.properties.get("unit-2b");
+            if (prop) prop.isRented = true;
+            const zone = this.interiorManager.interiors.get("apartment");
+            if (zone) {
+              this.interiorManager.outdoorSavedPosition.copy(this.playerPosition);
+              this.interiorManager.outdoorSavedYaw = this.playerYaw;
+              this.interiorManager.activeInterior = "apartment";
+              this.playerPosition.copy(zone.spawnPoint);
+              this.playerYaw = zone.spawnYaw;
+            }
+            this.statusMessage = "Monthly lease signed for Unit 2B (₦75,000)! Welcome home.";
+            this.saveGame();
+            this.updateTransform();
+            this.pushSnapshot(true);
+            return;
+          } else {
+            this.statusMessage = "Unit 2B requires ₦75,000 for monthly lease or ₦18,000,000 for freehold purchase.";
+            this.pushSnapshot(true);
+            return;
+          }
+        } else {
+          // Penthouse or Villa
+          const prop = this.economy.properties.get(nearbyProperty.id);
+          if (prop && this.cash >= prop.purchasePrice) {
+            const purchaseRes = this.economy.purchaseProperty(nearbyProperty.id, this.cash);
+            if (purchaseRes.success) {
+              this.cash -= purchaseRes.cost;
+              const zone = this.interiorManager.interiors.get(nearbyProperty.interiorId);
+              if (zone) {
+                this.interiorManager.outdoorSavedPosition.copy(this.playerPosition);
+                this.interiorManager.outdoorSavedYaw = this.playerYaw;
+                this.interiorManager.activeInterior = nearbyProperty.interiorId;
+                this.playerPosition.copy(zone.spawnPoint);
+                this.playerYaw = zone.spawnYaw;
+              }
+              this.statusMessage = purchaseRes.message;
+              this.saveGame();
+              this.updateTransform();
+              this.pushSnapshot(true);
+              return;
+            }
+          } else {
+            this.statusMessage = `${nearbyProperty.name} is private property: ₦${nearbyProperty.purchasePrice.toLocaleString()} required for freehold Certificate of Occupancy.`;
+            this.pushSnapshot(true);
+            return;
+          }
+        }
+      }
+    }
+
+    // 3. Outdoors on foot: Check public interior entrance doors (church, police-post, restaurant, gaming-hub)
     for (const [id, zone] of this.interiorManager.interiors.entries()) {
+      if (id === "apartment" || id === "penthouse" || id === "house") continue;
       const distDoor = this.playerPosition.distanceTo(zone.outdoorDoorPosition);
       if (distDoor <= 3.4) {
         this.interiorManager.outdoorSavedPosition.copy(this.playerPosition);
@@ -1735,9 +1825,17 @@ export class GameEngine {
     });
   }
 
+  private isPropertyAccessible(propId: PropertyId): boolean {
+    const prop = this.economy.properties.get(propId);
+    if (!prop) return false;
+    if (prop.isOwned) return true;
+    if (propId === "unit-2b" && (this.hasApartmentRental || prop.isRented)) return true;
+    return false;
+  }
+
   private surfaceHeight(x: number, z: number) {
     if (this.interiorManager.activeInterior) {
-      return -59.9;
+      return this.interiorManager.getSurfaceHeight(this.interiorManager.activeInterior, x, z);
     }
     if (Math.abs(x + 31) <= 10.5 && Math.abs(z - 31) <= 9) return 0.045;
     for (const road of ROAD_LAYOUT) {
@@ -1912,7 +2010,10 @@ export class GameEngine {
     } else if (this.interiorManager.activeInterior) {
       const activeZone = this.interiorManager.getActiveZone();
       if (activeZone) {
-        if (this.playerPosition.distanceTo(activeZone.exitPoint) <= 2.2) {
+        const nearbyDoor = this.interiorManager.getNearbyDoor(this.playerPosition, 2.0);
+        if (nearbyDoor) {
+          interactionPrompt = `${nearbyDoor.isOpen ? "Close" : "Open"} ${nearbyDoor.name}`;
+        } else if (this.playerPosition.distanceTo(activeZone.exitPoint) <= 2.2) {
           interactionPrompt = `Exit ${activeZone.name}`;
         } else if (activeZone.checkInteraction) {
           const inter = activeZone.checkInteraction(this.playerPosition, {
@@ -1938,9 +2039,33 @@ export class GameEngine {
         interactionPrompt = "Logistics Dispatch Board: Press [J] or click MISSIONS for Contracts";
       }
 
-      // Check outdoor doors
+      // Check residential property entrance doors
       if (!interactionPrompt) {
-        for (const [, zone] of this.interiorManager.interiors.entries()) {
+        const nearbyProperty = getPropertyByEntrance(this.playerPosition, 3.4);
+        if (nearbyProperty) {
+          const isAccessible = this.isPropertyAccessible(nearbyProperty.id);
+          if (isAccessible) {
+            const role = (nearbyProperty.id === "unit-2b" && !this.economy.properties.get("unit-2b")?.isOwned)
+              ? "Tenant"
+              : "Owner";
+            interactionPrompt = `Enter ${nearbyProperty.name} (${role})`;
+          } else if (nearbyProperty.id === "unit-2b") {
+            interactionPrompt = this.cash >= 75000
+              ? "Lease Unit 2B Apartment (₦75,000 / month)"
+              : "Unit 2B: Lease (₦75,000/mo) or Buy (₦18M) [Need ₦75k]";
+          } else {
+            const price = nearbyProperty.purchasePrice;
+            interactionPrompt = this.cash >= price
+              ? `Purchase ${nearbyProperty.name} (₦${price.toLocaleString()})`
+              : `${nearbyProperty.name}: For Sale (₦${price.toLocaleString()})`;
+          }
+        }
+      }
+
+      // Check public outdoor interior doors
+      if (!interactionPrompt) {
+        for (const [id, zone] of this.interiorManager.interiors.entries()) {
+          if (id === "apartment" || id === "penthouse" || id === "house") continue;
           if (this.playerPosition.distanceTo(zone.outdoorDoorPosition) <= 3.4) {
             interactionPrompt = `Enter ${zone.name}`;
             break;
@@ -1989,23 +2114,13 @@ export class GameEngine {
         }
       }
 
-      // Check outdoor shops / properties
+      // Check outdoor shops / workshops
       if (!interactionPrompt) {
         if (this.playerPosition.distanceTo(new THREE.Vector3(-22, 0, 45.2)) <= 2.8) {
           const biz = this.economy.businesses.get("sabon-gari-shop");
           interactionPrompt = biz?.isOwned
             ? "Sabon Gari Electronics: Owned Enterprise"
             : "Acquire Sabon Gari Electronics Stall (₦450,000)";
-        } else if (this.playerPosition.distanceTo(new THREE.Vector3(18, 0, 39.5)) <= 2.8) {
-          const prop = this.economy.properties.get("bompai-penthouse");
-          interactionPrompt = prop?.isOwned
-            ? "Bompai Penthouse: Owned Residence"
-            : "Purchase Bompai Penthouse (₦35,000,000)";
-        } else if (this.playerPosition.distanceTo(new THREE.Vector3(44, 0, 45)) <= 2.8) {
-          const prop = this.economy.properties.get("albaraka-villa");
-          interactionPrompt = prop?.isOwned
-            ? "Al-Baraka Villa: Owned Residence"
-            : "Purchase Al-Baraka Villa (₦65,000,000)";
         } else if (this.playerPosition.distanceTo(new THREE.Vector3(-16, 0, -22)) <= 3.2) {
           interactionPrompt = this.economy.vehicleUpgrade.engineStage >= 2
             ? "Sani Auto Workshop: Max Stage 2 Tune Active"

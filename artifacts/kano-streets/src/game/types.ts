@@ -33,7 +33,7 @@ export type VehicleType = "sedan" | "keke" | "van" | "pickup" | "minibus" | "tru
 
 export type GameScreen = "menu" | "playing" | "paused";
 
-export type InteriorId = "house" | "apartment" | "church" | "police-post" | "restaurant" | "gaming-hub";
+export type InteriorId = "house" | "apartment" | "penthouse" | "church" | "police-post" | "restaurant" | "gaming-hub";
 
 export type PropertyId = "unit-2b" | "bompai-penthouse" | "albaraka-villa";
 export type BusinessId = "sabon-gari-shop" | "arewa-suya-franchise" | "cyber-hub-station";
