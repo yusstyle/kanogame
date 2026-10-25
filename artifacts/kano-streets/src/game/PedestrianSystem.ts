@@ -10,7 +10,7 @@ import type { ColliderIndex } from "./ColliderIndex";
 import type { NavigationNetwork, PedestrianWaypoint } from "./navigation";
 import type { GameMaterials, GraphicsQuality } from "./types";
 
-export type PedestrianState = "walking" | "idle" | "vendor" | "talking" | "visiting";
+export type PedestrianState = "walking" | "idle" | "vendor" | "talking" | "visiting" | "sitting";
 export type NPCRole = "resident" | "trader" | "worker" | "customer" | "worshipper" | "visitor";
 
 export interface Pedestrian {
@@ -264,6 +264,7 @@ export class PedestrianSystem {
   private quality: GraphicsQuality = "balanced";
   private time = 0;
   private timeOfDayHours = 10;
+  private frameCounter = 0;
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -279,7 +280,7 @@ export class PedestrianSystem {
 
   public setQuality(quality: GraphicsQuality) {
     this.quality = quality;
-    const targetCount = quality === "performance" ? 12 : quality === "balanced" ? 16 : 22;
+    const targetCount = quality === "performance" ? 12 : quality === "balanced" ? 18 : 24;
 
     const enableShadows = quality === "quality";
     this.pedestrians.forEach((p) => {
@@ -294,12 +295,16 @@ export class PedestrianSystem {
       if (quality !== "performance" && !this.pedestrians.some((p) => p.id.startsWith("historic_npc_"))) {
         this.spawnHistoricCharacters();
       }
+      if (quality !== "performance" && !this.pedestrians.some((p) => p.id.startsWith("dakali_elder_"))) {
+        this.spawnDakaliElders();
+      }
       if (this.pedestrians.length < targetCount) {
         this.spawnAdditionalWalkers(targetCount - this.pedestrians.length);
       }
     } else if (this.pedestrians.length > targetCount) {
       const cullable = [
         ...this.pedestrians.filter((p) => p.state === "walking"),
+        ...this.pedestrians.filter((p) => p.id.startsWith("dakali_elder_")),
         ...this.pedestrians.filter((p) => p.id.startsWith("historic_npc_")),
       ];
       while (this.pedestrians.length > targetCount && cullable.length > 0) {
@@ -344,8 +349,61 @@ export class PedestrianSystem {
     this.spawnMarketVendors();
     this.spawnIndustrialWorkers();
     this.spawnHistoricCharacters();
-    const initialWalkerCount = this.quality === "performance" ? 2 : this.quality === "balanced" ? 6 : 12;
+    this.spawnDakaliElders();
+    const initialWalkerCount = this.quality === "performance" ? 2 : this.quality === "balanced" ? 4 : 8;
     this.spawnAdditionalWalkers(initialWalkerCount);
+  }
+
+  private spawnDakaliElders() {
+    const elderLocations = [
+      {
+        x: -72,
+        z: -78.2,
+        yaw: 0,
+        name: "Alhaji Bello Dan-Iya",
+        cry: "Barka da yamma. Welcome to sit with us on the Dakali, my son.",
+        dest: "Dandali Square Dakali Ledge",
+      },
+      {
+        x: -70.5,
+        z: -65.6,
+        yaw: Math.PI,
+        name: "Malam Sanusi Kurmi",
+        cry: "The cool evening breeze of Kano always gathers good friends here.",
+        dest: "Dandali Square Neem Shade",
+      },
+    ];
+
+    elderLocations.forEach((elder, index) => {
+      const palette = NPC_PALETTES[(index + 1) % NPC_PALETTES.length];
+      const model = createPedestrianModel(this.materials, palette);
+      const y = this.surfaceHeight(elder.x, elder.z) + 0.35;
+
+      model.root.position.set(elder.x, y, elder.z);
+      model.root.rotation.y = elder.yaw;
+      this.root.add(model.root);
+
+      this.pedestrians.push({
+        id: `dakali_elder_${index}`,
+        name: elder.name,
+        role: "resident",
+        model,
+        position: new THREE.Vector3(elder.x, y, elder.z),
+        yaw: elder.yaw,
+        speed: 0,
+        state: "sitting",
+        stateTimer: 0,
+        currentWaypoint: null,
+        targetWaypoint: null,
+        destinationName: elder.dest,
+        destinationPoint: new THREE.Vector3(elder.x, y, elder.z),
+        dialogues: [elder.cry, "The history of this ancient city runs deeper than the rocks of Dala."],
+        vendorCry: elder.cry,
+        walkPhase: 0,
+        personalSpeed: 0,
+        lookSeed: index * 3.7 + 1.2,
+      });
+    });
   }
 
   private spawnHistoricCharacters() {
@@ -674,6 +732,7 @@ export class PedestrianSystem {
 
   public update(dt: number, playerPosition: THREE.Vector3, playerVehiclePos: THREE.Vector3 | null) {
     this.time += dt;
+    this.frameCounter = (this.frameCounter + 1) % 60;
 
     for (let i = 0; i < this.pedestrians.length; i += 1) {
       const p = this.pedestrians[i];
@@ -683,7 +742,20 @@ export class PedestrianSystem {
         continue;
       }
 
-      this.updatePedestrian(p, dt, playerPosition, playerVehiclePos, i);
+      // Milestone 7: Distance-based LOD update frequency
+      if (distToPlayer >= 35 && distToPlayer < 75) {
+        if ((this.frameCounter + i) % 3 !== 0) {
+          continue;
+        }
+        this.updatePedestrian(p, dt * 3, playerPosition, playerVehiclePos, i);
+      } else if (distToPlayer >= 75) {
+        if ((this.frameCounter + i) % 15 !== 0) {
+          continue;
+        }
+        this.updatePedestrian(p, dt * 15, playerPosition, playerVehiclePos, i);
+      } else {
+        this.updatePedestrian(p, dt, playerPosition, playerVehiclePos, i);
+      }
     }
   }
 
@@ -696,6 +768,11 @@ export class PedestrianSystem {
   ) {
     if (p.state === "vendor") {
       this.animateVendor(p, dt);
+      return;
+    }
+
+    if (p.state === "sitting") {
+      this.animateSitting(p, dt);
       return;
     }
 
@@ -857,6 +934,34 @@ export class PedestrianSystem {
 
     if (p.model.head) {
       const lookAround = Math.sin(this.time * 0.4 + p.lookSeed) * 0.35;
+      p.model.head.rotation.y = THREE.MathUtils.damp(p.model.head.rotation.y, lookAround, 3, dt);
+    }
+
+    p.model.root.position.copy(p.position);
+    p.model.root.rotation.y = p.yaw;
+  }
+
+  private animateSitting(p: Pedestrian, dt: number) {
+    if (p.model.riggedCharacter) {
+      p.model.playAction("idle", 0.3);
+      p.model.updateAnimation(dt);
+      p.model.root.position.copy(p.position);
+      p.model.root.rotation.y = p.yaw;
+      return;
+    }
+
+    // Procedural seated pose on clay Dakali ledge
+    p.model.leftLeg.rotation.x = Math.PI * 0.42;
+    p.model.rightLeg.rotation.x = Math.PI * 0.42;
+    p.model.leftLeg.position.y = 0.32;
+    p.model.rightLeg.position.y = 0.32;
+
+    const breath = Math.sin(this.time * 1.4 + p.lookSeed) * 0.025;
+    p.model.leftArm.rotation.x = THREE.MathUtils.damp(p.model.leftArm.rotation.x, breath + 0.2, 4, dt);
+    p.model.rightArm.rotation.x = THREE.MathUtils.damp(p.model.rightArm.rotation.x, -breath + 0.2, 4, dt);
+
+    if (p.model.head) {
+      const lookAround = Math.sin(this.time * 0.3 + p.lookSeed) * 0.35;
       p.model.head.rotation.y = THREE.MathUtils.damp(p.model.head.rotation.y, lookAround, 3, dt);
     }
 

@@ -27,6 +27,8 @@ import { EconomySystem } from "./economySystem";
 import { KANO_LANDMARKS, getNearestLandmark } from "./landmarks";
 import { MissionSystem } from "./missionSystem";
 import { StorySystem } from "./storySystem";
+import { WeatherSystem, type WeatherPreset } from "./weatherSystem";
+import { AudioSystem } from "./audioSystem";
 
 const PLAYER_START = new THREE.Vector3(-4, 0, -4);
 const CAR_START = new THREE.Vector3(-2, 0, -8);
@@ -70,6 +72,10 @@ export class GameEngine {
   private readonly desiredCameraQuaternion = new THREE.Quaternion();
   private readonly callbacks: GameEngineCallbacks;
   private sunLight: THREE.DirectionalLight | null = null;
+  private hemiLight: THREE.HemisphereLight | null = null;
+  private vehicleHeadlight: THREE.SpotLight | null = null;
+  private readonly weatherSystem: WeatherSystem;
+  private readonly audioSystem: AudioSystem;
   private graphicsQuality: GraphicsQuality = "balanced";
   private readonly resizeObserver: ResizeObserver;
   private readonly onKeyDownBound: (event: KeyboardEvent) => void;
@@ -168,6 +174,11 @@ export class GameEngine {
     this.scene.background = new THREE.Color("#dcd4c3");
     this.scene.fog = new THREE.Fog("#dcd4c3", 42, 230);
 
+    this.weatherSystem = new WeatherSystem("clear");
+    this.scene.add(this.weatherSystem.particleGroup);
+
+    this.audioSystem = new AudioSystem(false, 0.65);
+
     this.materials = createMaterials();
     this.interiorManager = new BuildingInteriorManager(this.materials);
     this.scene.add(this.interiorManager.root);
@@ -182,6 +193,12 @@ export class GameEngine {
       }
       if (saved.storyProgress) {
         this.storySystem.loadProgress(saved.storyProgress);
+      }
+      if (saved.weatherPreset && ["clear", "harmattan", "sunset_glow", "cool_night"].includes(saved.weatherPreset)) {
+        this.weatherSystem.setPreset(saved.weatherPreset as WeatherPreset);
+      }
+      if (typeof saved.audioMuted === "boolean") {
+        this.audioSystem.setMuted(saved.audioMuted);
       }
     }
     this.world = createWorld(this.materials);
@@ -266,11 +283,17 @@ export class GameEngine {
     this.resizeObserver.observe(canvas.parentElement ?? canvas);
     this.resize();
 
-    this.onKeyDownBound = (event) => this.onKeyDown(event);
+    this.onKeyDownBound = (event) => {
+      this.audioSystem.init();
+      this.audioSystem.resume();
+      this.onKeyDown(event);
+    };
     this.onKeyUpBound = (event) => this.keys.delete(normalizeMovementKey(event.key.toLowerCase()));
     this.onMouseMoveBound = (event) => this.onMouseMove(event);
     this.onPointerLockBound = () => this.onPointerLockChange();
     this.onCanvasClickBound = () => {
+      this.audioSystem.init();
+      this.audioSystem.resume();
       if (
         this.screen === "playing" &&
         !this.prefersTouchControls() &&
@@ -280,6 +303,8 @@ export class GameEngine {
       }
     };
     this.onCanvasPointerDownBound = (event) => {
+      this.audioSystem.init();
+      this.audioSystem.resume();
       if (event.pointerType !== "touch" || this.screen !== "playing") return;
       this.touchLookPointerId = event.pointerId;
       this.touchLookPosition.set(event.clientX, event.clientY);
@@ -320,6 +345,7 @@ export class GameEngine {
   private addLighting() {
     const hemi = new THREE.HemisphereLight("#d8e8f2", "#7a5e42", 1.45);
     this.scene.add(hemi);
+    this.hemiLight = hemi;
 
     const sun = new THREE.DirectionalLight("#fff8ed", 2.85);
     sun.position.set(-44, 62, -34);
@@ -339,28 +365,55 @@ export class GameEngine {
     const bounce = new THREE.DirectionalLight("#a3c0d4", 0.55);
     bounce.position.set(52, 28, 40);
     this.scene.add(bounce);
+
+    const headlight = new THREE.SpotLight("#fff5d0", 2.6, 42, Math.PI / 5.5, 0.45, 1.2);
+    headlight.visible = false;
+    this.scene.add(headlight);
+    this.scene.add(headlight.target);
+    this.vehicleHeadlight = headlight;
   }
 
   private updateLighting() {
     if (!this.sunLight) return;
-    if (this.interiorManager.activeInterior) {
-      this.sunLight.intensity = 0.2;
-      return;
-    }
     const hour = (this.gameMinutes / 60) % 24;
-    let dayFactor = 1.0;
-    if (hour >= 6 && hour <= 18) {
-      dayFactor = Math.sin(((hour - 6) / 12) * Math.PI);
-    } else {
-      dayFactor = 0.12;
+    const isInterior = Boolean(this.interiorManager.activeInterior);
+
+    this.weatherSystem.applyToScene(this.scene, this.sunLight, this.hemiLight, hour, isInterior);
+
+    // Diurnal street lantern & interior window glow
+    const isNightOrTwilight = hour < 6.2 || hour > 18.6;
+    if (this.materials.lampGlow) {
+      this.materials.lampGlow.emissiveIntensity = isNightOrTwilight ? 2.4 : 0.2;
     }
-    this.sunLight.intensity = 0.4 + dayFactor * 1.5;
-    const targetPos = this.mode === "driving"
-      ? this.getActiveVehiclePosition()
-      : this.playerPosition;
-    this.sunLight.position.set(targetPos.x - 44, 62, targetPos.z - 34);
-    this.sunLight.target.position.set(targetPos.x, targetPos.y, targetPos.z);
-    this.sunLight.target.updateMatrixWorld();
+    if (this.materials.glassLit) {
+      this.materials.glassLit.emissiveIntensity = isNightOrTwilight ? 1.35 : 0.15;
+    }
+
+    if (this.vehicleHeadlight) {
+      if (isNightOrTwilight && this.mode === "driving" && !isInterior) {
+        this.vehicleHeadlight.visible = true;
+        const vPos = this.getActiveVehiclePosition();
+        const vYaw = this.getActiveVehicleYaw();
+        this.vehicleHeadlight.position.set(vPos.x, vPos.y + 0.85, vPos.z);
+        this.vehicleHeadlight.target.position.set(
+          vPos.x + Math.sin(vYaw) * 25,
+          vPos.y + 0.2,
+          vPos.z + Math.cos(vYaw) * 25,
+        );
+        this.vehicleHeadlight.target.updateMatrixWorld();
+      } else {
+        this.vehicleHeadlight.visible = false;
+      }
+    }
+
+    if (!isInterior) {
+      const targetPos = this.mode === "driving"
+        ? this.getActiveVehiclePosition()
+        : this.playerPosition;
+      this.sunLight.position.set(targetPos.x - 44, 62, targetPos.z - 34);
+      this.sunLight.target.position.set(targetPos.x, targetPos.y, targetPos.z);
+      this.sunLight.target.updateMatrixWorld();
+    }
   }
 
   private async loadAssets() {
@@ -924,10 +977,15 @@ export class GameEngine {
     const vPos = this.getActiveVehiclePosition();
     const vYaw = this.getActiveVehicleYaw();
     const right = new THREE.Vector3(Math.cos(vYaw), 0, -Math.sin(vYaw));
-    const offset = this.activeVehicle === "truck" ? 2.2 : this.activeVehicle === "minibus" || this.activeVehicle === "van" ? 1.9 : 1.75;
+    const forward = new THREE.Vector3(Math.sin(vYaw), 0, Math.cos(vYaw));
+    const sideOffset = this.activeVehicle === "truck" ? 2.3 : this.activeVehicle === "minibus" || this.activeVehicle === "van" ? 2.0 : 1.8;
+    const endOffset = this.activeVehicle === "truck" ? 4.5 : this.activeVehicle === "minibus" || this.activeVehicle === "van" ? 3.5 : 2.8;
+
     const candidates = [
-      vPos.clone().addScaledVector(right, offset),
-      vPos.clone().addScaledVector(right, -offset),
+      vPos.clone().addScaledVector(right, -sideOffset),
+      vPos.clone().addScaledVector(right, sideOffset),
+      vPos.clone().addScaledVector(forward, -endOffset),
+      vPos.clone().addScaledVector(forward, endOffset),
     ];
     const safeExit = candidates.find(
       (candidate) =>
@@ -940,6 +998,7 @@ export class GameEngine {
       return;
     }
 
+    safeExit.y = this.surfaceHeight(safeExit.x, safeExit.z);
     this.playerPosition.copy(safeExit);
     this.playerYaw = vYaw;
     if (this.activeVehicle === "sedan") this.carSpeed = 0;
@@ -980,6 +1039,23 @@ export class GameEngine {
       const activeVehPos = this.mode === "driving"
         ? this.getActiveVehiclePosition()
         : null;
+
+      const centerPos = activeVehPos ?? this.playerPosition;
+      this.weatherSystem.update(dt, centerPos);
+
+      const activeSpeed = this.mode === "driving" ? this.getActiveVehicleSpeed() : 0;
+      const isMovingOnFoot = this.mode === "on-foot" && (this.keys.has("w") || this.keys.has("s") || this.keys.has("a") || this.keys.has("d"));
+      const isSprinting = this.keys.has("shift");
+
+      this.audioSystem.update(dt, {
+        mode: this.mode,
+        vehicleSpeed: activeSpeed,
+        vehicleMaxSpeed: 24,
+        isMovingOnFoot,
+        isSprinting,
+        isHarmattan: this.weatherSystem.getPreset() === "harmattan",
+        isInterior: Boolean(this.interiorManager.activeInterior),
+      });
 
       this.trafficSystem.update(dt, this.playerPosition, activeVehPos);
       this.pedestrianSystem.update(dt, this.playerPosition, activeVehPos);
@@ -1717,7 +1793,13 @@ export class GameEngine {
     const target = isDriving
       ? new THREE.Vector3(vehiclePos.x, targetY, vehiclePos.z)
       : new THREE.Vector3(this.playerPosition.x, targetY, this.playerPosition.z);
-    const followYaw = isDriving ? vehicleYaw + this.cameraYaw : this.cameraYaw;
+    let followYaw = isDriving ? vehicleYaw + this.cameraYaw : this.cameraYaw;
+    if (isDriving) {
+      const activeSpeed = this.getActiveVehicleSpeed();
+      if (activeSpeed < -0.8) {
+        followYaw += Math.PI;
+      }
+    }
     const heightPitch = isIndoors ? Math.min(this.cameraPitch, 0.45) : this.cameraPitch;
     const direction = new THREE.Vector3(
       -Math.sin(followYaw) * Math.cos(heightPitch),
@@ -1727,40 +1809,41 @@ export class GameEngine {
     const desired = target.clone().addScaledVector(direction, distance);
     const path = desired.clone().sub(target);
     const pathLength = path.length();
-    const samples = Math.ceil(pathLength / 0.45);
+    const samples = Math.ceil(pathLength / 0.4);
     let safeDistance = pathLength;
+    const minSafeDist = isIndoors ? 1.4 : 2.0;
     const activeZone = this.interiorManager.getActiveZone();
     for (let step = 2; step <= samples; step += 1) {
-      const distanceAlongPath = Math.min(step * 0.45, pathLength);
+      const distanceAlongPath = Math.min(step * 0.4, pathLength);
       const point = target.clone().addScaledVector(path, distanceAlongPath / pathLength);
       let blocked = false;
       if (activeZone) {
         blocked = activeZone.colliders.some((collider: Collider) => {
           const dx = Math.max(Math.abs(point.x - collider.x) - collider.halfX, 0);
           const dz = Math.max(Math.abs(point.z - collider.z) - collider.halfZ, 0);
-          return dx * dx + dz * dz < 0.32 * 0.32;
+          return dx * dx + dz * dz < 0.36 * 0.36;
         });
       } else {
-        blocked = this.colliderIndex.query(point.x, point.z, 1.2).some((collider: Collider) => {
+        blocked = this.colliderIndex.query(point.x, point.z, 1.4).some((collider: Collider) => {
           if (point.y > (collider.height ?? 3.5) - 0.2) return false;
           const dx = Math.max(Math.abs(point.x - collider.x) - collider.halfX, 0);
           const dz = Math.max(Math.abs(point.z - collider.z) - collider.halfZ, 0);
-          return dx * dx + dz * dz < 0.32 * 0.32;
+          return dx * dx + dz * dz < 0.36 * 0.36;
         });
       }
       if (blocked) {
-        safeDistance = Math.max(isIndoors ? 1.5 : 2.2, distanceAlongPath - 0.45);
+        safeDistance = Math.max(minSafeDist, distanceAlongPath - 0.45);
         break;
       }
     }
     if (pathLength > 0) {
       desired.copy(target).addScaledVector(path.multiplyScalar(1 / pathLength), safeDistance);
     }
-    const smoothing = 1 - Math.exp(-7.2 * dt);
+    const smoothing = 1 - Math.exp(-9.5 * dt);
     this.camera.position.lerp(desired, smoothing);
     this.lookMatrix.lookAt(this.camera.position, target, this.camera.up);
     this.desiredCameraQuaternion.setFromRotationMatrix(this.lookMatrix);
-    this.camera.quaternion.slerp(this.desiredCameraQuaternion, 1 - Math.exp(-12 * dt));
+    this.camera.quaternion.slerp(this.desiredCameraQuaternion, 1 - Math.exp(-14 * dt));
   }
 
   private updateTransform() {
@@ -2010,6 +2093,9 @@ export class GameEngine {
       },
       playerHeading: this.mode === "driving" ? this.getActiveVehicleYaw() : this.playerYaw,
       storyInfo: this.storySystem.getSnapshotInfo({ x: location.x, z: location.z }),
+      weatherPreset: this.weatherSystem.getPreset(),
+      weatherDisplayName: this.weatherSystem.getPresetDisplayName(),
+      audioMuted: this.audioSystem.isMuted(),
     });
   }
 
@@ -2075,7 +2161,56 @@ export class GameEngine {
       this.missionSystem.getCompletedMissionsList(),
       this.missionSystem.careerEarnings,
       this.storySystem.getProgress(),
+      this.weatherSystem.getPreset(),
+      this.audioSystem.isMuted(),
     );
+  }
+
+  public getWeatherSystem(): WeatherSystem {
+    return this.weatherSystem;
+  }
+
+  public getWeatherPreset(): WeatherPreset {
+    return this.weatherSystem.getPreset();
+  }
+
+  public setWeatherPreset(preset: WeatherPreset): void {
+    this.weatherSystem.setPreset(preset);
+    this.updateLighting();
+    this.saveGame();
+    this.pushSnapshot(true);
+  }
+
+  public cycleWeather(): WeatherPreset {
+    const next = this.weatherSystem.cyclePreset();
+    this.statusMessage = `Atmosphere: ${this.weatherSystem.getPresetDisplayName(next)}`;
+    this.updateLighting();
+    this.saveGame();
+    this.pushSnapshot(true);
+    return next;
+  }
+
+  public getAudioSystem(): AudioSystem {
+    return this.audioSystem;
+  }
+
+  public toggleAudioMute(): boolean {
+    const muted = this.audioSystem.toggleMute();
+    this.statusMessage = muted ? "Audio Muted 🔇" : "Audio Active 🔊";
+    this.saveGame();
+    this.pushSnapshot(true);
+    return muted;
+  }
+
+  public isAudioMuted(): boolean {
+    return this.audioSystem.isMuted();
+  }
+
+  public setAudioMuted(muted: boolean): void {
+    this.audioSystem.setMuted(muted);
+    this.statusMessage = muted ? "Audio Muted 🔇" : "Audio Active 🔊";
+    this.saveGame();
+    this.pushSnapshot(true);
   }
 
   public getStorySystem(): StorySystem {

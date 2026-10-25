@@ -35,6 +35,9 @@ export interface GameUIProps {
   playerCoords?: { x: number; z: number };
   playerHeading?: number;
   storyInfo?: StorySnapshotInfo | null;
+  weatherPreset?: string;
+  weatherDisplayName?: string;
+  audioMuted?: boolean;
   graphicsQuality: GraphicsQuality;
   onStart: () => void;
   onPause: () => void;
@@ -48,6 +51,8 @@ export interface GameUIProps {
   onChooseInvestigation?: (choice: "elders" | "bank") => unknown;
   onChooseCareer?: (choice: CareerPathChoice) => unknown;
   onResolveChapter1?: () => unknown;
+  onCycleWeather?: () => void;
+  onToggleAudioMute?: () => void;
   onQualityChange: (quality: GraphicsQuality) => void;
 }
 
@@ -90,6 +95,9 @@ export default function GameUI({
   playerCoords,
   playerHeading,
   storyInfo,
+  weatherPreset: _weatherPreset,
+  weatherDisplayName,
+  audioMuted,
   graphicsQuality,
   onStart,
   onPause,
@@ -103,6 +111,8 @@ export default function GameUI({
   onChooseInvestigation,
   onChooseCareer,
   onResolveChapter1,
+  onCycleWeather,
+  onToggleAudioMute,
   onQualityChange,
 }: GameUIProps) {
   const [showDirectory, setShowDirectory] = useState(false);
@@ -116,11 +126,15 @@ export default function GameUI({
         setShowDirectory((prev) => !prev);
       } else if (e.key === 'j' || e.key === 'J') {
         setShowMissions((prev) => !prev);
+      } else if (e.key === 'n' || e.key === 'N') {
+        onCycleWeather?.();
+      } else if (e.key === 'u' || e.key === 'U') {
+        onToggleAudioMute?.();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [screen]);
+  }, [screen, onCycleWeather, onToggleAudioMute]);
 
   if (screen === 'menu') {
     return (
@@ -197,6 +211,24 @@ export default function GameUI({
             >
               <Key>J</Key>
               <span>MISSIONS{availableMissionsCount ? ` (${availableMissionsCount})` : ''}</span>
+            </button>
+            <button
+              className="ks-hud-directory-btn ks-hud-weather-btn"
+              onClick={onCycleWeather}
+              title="Change Sahel weather preset [N]"
+              aria-label="Cycle Weather Atmosphere"
+            >
+              <Key>N</Key>
+              <span>{weatherDisplayName ? weatherDisplayName.toUpperCase() : "SAHEL WEATHER"}</span>
+            </button>
+            <button
+              className="ks-hud-directory-btn ks-hud-audio-btn"
+              onClick={onToggleAudioMute}
+              title={audioMuted ? "Unmute Ambient & Engine Audio [U]" : "Mute Audio [U]"}
+              aria-label="Toggle Audio Mute"
+            >
+              <Key>U</Key>
+              <span>{audioMuted ? "🔇 MUTED" : "🔊 AUDIO"}</span>
             </button>
             <span className="ks-pause-hint"><Key>ESC</Key><span>PAUSE</span></span>
           </header>

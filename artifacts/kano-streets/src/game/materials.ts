@@ -235,6 +235,15 @@ export function createMaterials(): GameMaterials {
     neonMagenta: standard("#e8188e", 0.2, undefined, { emissive: "#c40c72", emissiveIntensity: 0.85 }),
     bankBlue: standard("#123862", 0.38, undefined, { metalness: 0.3, roughness: 0.38 }),
     warmOrange: standard("#e26a22", 0.42, undefined, { roughness: 0.42 }),
+    lampGlow: standard("#ffeaa7", 0.2, undefined, { emissive: "#ffb142", emissiveIntensity: 1.6 }),
+    headlightBeam: standard("#fff8e7", 0.1, undefined, {
+      emissive: "#ffeeaa",
+      emissiveIntensity: 1.2,
+      transparent: true,
+      opacity: 0.35,
+    }),
+    weatheredBrick: standard("#8a4732", 0.92, clayMap, relief(clayMap, 0.08)),
+    rustedZinc: standard("#7d5e4b", 0.72, zincMap, { metalness: 0.45, roughness: 0.72 }),
   };
 }
 

@@ -12,6 +12,8 @@ export interface SaveData {
   completedMissions?: string[];
   careerEarnings?: number;
   storyProgress?: StoryProgressData;
+  weatherPreset?: string;
+  audioMuted?: boolean;
   savedAt: number;
 }
 
@@ -232,6 +234,8 @@ export class EconomySystem {
     completedMissions?: string[],
     careerEarnings?: number,
     storyProgress?: StoryProgressData,
+    weatherPreset?: string,
+    audioMuted?: boolean,
   ): boolean {
     if (typeof window === "undefined" || !window.localStorage) return false;
     try {
@@ -247,6 +251,8 @@ export class EconomySystem {
         completedMissions: completedMissions ?? [],
         careerEarnings: careerEarnings ?? 0,
         storyProgress: storyProgress ? { ...storyProgress } : undefined,
+        weatherPreset,
+        audioMuted,
         savedAt: Date.now(),
       };
       window.localStorage.setItem("kano_streets_save_v1", JSON.stringify(data));

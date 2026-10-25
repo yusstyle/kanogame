@@ -69,6 +69,14 @@ function App() {
     return viewportRef.current?.resolveStoryChapter1();
   }, []);
 
+  const cycleWeather = useCallback(() => {
+    return viewportRef.current?.cycleWeather();
+  }, []);
+
+  const toggleAudioMute = useCallback(() => {
+    return viewportRef.current?.toggleAudioMute();
+  }, []);
+
   const receiveSnapshot = useCallback((next: GameSnapshot) => {
     setSnapshot((current) => {
       if (
@@ -94,7 +102,10 @@ function App() {
         current.playerCoords?.z === next.playerCoords?.z &&
         current.playerHeading === next.playerHeading &&
         current.storyInfo?.stageName === next.storyInfo?.stageName &&
-        current.storyInfo?.currentObjective === next.storyInfo?.currentObjective
+        current.storyInfo?.currentObjective === next.storyInfo?.currentObjective &&
+        current.weatherPreset === next.weatherPreset &&
+        current.weatherDisplayName === next.weatherDisplayName &&
+        current.audioMuted === next.audioMuted
       ) {
         return current;
       }
@@ -136,6 +147,9 @@ function App() {
         playerCoords={snapshot.playerCoords}
         playerHeading={snapshot.playerHeading}
         storyInfo={snapshot.storyInfo}
+        weatherPreset={snapshot.weatherPreset}
+        weatherDisplayName={snapshot.weatherDisplayName}
+        audioMuted={snapshot.audioMuted}
         graphicsQuality={graphicsQuality}
         onStart={start}
         onPause={pause}
@@ -149,6 +163,8 @@ function App() {
         onChooseInvestigation={chooseInvestigation}
         onChooseCareer={chooseCareer}
         onResolveChapter1={resolveChapter1}
+        onCycleWeather={cycleWeather}
+        onToggleAudioMute={toggleAudioMute}
         onQualityChange={setGraphicsQuality}
       />
     </main>

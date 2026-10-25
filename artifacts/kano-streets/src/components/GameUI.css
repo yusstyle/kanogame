@@ -335,6 +335,24 @@
   color: #eeddbb;
 }
 
+.ks-hud-weather-btn {
+  border-color: rgba(235, 175, 95, 0.45);
+}
+
+.ks-hud-weather-btn:hover {
+  background: rgba(235, 175, 95, 0.25);
+  border-color: #f5b041;
+}
+
+.ks-hud-audio-btn {
+  border-color: rgba(140, 190, 220, 0.45);
+}
+
+.ks-hud-audio-btn:hover {
+  background: rgba(140, 190, 220, 0.25);
+  border-color: #5dade2;
+}
+
 .ks-gps-chip {
   position: absolute;
   top: clamp(18px, 3.5vh, 36px);

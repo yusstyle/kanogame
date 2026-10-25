@@ -19,6 +19,8 @@ export type GameViewportHandle = {
   chooseStoryInvestigation: (choice: "elders" | "bank") => unknown;
   chooseStoryCareer: (choice: CareerPathChoice) => unknown;
   resolveStoryChapter1: () => unknown;
+  cycleWeather: () => unknown;
+  toggleAudioMute: () => unknown;
 };
 
 type GameViewportProps = {
@@ -55,6 +57,8 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
         chooseStoryInvestigation: (choice) => engineRef.current?.chooseStoryInvestigation(choice),
         chooseStoryCareer: (choice) => engineRef.current?.chooseStoryCareer(choice),
         resolveStoryChapter1: () => engineRef.current?.resolveStoryChapter1(),
+        cycleWeather: () => engineRef.current?.cycleWeather(),
+        toggleAudioMute: () => engineRef.current?.toggleAudioMute(),
       }),
       [],
     );

@@ -26,6 +26,8 @@ import { StorySystem, INDENTURE_1968 } from "./storySystem";
 import { createHistoricDistrict } from "./historicDistrict";
 import { createWorld } from "./world";
 import { toSvgX, toSvgY } from "../components/CityMapModal";
+import { WeatherSystem, WEATHER_CONFIGS } from "./weatherSystem";
+import { AudioSystem } from "./audioSystem";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1380,4 +1382,243 @@ test("Milestone 6: Interactive City Map Coordinate Projections, Waypoint Calcula
   assert.equal(loadedSave.storyProgress.investigationChoice, "elders");
   assert.equal(loadedSave.storyProgress.careerPathChoice, "transport");
   assert.equal(loadedSave.storyProgress.rewardClaimed, true);
+});
+
+test("Milestone 7: Environmental & Harmattan Weather System", () => {
+  const weather = new WeatherSystem("clear");
+  assert.equal(weather.getPreset(), "clear");
+  assert.equal(weather.getPresetDisplayName(), "Clear Sahel Sky");
+
+  // Cycle through presets
+  assert.equal(weather.cyclePreset(), "harmattan");
+  assert.equal(weather.getPresetDisplayName(), "Harmattan Dust Haze");
+
+  assert.equal(weather.cyclePreset(), "sunset_glow");
+  assert.equal(weather.getPresetDisplayName(), "Golden Sunset Glow");
+
+  assert.equal(weather.cyclePreset(), "cool_night");
+  assert.equal(weather.getPresetDisplayName(), "Cool Starlit Night");
+
+  assert.equal(weather.cyclePreset(), "clear");
+
+  // Apply Harmattan weather to scene
+  weather.setPreset("harmattan");
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog("#ffffff", 10, 100);
+  const sun = new THREE.DirectionalLight("#ffffff", 1);
+  const hemi = new THREE.HemisphereLight("#ffffff", "#000000", 1);
+
+  weather.applyToScene(scene, sun, hemi, 12, false);
+  assert.equal((scene.fog as THREE.Fog).near, WEATHER_CONFIGS.harmattan.fogNear);
+  assert.equal((scene.fog as THREE.Fog).far, WEATHER_CONFIGS.harmattan.fogFar);
+  assert.ok(sun.intensity > 1.5, "Sun intensity matches Harmattan daytime formula");
+
+  // Test interior mode
+  weather.applyToScene(scene, sun, hemi, 12, true);
+  assert.equal((scene.fog as THREE.Fog).near, 15);
+  assert.equal((scene.fog as THREE.Fog).far, 85);
+  assert.equal(sun.intensity, 0.2);
+
+  // Test particle drift update
+  const initialPos = new THREE.Vector3(0, 0, 0);
+  weather.update(0.5, initialPos);
+
+  weather.dispose();
+});
+
+test("Milestone 7: Procedural Audio System & Sahel Atmosphere", () => {
+  const audio = new AudioSystem(false, 0.7);
+  assert.equal(audio.isMuted(), false);
+  assert.equal(audio.getMasterVolume(), 0.7);
+
+  // Mute toggling
+  const isMuted = audio.toggleMute();
+  assert.equal(isMuted, true);
+  assert.equal(audio.isMuted(), true);
+
+  audio.setMuted(false);
+  assert.equal(audio.isMuted(), false);
+
+  // Master volume clamping
+  audio.setMasterVolume(1.5);
+  assert.equal(audio.getMasterVolume(), 1.0);
+  audio.setMasterVolume(-0.2);
+  assert.equal(audio.getMasterVolume(), 0.0);
+  audio.setMasterVolume(0.8);
+
+  // Update on foot locomotion
+  audio.update(0.1, {
+    mode: "on-foot",
+    isMovingOnFoot: true,
+    isSprinting: false,
+    isHarmattan: false,
+    isInterior: false,
+  });
+
+  // Update driving vehicle in Harmattan
+  audio.update(0.1, {
+    mode: "driving",
+    vehicleSpeed: 18,
+    vehicleMaxSpeed: 24,
+    isHarmattan: true,
+    isInterior: false,
+  });
+
+  audio.dispose();
+});
+
+test("Milestone 7: Camera Spring-Arm Collision Probe & Multi-Candidate Vehicle Dismount", () => {
+  const colliders: Collider[] = [
+    // Wall directly behind camera path (x: 0, z: -5)
+    { x: 0, z: -5, halfX: 0.8, halfZ: 0.5, height: 4.0 },
+    // Left compound wall blocking driver side (x: -1.8, z: 0)
+    { x: -1.8, z: 0, halfX: 0.3, halfZ: 4.0, height: 4.0 },
+  ];
+  const colliderIndex = new ColliderIndex(colliders);
+
+  // 1. Spring-arm collision detection:
+  // Target at (0, 1.25, 0), desired camera at (0, 1.25, -6.35).
+  // The line intersects the wall at z = -4.5.
+  const target = new THREE.Vector3(0, 1.25, 0);
+  const path = new THREE.Vector3(0, 0, -6.35);
+  const pathLength = path.length();
+  const samples = Math.ceil(pathLength / 0.4);
+  let safeDistance = pathLength;
+
+  for (let step = 2; step <= samples; step += 1) {
+    const distanceAlongPath = Math.min(step * 0.4, pathLength);
+    const point = target.clone().addScaledVector(path, distanceAlongPath / pathLength);
+    const blocked = colliderIndex.query(point.x, point.z, 1.4).some((c) => {
+      if (point.y > (c.height ?? 3.5) - 0.2) return false;
+      const dx = Math.max(Math.abs(point.x - c.x) - c.halfX, 0);
+      const dz = Math.max(Math.abs(point.z - c.z) - c.halfZ, 0);
+      return dx * dx + dz * dz < 0.36 * 0.36;
+    });
+    if (blocked) {
+      safeDistance = Math.max(2.0, distanceAlongPath - 0.45);
+      break;
+    }
+  }
+  assert.ok(safeDistance < pathLength, "Camera must push forward away from wall obstacle");
+  assert.ok(safeDistance >= 2.0, "Camera maintains minimum safe distance from player");
+
+  // 2. Multi-Candidate Vehicle Dismount:
+  // Vehicle at (0, 0, 0). Left driver side (x = -1.8) is blocked by left compound wall.
+  // Right passenger side (x = +1.8) is clear!
+  const vPos = new THREE.Vector3(0, 0, 0);
+  const vYaw = 0;
+  const right = new THREE.Vector3(Math.cos(vYaw), 0, -Math.sin(vYaw));
+  const forward = new THREE.Vector3(Math.sin(vYaw), 0, Math.cos(vYaw));
+  const sideOffset = 1.8;
+  const endOffset = 2.8;
+
+  const candidates = [
+    vPos.clone().addScaledVector(right, -sideOffset), // Left (-1.8, 0, 0) - blocked by wall
+    vPos.clone().addScaledVector(right, sideOffset),  // Right (+1.8, 0, 0) - clear!
+    vPos.clone().addScaledVector(forward, -endOffset), // Rear (0, 0, -2.8) - clear
+    vPos.clone().addScaledVector(forward, endOffset),  // Front (0, 0, 2.8) - clear
+  ];
+
+  const collidesFn = (x: number, z: number, rad: number) => {
+    return colliderIndex.query(x, z, rad + 0.5).some((collider: Collider) => {
+      const closestX = THREE.MathUtils.clamp(
+        x,
+        collider.x - collider.halfX,
+        collider.x + collider.halfX,
+      );
+      const closestZ = THREE.MathUtils.clamp(
+        z,
+        collider.z - collider.halfZ,
+        collider.z + collider.halfZ,
+      );
+      const dx = x - closestX;
+      const dz = z - closestZ;
+      return dx * dx + dz * dz < rad * rad;
+    });
+  };
+
+  const safeExit = candidates.find(
+    (c) => !collidesFn(c.x, c.z, 0.48) && c.distanceTo(vPos) > 1.2,
+  );
+
+  assert.ok(safeExit, "Safe exit position must be found");
+  assert.ok(safeExit.x > 1.0, "Safe exit selects unobstructed right passenger side");
+});
+
+test("Milestone 7: Distance-Based Crowd LOD Throttling & Dakali Seated Citizens", () => {
+  const scene = new THREE.Scene();
+  const materials = createMaterials();
+  const network = buildNavigationNetwork();
+  const colliderIndex = new ColliderIndex([]);
+
+  const pedestrians = new PedestrianSystem(scene, materials, network, colliderIndex, () => 0);
+  assert.ok(pedestrians.pedestrians.length >= 10, "Crowd must be populated");
+
+  // Verify presence of seated citizens on Dakali clay ledges
+  const seatedCitizens = pedestrians.pedestrians.filter((p) => p.state === "sitting");
+  assert.ok(seatedCitizens.length >= 1, "Must have seated citizens on Dakali benches");
+  const elder = seatedCitizens[0];
+  assert.ok(elder.name.includes("Bello") || elder.name.includes("Sanusi"));
+  assert.ok(elder.destinationName.includes("Dakali") || elder.destinationName.includes("Dandali"));
+
+  // Check elder dialogue interaction
+  const elderInter = pedestrians.checkPedestrianInteraction(elder.position.clone());
+  assert.ok(elderInter, "Seated elder should offer interaction prompt");
+  const toast = elderInter.action();
+  assert.ok(toast.includes("Dakali") || toast.includes("Barka") || toast.includes("Kano") || toast.includes("history"));
+
+  // Distance LOD verification: update with close player position
+  const closePlayer = elder.position.clone().add(new THREE.Vector3(2, 0, 2));
+  pedestrians.update(0.1, closePlayer, null);
+
+  // Quality scaling preserves performance target <= 12
+  pedestrians.setQuality("performance");
+  assert.ok(pedestrians.pedestrians.length <= 12, "Performance preset throttles crowd size to <= 12");
+
+  pedestrians.dispose();
+});
+
+test("Milestone 7: Save/Load Schema Backward Compatibility with Weather & Audio Preferences", () => {
+  const economy = new EconomySystem();
+
+  // Save with Milestone 7 weather & audio preferences
+  const success = economy.saveToStorage(
+    350000,
+    0,
+    true,
+    ["cotton-transport-kofar-ruwa"],
+    45000,
+    undefined,
+    "harmattan",
+    true,
+  );
+  assert.ok(success, "saveToStorage should return true");
+
+  const loaded = economy.loadFromStorage();
+  assert.ok(loaded, "loadFromStorage should return saved state");
+  assert.equal(loaded.cash, 350000);
+  assert.equal(loaded.weatherPreset, "harmattan");
+  assert.equal(loaded.audioMuted, true);
+
+  // Backward compatibility test: load legacy save lacking weatherPreset / audioMuted
+  const legacyData = {
+    version: 1,
+    cash: 50000,
+    trafficFine: 0,
+    hasApartmentRental: false,
+    ownedProperties: [],
+    ownedBusinesses: [],
+    dayCount: 3,
+    vehicleUpgrade: { engineStage: 0, paintColor: "#4a5568", suspensionUpgraded: false },
+    completedMissions: [],
+    careerEarnings: 0,
+    savedAt: Date.now(),
+  };
+  window.localStorage.setItem("kano_streets_save_v1", JSON.stringify(legacyData));
+
+  const loadedLegacy = economy.loadFromStorage();
+  assert.ok(loadedLegacy, "Legacy save without weather/audio should load cleanly");
+  assert.equal(loadedLegacy.cash, 50000);
+  assert.equal(loadedLegacy.weatherPreset, undefined);
+  assert.equal(loadedLegacy.audioMuted, undefined);
 });

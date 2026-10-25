@@ -192,6 +192,9 @@ export type GameSnapshot = {
   playerCoords?: { x: number; z: number };
   playerHeading?: number;
   storyInfo?: StorySnapshotInfo | null;
+  weatherPreset?: string;
+  weatherDisplayName?: string;
+  audioMuted?: boolean;
 };
 
 export type GameMaterials = {
@@ -238,4 +241,8 @@ export type GameMaterials = {
   neonMagenta?: import("three").MeshStandardMaterial;
   bankBlue?: import("three").MeshStandardMaterial;
   warmOrange?: import("three").MeshStandardMaterial;
+  lampGlow?: import("three").MeshStandardMaterial;
+  headlightBeam?: import("three").MeshStandardMaterial;
+  weatheredBrick?: import("three").MeshStandardMaterial;
+  rustedZinc?: import("three").MeshStandardMaterial;
 };
