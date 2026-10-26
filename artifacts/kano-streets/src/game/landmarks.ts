@@ -75,6 +75,15 @@ export const KANO_LANDMARKS: LandmarkLocation[] = [
     description: "Gothic-modern church sanctuary with bell tower, spire, altar, and choir pews.",
   },
   {
+    id: "furniture-showroom",
+    name: "Arewa Royal Furniture & Electronics Showroom",
+    district: "SABON GARI COMMERCIAL",
+    x: -22,
+    z: 22,
+    category: "commercial",
+    description: "Multi-level home furnishing showroom featuring living room sets, Nigerian royal suites, smart electronics, and modern kitchen setups.",
+  },
+  {
     id: "sabon-gari-complex",
     name: "Sabon Gari Commercial Complex",
     district: "SABON GARI",

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import './GameUI.css';
 import TouchControls from './TouchControls';
-import type { ActiveMissionInfo, CareerPathChoice, SocialContact, StorySnapshotInfo, VehicleType } from '../game/types';
+import type { ActiveMissionInfo, CareerPathChoice, SocialContact, StorySnapshotInfo, VehicleType, FurnitureInstance, PropertyId } from '../game/types';
 import { KANO_LANDMARKS } from '../game/landmarks';
 import { CAREER_MISSIONS_CATALOG } from '../game/missionSystem';
 import CityMapModal from './CityMapModal';
+import FurnitureShopModal from './FurnitureShopModal';
+import FurnishingOverlay from './FurnishingOverlay';
 
 export type Screen = 'menu' | 'playing' | 'paused';
 export type Mode = 'on-foot' | 'driving';
@@ -38,6 +40,11 @@ export interface GameUIProps {
   weatherPreset?: string;
   weatherDisplayName?: string;
   audioMuted?: boolean;
+  isFurnishingMode?: boolean;
+  furnishingTargetName?: string | null;
+  unplacedFurnitureCount?: number;
+  placedFurnitureCount?: number;
+  isFurnitureShopOpen?: boolean;
   graphicsQuality: GraphicsQuality;
   onStart: () => void;
   onPause: () => void;
@@ -53,6 +60,26 @@ export interface GameUIProps {
   onResolveChapter1?: () => unknown;
   onCycleWeather?: () => void;
   onToggleAudioMute?: () => void;
+  onOpenFurnitureShop?: () => void;
+  onCloseFurnitureShop?: () => void;
+  onPurchaseFurniture?: (catalogId: string) => { success: boolean; message: string };
+  onToggleFurnishingMode?: () => { success: boolean; message: string };
+  onPlaceFurnitureItem?: (
+    instanceId: string,
+    room: string,
+    floor: number,
+    position: { x: number; y: number; z: number },
+    rotationY: number,
+  ) => { success: boolean; message: string };
+  onMoveFurnitureItem?: (
+    instanceId: string,
+    position: { x: number; y: number; z: number },
+    rotationY: number,
+  ) => { success: boolean; message: string };
+  onStoreFurnitureItem?: (instanceId: string) => { success: boolean; message: string };
+  onRotateFurnitureItem?: (instanceId: string, deltaYaw: number) => { success: boolean; message: string };
+  getUnplacedFurniture?: () => FurnitureInstance[];
+  getPlacedFurniture?: (propertyId?: PropertyId) => FurnitureInstance[];
   onQualityChange: (quality: GraphicsQuality) => void;
 }
 
@@ -98,6 +125,11 @@ export default function GameUI({
   weatherPreset: _weatherPreset,
   weatherDisplayName,
   audioMuted,
+  isFurnishingMode,
+  furnishingTargetName,
+  unplacedFurnitureCount: _unplacedCount,
+  placedFurnitureCount: _placedCount,
+  isFurnitureShopOpen,
   graphicsQuality,
   onStart,
   onPause,
@@ -113,10 +145,25 @@ export default function GameUI({
   onResolveChapter1,
   onCycleWeather,
   onToggleAudioMute,
+  onOpenFurnitureShop,
+  onCloseFurnitureShop,
+  onPurchaseFurniture,
+  onToggleFurnishingMode,
+  onPlaceFurnitureItem,
+  onMoveFurnitureItem,
+  onStoreFurnitureItem,
+  onRotateFurnitureItem,
+  getUnplacedFurniture,
+  getPlacedFurniture,
   onQualityChange,
 }: GameUIProps) {
   const [showDirectory, setShowDirectory] = useState(false);
   const [showMissions, setShowMissions] = useState(false);
+
+  const isInsideHome = activeInterior === 'apartment' || activeInterior === 'penthouse' || activeInterior === 'house';
+  const currentPropertyId: PropertyId = activeInterior === 'apartment' ? 'unit-2b' : activeInterior === 'penthouse' ? 'bompai-penthouse' : 'albaraka-villa';
+  const canFurnish = isInsideHome && Boolean(hasApartmentRental || (ownedProperties && ownedProperties.includes(currentPropertyId)));
+  const isInsideShowroom = activeInterior === 'furniture-showroom';
 
   useEffect(() => {
     if (screen !== 'playing') return;
@@ -229,6 +276,40 @@ export default function GameUI({
             >
               <Key>U</Key>
               <span>{audioMuted ? "🔇 MUTED" : "🔊 AUDIO"}</span>
+            </button>
+            {canFurnish && (
+              <button
+                className="ks-hud-directory-btn"
+                onClick={() => onToggleFurnishingMode?.()}
+                title="Furnish and customize your residence [F]"
+                aria-label="Toggle Home Furnishing Mode"
+                style={{
+                  background: isFurnishingMode ? "var(--ks-copper)" : undefined,
+                  color: isFurnishingMode ? "#172421" : undefined,
+                  borderColor: isFurnishingMode ? "var(--ks-copper)" : undefined,
+                }}
+              >
+                <Key>F</Key>
+                <span>FURNISH</span>
+              </button>
+            )}
+            <button
+              className="ks-hud-directory-btn"
+              onClick={() => {
+                if (isFurnitureShopOpen) {
+                  onCloseFurnitureShop?.();
+                } else {
+                  onOpenFurnitureShop?.();
+                }
+              }}
+              title="Browse Arewa Royal Furniture & Electronics Showroom"
+              aria-label="Open Furniture Catalogue"
+              style={{
+                background: isInsideShowroom ? "rgba(34, 197, 94, 0.2)" : undefined,
+                borderColor: isInsideShowroom ? "rgba(34, 197, 94, 0.5)" : undefined,
+              }}
+            >
+              <span>🛋️ SHOP</span>
             </button>
             <span className="ks-pause-hint"><Key>ESC</Key><span>PAUSE</span></span>
           </header>
@@ -392,6 +473,7 @@ export default function GameUI({
               {mode === 'on-foot' && <><span><Key>SHIFT</Key> RUN</span><span><Key>SPACE</Key> JUMP</span></>}
               {mode === 'driving' && <span><Key>SPACE</Key> BRAKE</span>}
               {mode === 'on-foot' && <span><Key>E</Key> INTERACT</span>}
+              {canFurnish && <span><Key>F</Key> FURNISH HOME</span>}
               <span><Key>R</Key> RESET POSITION</span>
             </div>
             {interactionPrompt && (
@@ -478,6 +560,28 @@ export default function GameUI({
                 </div>
               </div>
             </div>
+          )}
+
+          {isFurnitureShopOpen && (
+            <FurnitureShopModal
+              onClose={() => onCloseFurnitureShop?.()}
+              playerCash={cash ?? 0}
+              onPurchaseFurniture={onPurchaseFurniture ?? ((id: string) => ({ success: false, message: "" }))}
+            />
+          )}
+
+          {isFurnishingMode && canFurnish && (
+            <FurnishingOverlay
+              propertyName={furnishingTargetName || "Residence"}
+              propertyId={currentPropertyId}
+              unplacedItems={getUnplacedFurniture ? getUnplacedFurniture() : []}
+              placedItems={getPlacedFurniture ? getPlacedFurniture(currentPropertyId) : []}
+              onClose={() => onToggleFurnishingMode?.()}
+              onPlaceItem={onPlaceFurnitureItem ?? (() => ({ success: false, message: "" }))}
+              onMoveItem={onMoveFurnitureItem ?? (() => ({ success: false, message: "" }))}
+              onStoreItem={onStoreFurnitureItem ?? (() => ({ success: false, message: "" }))}
+              onRotateItem={onRotateFurnitureItem ?? (() => ({ success: false, message: "" }))}
+            />
           )}
         </>
       )}

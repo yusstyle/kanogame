@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import GameUI from "./components/GameUI";
 import GameViewport, { type GameViewportHandle } from "./components/GameViewport";
-import type { CareerPathChoice, GameScreen, GameSnapshot, GraphicsQuality } from "./game/types";
+import type { CareerPathChoice, GameScreen, GameSnapshot, GraphicsQuality, PropertyId } from "./game/types";
 
 const INITIAL_SNAPSHOT: GameSnapshot = {
   mode: "on-foot",
@@ -77,6 +77,62 @@ function App() {
     return viewportRef.current?.toggleAudioMute();
   }, []);
 
+  const openFurnitureShop = useCallback(() => {
+    viewportRef.current?.openFurnitureShop();
+  }, []);
+
+  const closeFurnitureShop = useCallback(() => {
+    viewportRef.current?.closeFurnitureShop();
+  }, []);
+
+  const purchaseFurniture = useCallback((catalogId: string) => {
+    return viewportRef.current?.purchaseFurniture(catalogId) ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const toggleFurnishingMode = useCallback(() => {
+    return viewportRef.current?.toggleFurnishingMode() ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const placeFurnitureItem = useCallback(
+    (instanceId: string, room: string, floor: number, position: { x: number; y: number; z: number }, rotationY: number) => {
+      return (
+        viewportRef.current?.placeFurnitureItem(instanceId, room, floor, position, rotationY) ?? {
+          success: false,
+          message: "Engine not ready",
+        }
+      );
+    },
+    [],
+  );
+
+  const moveFurnitureItem = useCallback(
+    (instanceId: string, position: { x: number; y: number; z: number }, rotationY: number) => {
+      return (
+        viewportRef.current?.moveFurnitureItem(instanceId, position, rotationY) ?? {
+          success: false,
+          message: "Engine not ready",
+        }
+      );
+    },
+    [],
+  );
+
+  const storeFurnitureItem = useCallback((instanceId: string) => {
+    return viewportRef.current?.storeFurnitureItem(instanceId) ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const rotateFurnitureItem = useCallback((instanceId: string, deltaYaw: number) => {
+    return viewportRef.current?.rotateFurnitureItem(instanceId, deltaYaw) ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const getUnplacedFurniture = useCallback(() => {
+    return viewportRef.current?.getUnplacedFurniture() ?? [];
+  }, []);
+
+  const getPlacedFurniture = useCallback((propertyId?: PropertyId) => {
+    return viewportRef.current?.getPlacedFurniture(propertyId) ?? [];
+  }, []);
+
   const receiveSnapshot = useCallback((next: GameSnapshot) => {
     setSnapshot((current) => {
       if (
@@ -105,7 +161,12 @@ function App() {
         current.storyInfo?.currentObjective === next.storyInfo?.currentObjective &&
         current.weatherPreset === next.weatherPreset &&
         current.weatherDisplayName === next.weatherDisplayName &&
-        current.audioMuted === next.audioMuted
+        current.audioMuted === next.audioMuted &&
+        current.isFurnishingMode === next.isFurnishingMode &&
+        current.furnishingTargetName === next.furnishingTargetName &&
+        current.unplacedFurnitureCount === next.unplacedFurnitureCount &&
+        current.placedFurnitureCount === next.placedFurnitureCount &&
+        current.isFurnitureShopOpen === next.isFurnitureShopOpen
       ) {
         return current;
       }
@@ -150,6 +211,11 @@ function App() {
         weatherPreset={snapshot.weatherPreset}
         weatherDisplayName={snapshot.weatherDisplayName}
         audioMuted={snapshot.audioMuted}
+        isFurnishingMode={snapshot.isFurnishingMode}
+        furnishingTargetName={snapshot.furnishingTargetName}
+        unplacedFurnitureCount={snapshot.unplacedFurnitureCount}
+        placedFurnitureCount={snapshot.placedFurnitureCount}
+        isFurnitureShopOpen={snapshot.isFurnitureShopOpen}
         graphicsQuality={graphicsQuality}
         onStart={start}
         onPause={pause}
@@ -165,6 +231,16 @@ function App() {
         onResolveChapter1={resolveChapter1}
         onCycleWeather={cycleWeather}
         onToggleAudioMute={toggleAudioMute}
+        onOpenFurnitureShop={openFurnitureShop}
+        onCloseFurnitureShop={closeFurnitureShop}
+        onPurchaseFurniture={purchaseFurniture}
+        onToggleFurnishingMode={toggleFurnishingMode}
+        onPlaceFurnitureItem={placeFurnitureItem}
+        onMoveFurnitureItem={moveFurnitureItem}
+        onStoreFurnitureItem={storeFurnitureItem}
+        onRotateFurnitureItem={rotateFurnitureItem}
+        getUnplacedFurniture={getUnplacedFurniture}
+        getPlacedFurniture={getPlacedFurniture}
         onQualityChange={setGraphicsQuality}
       />
     </main>

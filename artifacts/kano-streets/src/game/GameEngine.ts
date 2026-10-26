@@ -21,7 +21,7 @@ import { buildNavigationNetwork, type NavigationNetwork } from "./navigation";
 import { PedestrianSystem } from "./PedestrianSystem";
 import { TrafficSystem } from "./TrafficSystem";
 import { createWorld } from "./world";
-import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType, CareerPathChoice, PropertyId } from "./types";
+import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType, CareerPathChoice, PropertyId, InteriorId, FurnitureInstance } from "./types";
 import { SocialSystem } from "./socialSystem";
 import { EconomySystem } from "./economySystem";
 import { KANO_LANDMARKS, getNearestLandmark } from "./landmarks";
@@ -151,6 +151,8 @@ export class GameEngine {
   private gameScore = 0;
   private featuredContactId: string | null = null;
   private gpsTargetLandmark: string | null = null;
+  private isFurnishingMode = false;
+  private isFurnitureShopOpen = false;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -202,6 +204,7 @@ export class GameEngine {
         this.audioSystem.setMuted(saved.audioMuted);
       }
     }
+    this.syncAllPlacedFurniture();
     this.world = createWorld(this.materials);
     this.colliderIndex = new ColliderIndex(this.world.colliders);
     this.scene.add(this.world.root);
@@ -512,11 +515,25 @@ export class GameEngine {
       this.handleInteract();
       return;
     }
+    if (normalized === "f" && this.screen === "playing") {
+      this.toggleFurnishingMode();
+      return;
+    }
     if (normalized === "r" && this.screen !== "menu") {
       this.reset();
       return;
     }
     if (normalized === "escape" && this.screen === "playing") {
+      if (this.isFurnishingMode) {
+        this.isFurnishingMode = false;
+        this.pushSnapshot(true);
+        return;
+      }
+      if (this.isFurnitureShopOpen) {
+        this.isFurnitureShopOpen = false;
+        this.pushSnapshot(true);
+        return;
+      }
       this.callbacks.onPause();
       return;
     }
@@ -612,11 +629,21 @@ export class GameEngine {
   private onKeyDown(event: KeyboardEvent) {
     const key = event.key.toLowerCase();
     const movementKey = normalizeMovementKey(key);
-    if (["w", "a", "s", "d", " ", "shift", "e", "r", "escape", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
+    if (["w", "a", "s", "d", " ", "shift", "e", "f", "r", "escape", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
       event.preventDefault();
     }
 
     if (key === "escape" && !event.repeat && this.screen === "playing") {
+      if (this.isFurnishingMode) {
+        this.isFurnishingMode = false;
+        this.pushSnapshot(true);
+        return;
+      }
+      if (this.isFurnitureShopOpen) {
+        this.isFurnitureShopOpen = false;
+        this.pushSnapshot(true);
+        return;
+      }
       this.callbacks.onPause();
       return;
     }
@@ -626,6 +653,10 @@ export class GameEngine {
     }
     if (key === "e" && !event.repeat && this.screen === "playing") {
       this.handleInteract();
+      return;
+    }
+    if (key === "f" && !event.repeat && this.screen === "playing") {
+      this.toggleFurnishingMode();
       return;
     }
     this.keys.add(movementKey);
@@ -693,7 +724,23 @@ export class GameEngine {
     if (this.interiorManager.activeInterior) {
       const activeZone = this.interiorManager.getActiveZone();
       if (activeZone) {
-        // First check: interactive interior room doors (open/close)
+        // First check: placed furniture interaction (e.g. sit on sofa, watch TV, remote work on PC, drink Zobo from fridge, sleep in bed)
+        const furnInter = this.interiorManager.getFurnitureInteraction(this.playerPosition);
+        if (furnInter) {
+          const res = furnInter.action();
+          this.statusMessage = res.statusMessage;
+          if (res.cashDelta) this.cash += res.cashDelta;
+          if (res.timeDeltaMinutes) {
+            this.gameMinutes += res.timeDeltaMinutes;
+            this.economy.dayCount += Math.floor(res.timeDeltaMinutes / (24 * 60));
+          }
+          if (res.scoreDelta) this.gameScore = Math.max(this.gameScore, this.gameScore + res.scoreDelta);
+          this.saveGame();
+          this.pushSnapshot(true);
+          return;
+        }
+
+        // Second check: interactive interior room doors (open/close)
         const nearbyDoor = this.interiorManager.getNearbyDoor(this.playerPosition, 2.0);
         if (nearbyDoor) {
           const res = this.interiorManager.toggleDoor(nearbyDoor.id);
@@ -702,19 +749,20 @@ export class GameEngine {
           return;
         }
 
-        // Second check: Distance to exit door
+        // Third check: Distance to exit door
         const distExit = this.playerPosition.distanceTo(activeZone.exitPoint);
         if (distExit <= 2.2) {
           this.playerPosition.copy(activeZone.outdoorDoorPosition);
           this.playerYaw = activeZone.outdoorDoorYaw;
           this.interiorManager.activeInterior = null;
+          this.isFurnishingMode = false;
           this.statusMessage = `Exited ${activeZone.name}`;
           this.updateTransform();
           this.pushSnapshot(true);
           return;
         }
 
-        // Third check: interactive station inside
+        // Fourth check: interactive station inside
         if (activeZone.checkInteraction) {
           const inter = activeZone.checkInteraction(this.playerPosition, {
             cash: this.cash,
@@ -745,6 +793,9 @@ export class GameEngine {
             if (res.purchasedBusiness) {
               const b = this.economy.businesses.get(res.purchasedBusiness);
               if (b) b.isOwned = true;
+            }
+            if (res.openFurnitureShop) {
+              this.isFurnitureShopOpen = true;
             }
             if (res.socialContactId) {
               this.featuredContactId = res.socialContactId;
@@ -2010,21 +2061,26 @@ export class GameEngine {
     } else if (this.interiorManager.activeInterior) {
       const activeZone = this.interiorManager.getActiveZone();
       if (activeZone) {
-        const nearbyDoor = this.interiorManager.getNearbyDoor(this.playerPosition, 2.0);
-        if (nearbyDoor) {
-          interactionPrompt = `${nearbyDoor.isOpen ? "Close" : "Open"} ${nearbyDoor.name}`;
-        } else if (this.playerPosition.distanceTo(activeZone.exitPoint) <= 2.2) {
-          interactionPrompt = `Exit ${activeZone.name}`;
-        } else if (activeZone.checkInteraction) {
-          const inter = activeZone.checkInteraction(this.playerPosition, {
-            cash: this.cash,
-            trafficFine: this.trafficFine,
-            hasApartmentRental: this.hasApartmentRental,
-            score: this.gameScore,
-            ownedProperties: this.economy.getOwnedPropertiesList(),
-            ownedBusinesses: this.economy.getOwnedBusinessesList(),
-          });
-          if (inter) interactionPrompt = inter.prompt;
+        const furnInter = this.interiorManager.getFurnitureInteraction(this.playerPosition);
+        if (furnInter) {
+          interactionPrompt = furnInter.prompt;
+        } else {
+          const nearbyDoor = this.interiorManager.getNearbyDoor(this.playerPosition, 2.0);
+          if (nearbyDoor) {
+            interactionPrompt = `${nearbyDoor.isOpen ? "Close" : "Open"} ${nearbyDoor.name}`;
+          } else if (this.playerPosition.distanceTo(activeZone.exitPoint) <= 2.2) {
+            interactionPrompt = `Exit ${activeZone.name}`;
+          } else if (activeZone.checkInteraction) {
+            const inter = activeZone.checkInteraction(this.playerPosition, {
+              cash: this.cash,
+              trafficFine: this.trafficFine,
+              hasApartmentRental: this.hasApartmentRental,
+              score: this.gameScore,
+              ownedProperties: this.economy.getOwnedPropertiesList(),
+              ownedBusinesses: this.economy.getOwnedBusinessesList(),
+            });
+            if (inter) interactionPrompt = inter.prompt;
+          }
         }
       }
     } else {
@@ -2211,6 +2267,13 @@ export class GameEngine {
       weatherPreset: this.weatherSystem.getPreset(),
       weatherDisplayName: this.weatherSystem.getPresetDisplayName(),
       audioMuted: this.audioSystem.isMuted(),
+      isFurnishingMode: this.isFurnishingMode,
+      furnishingTargetName: this.getFurnishingTargetName(),
+      unplacedFurnitureCount: this.economy.getUnplacedFurniture().length,
+      placedFurnitureCount: this.getCurrentInteriorPropertyId()
+        ? this.economy.getPlacedFurniture(this.getCurrentInteriorPropertyId()!).length
+        : 0,
+      isFurnitureShopOpen: this.isFurnitureShopOpen,
     });
   }
 
@@ -2369,6 +2432,160 @@ export class GameEngine {
     this.saveGame();
     this.pushSnapshot(true);
     return res;
+  }
+
+  // =========================================================================
+  // Milestone 9: Customizable Homes, Furnishing & Furniture Showroom
+  // =========================================================================
+
+  public syncAllPlacedFurniture(): void {
+    const properties: { propId: PropertyId; interiorId: InteriorId }[] = [
+      { propId: "unit-2b", interiorId: "apartment" },
+      { propId: "bompai-penthouse", interiorId: "penthouse" },
+      { propId: "albaraka-villa", interiorId: "house" },
+    ];
+    for (const { propId, interiorId } of properties) {
+      const placed = this.economy.getPlacedFurniture(propId);
+      this.interiorManager.updatePlacedFurniture(interiorId, placed);
+    }
+  }
+
+  public getCurrentInteriorPropertyId(): PropertyId | null {
+    if (this.interiorManager.activeInterior === "apartment") return "unit-2b";
+    if (this.interiorManager.activeInterior === "penthouse") return "bompai-penthouse";
+    if (this.interiorManager.activeInterior === "house") return "albaraka-villa";
+    return null;
+  }
+
+  public canFurnishCurrentLocation(): boolean {
+    const propId = this.getCurrentInteriorPropertyId();
+    if (!propId) return false;
+    if (propId === "unit-2b") {
+      return this.hasApartmentRental || Boolean(this.economy.properties.get("unit-2b")?.isOwned);
+    }
+    return Boolean(this.economy.properties.get(propId)?.isOwned);
+  }
+
+  public getFurnishingTargetName(): string {
+    const propId = this.getCurrentInteriorPropertyId();
+    if (!propId) return "Residence";
+    if (propId === "unit-2b") return "Airport View Unit 2B (Executive Flat)";
+    if (propId === "bompai-penthouse") return "Bompai Heights Luxury Penthouse";
+    if (propId === "albaraka-villa") return "Al-Baraka Executive Villa";
+    return "Residence";
+  }
+
+  public isFurnitureShopActive(): boolean {
+    return this.isFurnitureShopOpen;
+  }
+
+  public openFurnitureShop(): void {
+    this.isFurnitureShopOpen = true;
+    this.pushSnapshot(true);
+  }
+
+  public closeFurnitureShop(): void {
+    this.isFurnitureShopOpen = false;
+    this.pushSnapshot(true);
+  }
+
+  public isFurnishingModeActive(): boolean {
+    return this.isFurnishingMode;
+  }
+
+  public toggleFurnishingMode(): { success: boolean; message: string } {
+    if (!this.canFurnishCurrentLocation()) {
+      const msg = "Furnishing Mode: Enter an owned or rented residence to customize your home.";
+      this.statusMessage = msg;
+      this.pushSnapshot(true);
+      return { success: false, message: msg };
+    }
+
+    this.isFurnishingMode = !this.isFurnishingMode;
+    const msg = this.isFurnishingMode
+      ? `Furnishing Mode Enabled: ${this.getFurnishingTargetName()}`
+      : "Furnishing Mode Disabled";
+    this.statusMessage = msg;
+    this.pushSnapshot(true);
+    return { success: true, message: msg };
+  }
+
+  public purchaseFurniture(catalogId: string): { success: boolean; message: string } {
+    const res = this.economy.purchaseFurniture(catalogId, this.cash);
+    if (res.success && res.cost) {
+      this.cash -= res.cost;
+      this.saveGame();
+      this.statusMessage = res.message;
+      this.pushSnapshot(true);
+    }
+    return res;
+  }
+
+  public placeFurnitureItem(
+    instanceId: string,
+    room: string,
+    floor: number,
+    position: { x: number; y: number; z: number },
+    rotationY: number,
+  ): { success: boolean; message: string } {
+    const propId = this.getCurrentInteriorPropertyId();
+    if (!propId || !this.canFurnishCurrentLocation()) {
+      return { success: false, message: "Must be inside an owned or rented home to place furniture." };
+    }
+
+    const res = this.economy.placeFurniture(instanceId, propId, floor, room, position, rotationY);
+    if (res.success) {
+      this.syncAllPlacedFurniture();
+      this.saveGame();
+      this.statusMessage = res.message;
+      this.pushSnapshot(true);
+    }
+    return res;
+  }
+
+  public moveFurnitureItem(
+    instanceId: string,
+    position: { x: number; y: number; z: number },
+    rotationY: number,
+  ): { success: boolean; message: string } {
+    const res = this.economy.moveFurniture(instanceId, position, rotationY);
+    if (res.success) {
+      this.syncAllPlacedFurniture();
+      this.saveGame();
+      this.statusMessage = res.message;
+      this.pushSnapshot(true);
+    }
+    return res;
+  }
+
+  public storeFurnitureItem(instanceId: string): { success: boolean; message: string } {
+    const res = this.economy.storeFurniture(instanceId);
+    if (res.success) {
+      this.syncAllPlacedFurniture();
+      this.saveGame();
+      this.statusMessage = res.message;
+      this.pushSnapshot(true);
+    }
+    return res;
+  }
+
+  public rotateFurnitureItem(instanceId: string, deltaYaw = Math.PI / 2): { success: boolean; message: string } {
+    const instance = this.economy.furnitureInventory.find((i) => i.instanceId === instanceId);
+    if (!instance || !instance.isPlaced) {
+      return { success: false, message: "Item is not placed." };
+    }
+    const newYaw = (instance.rotationY + deltaYaw) % (Math.PI * 2);
+    return this.moveFurnitureItem(instanceId, instance.position, newYaw);
+  }
+
+  public getUnplacedFurniture(): FurnitureInstance[] {
+    return this.economy.getUnplacedFurniture();
+  }
+
+  public getPlacedFurniture(propertyId?: PropertyId): FurnitureInstance[] {
+    const propId = propertyId ?? this.getCurrentInteriorPropertyId();
+    if (!propId) return [];
+    return this.economy.getPlacedFurniture(propId);
   }
 
   private lerpAngle(from: number, to: number, alpha: number) {

@@ -829,3 +829,90 @@ export function createSabonGariPlaza(materials: GameMaterials): PlotAsset {
 
   return { root, colliders };
 }
+
+// 10. Arewa Royal Furniture & Electronics Showroom (Sabon Gari Commercial Corridor)
+export function createFurnitureShowroom(materials: GameMaterials): PlotAsset {
+  const root = new THREE.Group();
+  const colliders: Collider[] = [];
+  root.name = "furniture-showroom-building";
+
+  const width = 16.0;
+  const depth = 11.0;
+  const height = 8.6; // 2 commercial storeys
+  const frontZ = -depth / 2; // Front facing South toward Bompai Road
+
+  // Main architectural structure: warm Sahelian sandstone plaster
+  addBox(root, materials.plaster, 0, height / 2, 0, width, height, depth);
+  // Roof slab & modern dark architectural parapet
+  addBox(root, materials.darkTrim || materials.metal, 0, height + 0.25, 0, width + 0.6, 0.5, depth + 0.6);
+
+  // Vertical royal navy / gold accent pillars on corners
+  for (const px of [-width / 2 + 0.5, width / 2 - 0.5]) {
+    addBox(root, materials.bankBlue || materials.darkTrim, px, height / 2, frontZ - 0.2, 0.9, height, 0.4);
+    addBox(root, materials.goldTrim || materials.trim, px, height - 0.6, frontZ - 0.25, 0.95, 0.3, 0.45);
+  }
+
+  // Large Ground Floor Glazed Display Windows
+  // Left showroom bay: Living room showcase vignette
+  addBox(root, materials.glassLit || materials.glass, -4.6, 2.0, frontZ - 0.08, 5.2, 3.2, 0.12);
+  addBox(root, materials.cloth, -4.6, 1.2, frontZ + 1.2, 2.4, 0.7, 1.0); // Mini preview sofa
+  addBox(root, materials.wood, -4.6, 0.9, frontZ + 2.2, 1.2, 0.4, 0.6); // Mini coffee table
+
+  // Right showroom bay: Modern smart tech & bedroom preview vignette
+  addBox(root, materials.glassLit || materials.glass, 4.6, 2.0, frontZ - 0.08, 5.2, 3.2, 0.12);
+  addBox(root, materials.darkTrim, 4.6, 2.2, frontZ + 1.8, 2.0, 1.2, 0.08); // Mini TV screen
+  addBox(root, materials.neonCyan || materials.glassLit, 4.6, 2.2, frontZ + 1.76, 1.85, 1.05, 0.04);
+
+  // Center Entrance Double Glass Doors
+  addBox(root, materials.glassLit || materials.glass, 0, 1.5, frontZ - 0.08, 2.6, 2.7, 0.1);
+  addBox(root, materials.goldTrim || materials.trim, 0, 1.5, frontZ - 0.12, 0.08, 2.7, 0.15); // Center frame divider
+  // Polished entrance door handles
+  addBox(root, materials.goldTrim || materials.trim, -0.2, 1.4, frontZ - 0.18, 0.06, 0.6, 0.08);
+  addBox(root, materials.goldTrim || materials.trim, 0.2, 1.4, frontZ - 0.18, 0.06, 0.6, 0.08);
+
+  // Modern Cantilevered Entrance Canopy & Lighting
+  addBox(root, materials.concrete, 0, 3.5, frontZ - 1.2, 4.2, 0.22, 2.6);
+  addBox(root, materials.metal, -1.9, 2.4, frontZ - 2.3, 0.08, 2.2, 0.08);
+  addBox(root, materials.metal, 1.9, 2.4, frontZ - 2.3, 0.08, 2.2, 0.08);
+
+  // Upper Floor Ribbon Windows & Architectural Louvers
+  for (const fx of [-4.8, -1.6, 1.6, 4.8]) {
+    addBox(root, materials.glassLit || materials.glass, fx, 5.8, frontZ - 0.08, 2.6, 2.0, 0.1);
+    // Sahelian solar brise-soleil / timber slats
+    for (const ly of [5.2, 5.7, 6.2, 6.7]) {
+      addBox(root, materials.wood, fx, ly, frontZ - 0.2, 2.7, 0.06, 0.16);
+    }
+  }
+
+  // Prominent Showroom Signboard with Nigerian Branding
+  const signMat = makeSignMaterial(
+    "AREWA ROYAL FURNITURE & ELECTRONICS SHOWROOM\nLIVING · BEDROOM · KITCHEN · HOME COMPUTING",
+    "#0d2035",
+  );
+  addBox(root, signMat, 0, 4.25, frontZ - 0.22, 12.5, 1.05, 0.14);
+
+  // Rooftop Commercial HVAC & Solar Energy Array
+  addBox(root, materials.metal, -3.5, height + 0.9, -1.5, 2.2, 1.2, 1.8);
+  addBox(root, materials.metal, -3.5, height + 0.9, 1.5, 2.2, 1.2, 1.8);
+  // 6 Solar Panels
+  for (const sx of [1.5, 4.0]) {
+    for (const sz of [-3.0, 0, 3.0]) {
+      const panel = addBox(root, materials.bankBlue || materials.darkTrim, sx, height + 0.65, sz, 1.8, 0.08, 2.2, false);
+      panel.rotation.x = -0.2;
+    }
+  }
+
+  // Paved Front Approach & Planter Boxes
+  addBox(root, materials.sidewalk, 0, 0.1, frontZ - 1.6, width + 1.2, 0.2, 3.2, false);
+  for (const bx of [-6.2, 6.2]) {
+    addBox(root, materials.concrete, bx, 0.5, frontZ - 1.8, 1.6, 0.7, 1.0);
+    addBox(root, materials.foliage || materials.sidewalk, bx, 0.95, frontZ - 1.8, 1.4, 0.5, 0.8);
+  }
+
+  colliders.push(
+    { x: 0, z: 0, halfX: width / 2 + 0.3, halfZ: depth / 2 + 0.3, height: height + 1 },
+    { x: 0, z: frontZ - 1.6, halfX: width / 2, halfZ: 1.6, height: 3.6 },
+  );
+
+  return { root, colliders };
+}

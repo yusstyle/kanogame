@@ -16,6 +16,7 @@ import {
   createPoliceOfficerModel,
   createPoliceStation,
   createSabonGariPlaza,
+  createFurnitureShowroom,
 } from "./modernDistrict";
 import { createIndustrialDistrict } from "./industrialDistrict";
 import { createHistoricDistrict } from "./historicDistrict";
@@ -789,7 +790,8 @@ export function createWorld(materials: GameMaterials): WorldResult {
           Math.hypot(x - 80, z - (-22)) < 18 ||
           Math.hypot(x - 80, z - (-46)) < 16 ||
           Math.hypot(x - 18, z - 42) < 16 ||
-          Math.hypot(x - (-22), z - 48) < 16
+          Math.hypot(x - (-22), z - 48) < 16 ||
+          Math.hypot(x - (-22), z - 22) < 16
         ) {
           continue;
         }
@@ -903,7 +905,13 @@ export function createWorld(materials: GameMaterials): WorldResult {
   root.add(sabonGariComplex.root);
   colliders.push(...sabonGariComplex.colliders.map((c) => ({ ...c, x: c.x - 22, z: c.z + 48 })));
 
-  // 12. Checkpoint 2: NPF Highway Patrol on Sabon Gari Avenue
+  // 12. Arewa Royal Furniture & Electronics Showroom (Sabon Gari Commercial Corridor)
+  const furnitureShowroom = createFurnitureShowroom(materials);
+  furnitureShowroom.root.position.set(-22, 0, 22);
+  root.add(furnitureShowroom.root);
+  colliders.push(...furnitureShowroom.colliders.map((c) => ({ ...c, x: c.x - 22, z: c.z + 22 })));
+
+  // 13. Checkpoint 2: NPF Highway Patrol on Sabon Gari Avenue
   const officer2 = createPoliceOfficerModel(materials);
   officer2.position.set(-10, 0, -56);
   officer2.rotation.y = -Math.PI / 2;

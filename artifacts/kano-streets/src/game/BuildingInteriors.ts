@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { makeSignMaterial } from "./materials";
-import type { Collider, GameMaterials, InteriorId, PropertyId, BusinessId } from "./types";
+import type { Collider, GameMaterials, InteriorId, PropertyId, BusinessId, FurnitureInstance } from "./types";
 import { PROPERTY_REGISTRY } from "./propertyRegistry";
+import { buildFurnitureMesh, type RenderedFurnitureResult } from "./furnitureRenderer";
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
 const unitCyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
@@ -90,6 +91,8 @@ export interface InteriorZone {
       socialContactId?: string;
       purchasedProperty?: PropertyId;
       purchasedBusiness?: BusinessId;
+      openFurnitureShop?: boolean;
+      timeDeltaMinutes?: number;
     };
   } | null;
 }
@@ -102,6 +105,8 @@ export class BuildingInteriorManager {
   public outdoorSavedYaw = 0;
   public interactiveDoors: InteractiveDoor[] = [];
   public lightsOn = true;
+  public placedFurnitureGroups = new Map<InteriorId, THREE.Group>();
+  public placedFurnitureItems = new Map<string, RenderedFurnitureResult>();
 
   constructor(private readonly materials: GameMaterials) {
     this.root.name = "building-interiors-root";
@@ -112,6 +117,7 @@ export class BuildingInteriorManager {
     this.buildPolicePostInterior();
     this.buildRestaurantInterior();
     this.buildGamingHubInterior();
+    this.buildFurnitureShowroomInterior();
   }
 
   private addInteractiveDoor(
@@ -1429,6 +1435,387 @@ export class BuildingInteriorManager {
         return null;
       },
     });
+  }
+
+  // =========================================================================
+  // 8. Arewa Royal Furniture & Electronics Showroom (Sabon Gari)
+  // =========================================================================
+  private buildFurnitureShowroomInterior() {
+    const cx = 460;
+    const cy = -60;
+    const cz = 0;
+    const group = new THREE.Group();
+    group.position.set(cx, cy, cz);
+    this.root.add(group);
+
+    const colliders: Collider[] = [];
+    const lights: THREE.PointLight[] = [];
+
+    const width = 18.0;
+    const depth = 14.0;
+    const height = 4.2;
+
+    // Polished Italian Ivory Porcelain Tile Flooring
+    addBox(group, this.materials.white, 0, 0.05, 0, width, 0.1, depth, false);
+
+    // Warm Sahelian Plaster Perimeter Walls with Dark Walnut Baseboard
+    // North Back Wall
+    addBox(group, this.materials.plaster, 0, height / 2, -depth / 2, width, height, 0.3);
+    addBox(group, this.materials.darkTrim, 0, 0.25, -depth / 2 + 0.16, width, 0.4, 0.04);
+    // South Front Wall with Double Entrance Door Opening
+    addBox(group, this.materials.plaster, -width / 4 - 0.9, height / 2, depth / 2, width / 2 - 1.8, height, 0.3);
+    addBox(group, this.materials.plaster, width / 4 + 0.9, height / 2, depth / 2, width / 2 - 1.8, height, 0.3);
+    addBox(group, this.materials.plaster, 0, height - 0.6, depth / 2, 3.6, 1.2, 0.3);
+    // West & East Side Walls
+    addBox(group, this.materials.plaster, -width / 2, height / 2, 0, 0.3, height, depth);
+    addBox(group, this.materials.plaster, width / 2, height / 2, 0, 0.3, height, depth);
+    addBox(group, this.materials.darkTrim, -width / 2 + 0.16, 0.25, 0, 0.04, 0.4, depth);
+    addBox(group, this.materials.darkTrim, width / 2 - 0.16, 0.25, 0, 0.04, 0.4, depth);
+
+    // Modern Commercial Grid Ceiling with Track Downlights
+    addBox(group, this.materials.roof, 0, height, 0, width, 0.2, depth, false);
+
+    // Showroom Lighting Fixtures
+    for (const lx of [-5, 0, 5]) {
+      for (const lz of [-4, 0, 4]) {
+        const light = new THREE.PointLight("#fff9eb", 1.8, 12);
+        light.position.set(cx + lx, cy + height - 0.4, cz + lz);
+        light.userData.baseIntensity = 1.8;
+        this.root.add(light);
+        lights.push(light);
+
+        addBox(group, this.materials.metal, lx, height - 0.1, lz, 0.4, 0.1, 0.4);
+      }
+    }
+
+    // Grand Showroom Signboard inside Entrance
+    const insideSign = makeSignMaterial("AREWA ROYAL FURNITURE & ELECTRONICS SHOWROOM\nKANO COMMERCE · QUALITY GUARANTEE", "#0d2035");
+    addBox(group, insideSign, 0, height - 0.8, -depth / 2 + 0.2, 11.5, 0.9, 0.06);
+
+    // Entrance Runner Carpet
+    addBox(group, this.materials.clothRed, 0, 0.1, 4.2, 3.0, 0.04, 5.0, false);
+
+    // -----------------------------------------------------------------------
+    // Zone 1: Executive Living Room Suite Vignette (West Side, x ~ -5.0)
+    // -----------------------------------------------------------------------
+    const z1x = -5.0;
+    const z1z = 0;
+    // Raised Teak Wood Stage
+    addBox(group, this.materials.wood, z1x, 0.12, z1z, 6.2, 0.14, 5.8);
+    // Acoustic Wood Slat Media Backdrop Wall
+    for (let i = -2.8; i <= 2.8; i += 0.25) {
+      addBox(group, this.materials.wood, z1x - 2.8, height / 2, z1z + i, 0.15, height - 0.2, 0.12);
+    }
+    // 75-inch 4K Smart TV on Media Wall
+    addBox(group, this.materials.black, z1x - 2.65, 2.2, z1z, 0.08, 1.35, 2.4);
+    addBox(group, this.materials.neonCyan || this.materials.glassLit, z1x - 2.6, 2.2, z1z, 0.04, 1.25, 2.25);
+    // Media Console Table
+    addBox(group, this.materials.darkTrim, z1x - 2.4, 0.55, z1z, 0.6, 0.65, 3.0);
+    // Royal Sectional Sofa in Premium Navy Fabric
+    addBox(group, this.materials.cloth, z1x + 0.6, 0.4, z1z - 0.8, 1.4, 0.45, 2.8);
+    addBox(group, this.materials.cloth, z1x + 0.6, 0.85, z1z - 2.0, 1.4, 0.55, 0.4);
+    addBox(group, this.materials.cloth, z1x - 0.6, 0.4, z1z + 0.8, 2.6, 0.45, 1.2);
+    // Marble Top Center Table
+    addBox(group, this.materials.white, z1x - 0.4, 0.35, z1z - 0.6, 1.2, 0.32, 1.6);
+    // Brass Standing Floor Lamp
+    addCyl(group, this.materials.goldTrim || this.materials.trim, z1x + 1.8, 1.3, z1z + 1.8, 0.04, 2.2);
+    addCyl(group, this.materials.white, z1x + 1.8, 2.25, z1z + 1.8, 0.35, 0.4);
+
+    // -----------------------------------------------------------------------
+    // Zone 2: Northern Royal Master Bedroom Suite Vignette (North-West, x ~ -4.8, z ~ -4.5)
+    // -----------------------------------------------------------------------
+    const z2x = -4.8;
+    const z2z = -4.5;
+    // Plush Bedroom Area Rug
+    addBox(group, this.materials.cloth, z2x, 0.12, z2z, 5.8, 0.06, 4.4, false);
+    // King-Size Royal Bed Frame & Headboard
+    addBox(group, this.materials.darkTrim, z2x, 0.45, z2z, 2.6, 0.55, 2.4);
+    addBox(group, this.materials.white, z2x, 0.7, z2z, 2.4, 0.35, 2.2);
+    addBox(group, this.materials.clothRed, z2x, 0.82, z2z - 0.2, 2.2, 0.12, 1.8);
+    // Padded Royal Headboard with Gold Trim
+    addBox(group, this.materials.clothRed, z2x, 1.4, z2z - 1.25, 2.7, 1.4, 0.2);
+    addBox(group, this.materials.goldTrim || this.materials.trim, z2x, 1.4, z2z - 1.2, 2.8, 1.5, 0.05);
+    // Matching Nightstands with Bedside Touch Lamps
+    for (const sx of [-1.65, 1.65]) {
+      addBox(group, this.materials.wood, z2x + sx, 0.4, z2z - 1.0, 0.65, 0.6, 0.6);
+      addCyl(group, this.materials.goldTrim || this.materials.trim, z2x + sx, 0.8, z2z - 1.0, 0.08, 0.25);
+      addBox(group, this.materials.white, z2x + sx, 1.0, z2z - 1.0, 0.25, 0.25, 0.25);
+    }
+
+    // -----------------------------------------------------------------------
+    // Zone 3: Modern Smart Kitchen Suite Vignette (North-East, x ~ 4.8, z ~ -4.5)
+    // -----------------------------------------------------------------------
+    const z3x = 4.8;
+    const z3z = -4.5;
+    // Quartz Island Countertop
+    addBox(group, this.materials.darkTrim, z3x, 0.55, z3z, 1.4, 0.88, 3.2);
+    addBox(group, this.materials.white, z3x, 0.98, z3z, 1.6, 0.08, 3.4);
+    // Bar Stools
+    for (const bz of [-0.8, 0.8]) {
+      addCyl(group, this.materials.metal, z3x - 1.1, 0.45, z3z + bz, 0.04, 0.7);
+      addCyl(group, this.materials.wood, z3x - 1.1, 0.72, z3z + bz, 0.22, 0.08);
+    }
+    // Stainless Steel Double-Door Smart Refrigerator
+    addBox(group, this.materials.metal, z3x + 2.8, 1.25, z3z - 1.2, 1.1, 2.1, 0.95);
+    addBox(group, this.materials.black, z3x + 2.28, 1.35, z3z - 1.2, 0.04, 0.5, 0.35); // Touch panel
+    // 4-Burner Gas Cooker with Range Hood
+    addBox(group, this.materials.darkTrim, z3x + 2.8, 0.55, z3z + 0.8, 1.0, 0.88, 1.0);
+    addBox(group, this.materials.metal, z3x + 2.8, 1.9, z3z + 0.8, 0.9, 0.4, 0.9);
+
+    // -----------------------------------------------------------------------
+    // Zone 4: Executive Study & High-End Gaming Rig (East Side, x ~ 5.2, z ~ 0)
+    // -----------------------------------------------------------------------
+    const z4x = 5.2;
+    const z4z = 0;
+    // Walnut Executive Desk
+    addBox(group, this.materials.wood, z4x, 0.45, z4z, 1.2, 0.74, 2.4);
+    // Dual Curved Ultrawide Displays
+    addBox(group, this.materials.black, z4x - 0.1, 1.15, z4z - 0.55, 0.12, 0.45, 0.95);
+    addBox(group, this.materials.black, z4x - 0.1, 1.15, z4z + 0.55, 0.12, 0.45, 0.95);
+    addBox(group, this.materials.neonCyan || this.materials.glassLit, z4x - 0.15, 1.15, z4z - 0.55, 0.04, 0.4, 0.9);
+    addBox(group, this.materials.neonCyan || this.materials.glassLit, z4x - 0.15, 1.15, z4z + 0.55, 0.04, 0.4, 0.9);
+    // RGB Liquid-Cooled Gaming Tower
+    addBox(group, this.materials.black, z4x + 0.25, 1.1, z4z + 0.95, 0.3, 0.55, 0.55);
+    addBox(group, this.materials.neonCyan || this.materials.glassLit, z4x + 0.1, 1.1, z4z + 0.95, 0.04, 0.45, 0.45);
+    // High-Back Ergonomic Office Chair
+    addBox(group, this.materials.darkTrim, z4x - 0.7, 0.5, z4z, 0.65, 0.45, 0.65);
+    addBox(group, this.materials.cloth, z4x - 0.95, 0.95, z4z, 0.18, 0.7, 0.6);
+
+    // -----------------------------------------------------------------------
+    // Zone 5: Central Customer Reception Desk & Musa Dan-Ladi NPC (x = 0, z = 2.0)
+    // -----------------------------------------------------------------------
+    const counterX = 0;
+    const counterZ = 2.0;
+    // Curved Front Counter
+    addBox(group, this.materials.darkTrim, counterX, 0.55, counterZ, 3.4, 0.95, 1.1);
+    addBox(group, this.materials.white, counterX, 1.02, counterZ, 3.6, 0.08, 1.25);
+    // POS Terminal, Receipt Machine & Catalogue Stand
+    addBox(group, this.materials.black, counterX - 0.8, 1.12, counterZ - 0.1, 0.28, 0.12, 0.35);
+    addBox(group, this.materials.metal, counterX + 0.8, 1.18, counterZ - 0.1, 0.45, 0.25, 0.35);
+    const counterSign = makeSignMaterial("CUSTOMER SERVICE & ORDERS", "#0d2035");
+    addBox(group, counterSign, counterX, 0.55, counterZ + 0.64, 2.6, 0.4, 0.06);
+
+    // 3D Sales Consultant NPC: Musa Dan-Ladi
+    const musa = new THREE.Group();
+    musa.position.set(counterX, 0, counterZ - 0.8);
+    musa.rotation.y = 0; // facing south toward player approaching the desk
+    group.add(musa);
+    // Legs in dark trousers
+    addBox(musa, this.materials.darkTrim, -0.16, 0.45, 0, 0.18, 0.85, 0.2);
+    addBox(musa, this.materials.darkTrim, 0.16, 0.45, 0, 0.18, 0.85, 0.2);
+    // Crisp Royal Blue Embroidered Kaftan
+    addBox(musa, this.materials.bankBlue || this.materials.cloth, 0, 1.15, 0, 0.54, 0.75, 0.32);
+    // Gold embroidery trim down kaftan center
+    addBox(musa, this.materials.goldTrim || this.materials.trim, 0, 1.15, 0.17, 0.06, 0.65, 0.04);
+    // Hands & arms resting gracefully on counter
+    addBox(musa, this.materials.bankBlue || this.materials.cloth, -0.32, 1.1, 0.15, 0.14, 0.55, 0.16);
+    addBox(musa, this.materials.bankBlue || this.materials.cloth, 0.32, 1.1, 0.15, 0.14, 0.55, 0.16);
+    // Realistic skin head & warm expression
+    const skinMat = new THREE.MeshStandardMaterial({ color: "#543722", roughness: 0.8 });
+    addBox(musa, skinMat, 0, 1.62, 0, 0.24, 0.26, 0.24);
+    // Northern Fula Cap (embroidered traditional cap)
+    addBox(musa, this.materials.white, 0, 1.78, 0, 0.25, 0.12, 0.25);
+    addBox(musa, this.materials.goldTrim || this.materials.trim, 0, 1.74, 0.13, 0.26, 0.04, 0.02);
+
+    // Double Glass Entrance/Exit Doors
+    this.addInteractiveDoor(
+      group,
+      "furniture-showroom",
+      "showroom-exit-left",
+      "Showroom Main Entrance (Left)",
+      -0.8,
+      0,
+      depth / 2 - 0.1,
+      1.4,
+      2.6,
+      0.08,
+      this.materials.glassLit || this.materials.glass,
+      cx,
+      cz,
+      false,
+      colliders,
+    );
+    this.addInteractiveDoor(
+      group,
+      "furniture-showroom",
+      "showroom-exit-right",
+      "Showroom Main Entrance (Right)",
+      0.8,
+      0,
+      depth / 2 - 0.1,
+      1.4,
+      2.6,
+      0.08,
+      this.materials.glassLit || this.materials.glass,
+      cx,
+      cz,
+      true,
+      colliders,
+    );
+
+    // Colliders
+    colliders.push(
+      // Perimeter walls
+      { x: cx, z: cz - depth / 2, halfX: width / 2, halfZ: 0.4, height },
+      { x: cx - width / 4 - 0.9, z: cz + depth / 2, halfX: width / 4 - 0.8, halfZ: 0.4, height },
+      { x: cx + width / 4 + 0.9, z: cz + depth / 2, halfX: width / 4 - 0.8, halfZ: 0.4, height },
+      { x: cx - width / 2, z: cz, halfX: 0.4, halfZ: depth / 2, height },
+      { x: cx + width / 2, z: cz, halfX: 0.4, halfZ: depth / 2, height },
+      // Counter & Musa
+      { x: cx + counterX, z: cz + counterZ, halfX: 1.9, halfZ: 0.8, height: 1.5 },
+      // Vignette colliders
+      { x: cx + z1x, z: cz + z1z, halfX: 3.1, halfZ: 2.9, height: 2.5 },
+      { x: cx + z2x, z: cz + z2z, halfX: 2.9, halfZ: 2.2, height: 2.5 },
+      { x: cx + z3x, z: cz + z3z, halfX: 2.8, halfZ: 2.2, height: 2.5 },
+      { x: cx + z4x, z: cz + z4z, halfX: 2.8, halfZ: 2.2, height: 2.5 },
+    );
+
+    this.interiors.set("furniture-showroom", {
+      id: "furniture-showroom",
+      name: "Arewa Royal Furniture & Electronics Showroom",
+      districtLabel: "SABON GARI · FURNITURE SHOWROOM",
+      root: group,
+      colliders,
+      lights,
+      spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + 4.8),
+      spawnYaw: Math.PI,
+      exitPoint: new THREE.Vector3(cx, cy + 0.1, cz + 5.9),
+      outdoorDoorPosition: new THREE.Vector3(-22, 0, 16.5),
+      outdoorDoorYaw: 0,
+      checkInteraction: (pos) => {
+        // Distance to Musa Dan-Ladi at the customer service counter
+        const distCounter = pos.distanceTo(new THREE.Vector3(cx + counterX, cy + 0.1, cz + counterZ + 0.9));
+        if (distCounter <= 2.6) {
+          return {
+            prompt: "Browse Furniture Catalogue (Musa Dan-Ladi)",
+            action: () => ({
+              statusMessage: "Musa Dan-Ladi: 'Sannu da zuwa! Browse our royal furniture catalogue to upgrade your Kano home.'",
+              openFurnitureShop: true,
+            }),
+          };
+        }
+
+        // Living Room Vignette Inspection
+        const distZ1 = pos.distanceTo(new THREE.Vector3(cx + z1x, cy + 0.1, cz + z1z));
+        if (distZ1 <= 3.2) {
+          return {
+            prompt: "Inspect Living Room Showcase Suite",
+            action: () => ({
+              statusMessage: "Showroom: 'Arewa Executive Salon Suite — handcrafted fabric armchairs, 75-inch 4K TV, and marble center tables.'",
+            }),
+          };
+        }
+
+        // Bedroom Vignette Inspection
+        const distZ2 = pos.distanceTo(new THREE.Vector3(cx + z2x, cy + 0.1, cz + z2z));
+        if (distZ2 <= 3.0) {
+          return {
+            prompt: "Inspect Northern Royal Bedroom Suite",
+            action: () => ({
+              statusMessage: "Showroom: 'Emirate Luxury King Bed Suite — carved wooden posts, gold damask pillows, and mirrored wardrobes.'",
+            }),
+          };
+        }
+
+        // Kitchen Vignette Inspection
+        const distZ3 = pos.distanceTo(new THREE.Vector3(cx + z3x, cy + 0.1, cz + z3z));
+        if (distZ3 <= 3.0) {
+          return {
+            prompt: "Inspect Modern Smart Kitchen Appliances",
+            action: () => ({
+              statusMessage: "Showroom: 'Sahelian Stainless Steel Appliances — double-door inverter refrigerators, 4-burner cookers, and quartz islands.'",
+            }),
+          };
+        }
+
+        // Study Vignette Inspection
+        const distZ4 = pos.distanceTo(new THREE.Vector3(cx + z4x, cy + 0.1, cz + z4z));
+        if (distZ4 <= 3.0) {
+          return {
+            prompt: "Inspect Executive Workstation & Gaming Rig",
+            action: () => ({
+              statusMessage: "Showroom: 'High-Performance Workstation — dual curved monitors, liquid-cooled RGB PC tower, and ergonomic mesh seating.'",
+            }),
+          };
+        }
+
+        return null;
+      },
+    });
+  }
+
+  public updatePlacedFurniture(interiorId: InteriorId, instances: FurnitureInstance[]) {
+    const zone = this.interiors.get(interiorId);
+    if (!zone) return;
+
+    let group = this.placedFurnitureGroups.get(interiorId);
+    if (!group) {
+      group = new THREE.Group();
+      group.name = `placed-furniture-${interiorId}`;
+      zone.root.add(group);
+      this.placedFurnitureGroups.set(interiorId, group);
+    }
+
+    // Clear existing children in the furniture group
+    while (group.children.length > 0) {
+      group.remove(group.children[0]);
+    }
+
+    // Remove old furniture colliders from zone
+    zone.colliders = zone.colliders.filter((c) => !(c as any).isFurniture);
+
+    // Clear placed items for this interior
+    for (const [id] of this.placedFurnitureItems.entries()) {
+      if (instances.every((inst) => inst.instanceId !== id)) {
+        this.placedFurnitureItems.delete(id);
+      }
+    }
+
+    // Build and add 3D meshes and colliders
+    const cx = zone.root.position.x;
+    const cz = zone.root.position.z;
+
+    instances.forEach((instance) => {
+      const rendered = buildFurnitureMesh(instance, this.materials, cx, cz);
+      group.add(rendered.group);
+      rendered.colliders.forEach((c) => {
+        (c as any).isFurniture = true;
+        (c as any).furnitureInstanceId = instance.instanceId;
+        zone.colliders.push(c);
+      });
+      this.placedFurnitureItems.set(instance.instanceId, rendered);
+    });
+  }
+
+  public getFurnitureInteraction(playerPos: THREE.Vector3): {
+    prompt: string;
+    action: () => {
+      statusMessage: string;
+      cashDelta?: number;
+      timeDeltaMinutes?: number;
+      scoreDelta?: number;
+    };
+  } | null {
+    if (!this.activeInterior) return null;
+    const zone = this.interiors.get(this.activeInterior);
+    if (!zone) return null;
+
+    let closest: {
+      dist: number;
+      interaction: NonNullable<RenderedFurnitureResult["interaction"]>;
+    } | null = null;
+
+    for (const item of this.placedFurnitureItems.values()) {
+      if (!item.interaction) continue;
+      const itemWorldPos = new THREE.Vector3();
+      item.group.getWorldPosition(itemWorldPos);
+      const dist = playerPos.distanceTo(itemWorldPos);
+      if (dist <= 2.4 && (!closest || dist < closest.dist)) {
+        closest = { dist, interaction: item.interaction };
+      }
+    }
+
+    return closest ? closest.interaction : null;
   }
 
   public getActiveZone(): InteriorZone | null {

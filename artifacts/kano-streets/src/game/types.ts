@@ -33,10 +33,23 @@ export type VehicleType = "sedan" | "keke" | "van" | "pickup" | "minibus" | "tru
 
 export type GameScreen = "menu" | "playing" | "paused";
 
-export type InteriorId = "house" | "apartment" | "penthouse" | "church" | "police-post" | "restaurant" | "gaming-hub";
+export type InteriorId = "house" | "apartment" | "penthouse" | "church" | "police-post" | "restaurant" | "gaming-hub" | "furniture-showroom";
 
 export type PropertyId = "unit-2b" | "bompai-penthouse" | "albaraka-villa";
 export type BusinessId = "sabon-gari-shop" | "arewa-suya-franchise" | "cyber-hub-station";
+
+export interface FurnitureInstance {
+  instanceId: string;
+  catalogId: string;
+  purchasedAt: number;
+  purchasePrice: number;
+  assignedPropertyId?: PropertyId;
+  room?: string;
+  floor: number;
+  position: { x: number; y: number; z: number };
+  rotationY: number;
+  isPlaced: boolean;
+}
 
 export type MissionCategory =
   | "local_delivery"
@@ -195,6 +208,11 @@ export type GameSnapshot = {
   weatherPreset?: string;
   weatherDisplayName?: string;
   audioMuted?: boolean;
+  isFurnishingMode?: boolean;
+  furnishingTargetName?: string | null;
+  unplacedFurnitureCount?: number;
+  placedFurnitureCount?: number;
+  isFurnitureShopOpen?: boolean;
 };
 
 export type GameMaterials = {

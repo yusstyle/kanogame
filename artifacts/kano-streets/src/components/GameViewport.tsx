@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import type { GameEngine } from "../game/GameEngine";
-import type { CareerPathChoice, GameScreen, GameSnapshot, GraphicsQuality } from "../game/types";
+import type { CareerPathChoice, GameScreen, GameSnapshot, GraphicsQuality, FurnitureInstance, PropertyId } from "../game/types";
 
 export type GameViewportHandle = {
   requestPointerLock: () => void;
@@ -21,6 +21,26 @@ export type GameViewportHandle = {
   resolveStoryChapter1: () => unknown;
   cycleWeather: () => unknown;
   toggleAudioMute: () => unknown;
+  openFurnitureShop: () => void;
+  closeFurnitureShop: () => void;
+  purchaseFurniture: (catalogId: string) => { success: boolean; message: string };
+  toggleFurnishingMode: () => { success: boolean; message: string };
+  placeFurnitureItem: (
+    instanceId: string,
+    room: string,
+    floor: number,
+    position: { x: number; y: number; z: number },
+    rotationY: number,
+  ) => { success: boolean; message: string };
+  moveFurnitureItem: (
+    instanceId: string,
+    position: { x: number; y: number; z: number },
+    rotationY: number,
+  ) => { success: boolean; message: string };
+  storeFurnitureItem: (instanceId: string) => { success: boolean; message: string };
+  rotateFurnitureItem: (instanceId: string, deltaYaw: number) => { success: boolean; message: string };
+  getUnplacedFurniture: () => FurnitureInstance[];
+  getPlacedFurniture: (propertyId?: PropertyId) => FurnitureInstance[];
 };
 
 type GameViewportProps = {
@@ -59,6 +79,20 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
         resolveStoryChapter1: () => engineRef.current?.resolveStoryChapter1(),
         cycleWeather: () => engineRef.current?.cycleWeather(),
         toggleAudioMute: () => engineRef.current?.toggleAudioMute(),
+        openFurnitureShop: () => engineRef.current?.openFurnitureShop(),
+        closeFurnitureShop: () => engineRef.current?.closeFurnitureShop(),
+        purchaseFurniture: (catalogId) => engineRef.current?.purchaseFurniture(catalogId) ?? { success: false, message: "Engine not ready" },
+        toggleFurnishingMode: () => engineRef.current?.toggleFurnishingMode() ?? { success: false, message: "Engine not ready" },
+        placeFurnitureItem: (instId, rm, fl, pos, rot) =>
+          engineRef.current?.placeFurnitureItem(instId, rm, fl, pos, rot) ?? { success: false, message: "Engine not ready" },
+        moveFurnitureItem: (instId, pos, rot) =>
+          engineRef.current?.moveFurnitureItem(instId, pos, rot) ?? { success: false, message: "Engine not ready" },
+        storeFurnitureItem: (instId) =>
+          engineRef.current?.storeFurnitureItem(instId) ?? { success: false, message: "Engine not ready" },
+        rotateFurnitureItem: (instId, delta) =>
+          engineRef.current?.rotateFurnitureItem(instId, delta) ?? { success: false, message: "Engine not ready" },
+        getUnplacedFurniture: () => engineRef.current?.getUnplacedFurniture() ?? [],
+        getPlacedFurniture: (propId) => engineRef.current?.getPlacedFurniture(propId) ?? [],
       }),
       [],
     );

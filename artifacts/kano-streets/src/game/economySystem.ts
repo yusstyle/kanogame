@@ -1,4 +1,5 @@
-import type { PropertyId, BusinessId, PropertyInfo, BusinessInfo, VehicleUpgrade, StoryProgressData } from "./types";
+import type { PropertyId, BusinessId, PropertyInfo, BusinessInfo, VehicleUpgrade, StoryProgressData, FurnitureInstance } from "./types";
+import { getFurnitureCatalogItem } from "./furnitureCatalogue";
 
 export interface SaveData {
   version: number;
@@ -14,6 +15,7 @@ export interface SaveData {
   storyProgress?: StoryProgressData;
   weatherPreset?: string;
   audioMuted?: boolean;
+  furnitureInventory?: FurnitureInstance[];
   savedAt: number;
 }
 
@@ -227,6 +229,115 @@ export class EconomySystem {
     return list;
   }
 
+  public furnitureInventory: FurnitureInstance[] = [];
+
+  public purchaseFurniture(
+    catalogId: string,
+    playerCash: number,
+  ): { success: boolean; cost: number; instance?: FurnitureInstance; message: string } {
+    const item = getFurnitureCatalogItem(catalogId);
+    if (!item) {
+      return { success: false, cost: 0, message: "Item not found in furniture catalogue." };
+    }
+    if (playerCash < item.price) {
+      return {
+        success: false,
+        cost: 0,
+        message: `Insufficient funds: ${item.name} requires ₦${item.price.toLocaleString()} (Current: ₦${playerCash.toLocaleString()}).`,
+      };
+    }
+
+    const instanceId = `furn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const instance: FurnitureInstance = {
+      instanceId,
+      catalogId,
+      purchasedAt: Date.now(),
+      purchasePrice: item.price,
+      floor: 1,
+      position: { x: 0, y: 0, z: 0 },
+      rotationY: 0,
+      isPlaced: false,
+    };
+
+    this.furnitureInventory.push(instance);
+    return {
+      success: true,
+      cost: item.price,
+      instance,
+      message: `Purchased ${item.name} for ₦${item.price.toLocaleString()}! Delivered to your property inventory.`,
+    };
+  }
+
+  public placeFurniture(
+    instanceId: string,
+    propertyId: PropertyId,
+    floor: number,
+    room: string,
+    pos: { x: number; y: number; z: number },
+    rotationY: number,
+  ): { success: boolean; message: string } {
+    const instance = this.furnitureInventory.find((f) => f.instanceId === instanceId);
+    if (!instance) {
+      return { success: false, message: "Furniture item not found in inventory." };
+    }
+
+    const prop = this.properties.get(propertyId);
+    if (!prop || (!prop.isOwned && !(propertyId === "unit-2b" && (prop.isRented || prop.isOwned)))) {
+      return { success: false, message: "You must own or lease this property before furnishing it." };
+    }
+
+    instance.assignedPropertyId = propertyId;
+    instance.floor = floor;
+    instance.room = room;
+    instance.position = { ...pos };
+    instance.rotationY = rotationY;
+    instance.isPlaced = true;
+
+    const itemName = getFurnitureCatalogItem(instance.catalogId)?.name ?? "Furniture";
+    return {
+      success: true,
+      message: `Placed ${itemName} in ${room}!`,
+    };
+  }
+
+  public moveFurniture(
+    instanceId: string,
+    pos: { x: number; y: number; z: number },
+    rotationY: number,
+  ): { success: boolean; message: string } {
+    const instance = this.furnitureInventory.find((f) => f.instanceId === instanceId);
+    if (!instance || !instance.isPlaced) {
+      return { success: false, message: "Placed furniture item not found." };
+    }
+    instance.position = { ...pos };
+    instance.rotationY = rotationY;
+    const itemName = getFurnitureCatalogItem(instance.catalogId)?.name ?? "Furniture";
+    return { success: true, message: `Repositioned ${itemName}.` };
+  }
+
+  public storeFurniture(instanceId: string): { success: boolean; message: string } {
+    const instance = this.furnitureInventory.find((f) => f.instanceId === instanceId);
+    if (!instance) {
+      return { success: false, message: "Furniture item not found." };
+    }
+    instance.isPlaced = false;
+    instance.assignedPropertyId = undefined;
+    instance.room = undefined;
+    const itemName = getFurnitureCatalogItem(instance.catalogId)?.name ?? "Item";
+    return {
+      success: true,
+      message: `${itemName} returned to inventory storage.`,
+    };
+  }
+
+  public getPlacedFurniture(propertyId: PropertyId): FurnitureInstance[] {
+    return this.furnitureInventory.filter((f) => f.isPlaced && f.assignedPropertyId === propertyId);
+  }
+
+  public getUnplacedFurniture(): FurnitureInstance[] {
+    return this.furnitureInventory.filter((f) => !f.isPlaced);
+  }
+
   public saveToStorage(
     cash: number,
     trafficFine: number,
@@ -253,6 +364,10 @@ export class EconomySystem {
         storyProgress: storyProgress ? { ...storyProgress } : undefined,
         weatherPreset,
         audioMuted,
+        furnitureInventory: this.furnitureInventory.map((f) => ({
+          ...f,
+          position: { ...f.position },
+        })),
         savedAt: Date.now(),
       };
       window.localStorage.setItem("kano_streets_save_v1", JSON.stringify(data));
@@ -289,6 +404,24 @@ export class EconomySystem {
       if (data.dayCount) {
         this.dayCount = data.dayCount;
         this.lastProcessedDay = data.dayCount;
+      }
+      if (Array.isArray(data.furnitureInventory)) {
+        this.furnitureInventory = data.furnitureInventory
+          .filter((f) => f && f.instanceId && f.catalogId)
+          .map((f) => ({
+            instanceId: f.instanceId,
+            catalogId: f.catalogId,
+            purchasedAt: f.purchasedAt || Date.now(),
+            purchasePrice: f.purchasePrice || 0,
+            assignedPropertyId: f.assignedPropertyId,
+            room: f.room,
+            floor: f.floor || 1,
+            position: f.position ? { ...f.position } : { x: 0, y: 0, z: 0 },
+            rotationY: f.rotationY || 0,
+            isPlaced: Boolean(f.isPlaced),
+          }));
+      } else {
+        this.furnitureInventory = [];
       }
       return data;
     } catch {
