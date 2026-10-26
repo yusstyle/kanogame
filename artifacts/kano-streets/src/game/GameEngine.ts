@@ -21,15 +21,17 @@ import { buildNavigationNetwork, type NavigationNetwork } from "./navigation";
 import { PedestrianSystem } from "./PedestrianSystem";
 import { TrafficSystem } from "./TrafficSystem";
 import { createWorld } from "./world";
-import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType, CareerPathChoice, PropertyId, InteriorId, FurnitureInstance } from "./types";
+import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType, CareerPathChoice, PropertyId, InteriorId, FurnitureInstance, HomeNavInfo } from "./types";
 import { SocialSystem } from "./socialSystem";
 import { EconomySystem } from "./economySystem";
-import { KANO_LANDMARKS, getNearestLandmark } from "./landmarks";
+import { KANO_LANDMARKS, getNearestLandmark, getGpsLandmark } from "./landmarks";
 import { MissionSystem } from "./missionSystem";
 import { StorySystem } from "./storySystem";
 import { WeatherSystem, type WeatherPreset } from "./weatherSystem";
 import { AudioSystem } from "./audioSystem";
-import { getPropertyByEntrance } from "./propertyRegistry";
+import { getPropertyByEntrance, getPropertyRegistryEntry } from "./propertyRegistry";
+import { LifeSimulationSystem } from "./lifeSimulation";
+import { FreelanceSystem, FREELANCE_CONTRACT_CATALOG } from "./freelanceSystem";
 
 const PLAYER_START = new THREE.Vector3(-4, 0, -4);
 const CAR_START = new THREE.Vector3(-2, 0, -8);
@@ -140,6 +142,8 @@ export class GameEngine {
   public readonly economy = new EconomySystem();
   public readonly missionSystem = new MissionSystem();
   public readonly storySystem = new StorySystem();
+  public readonly lifeSim = new LifeSimulationSystem();
+  public readonly freelanceSystem = new FreelanceSystem();
   private van!: UsableVehicleModel;
   private pickup!: UsableVehicleModel;
   private minibus!: UsableVehicleModel;
@@ -203,7 +207,17 @@ export class GameEngine {
       if (typeof saved.audioMuted === "boolean") {
         this.audioSystem.setMuted(saved.audioMuted);
       }
+      if (saved.selectedHomePropertyId !== undefined) {
+        this.economy.selectedHomePropertyId = saved.selectedHomePropertyId;
+      }
+      if (saved.needs) {
+        this.lifeSim.loadSnapshot(saved.needs);
+      }
+      if (saved.completedFreelanceContracts) {
+        this.freelanceSystem.loadSnapshot(saved.completedFreelanceContracts, saved.freelanceEarnings);
+      }
     }
+    this.economy.resolveSelectedHome(this.hasApartmentRental);
     this.syncAllPlacedFurniture();
     this.world = createWorld(this.materials);
     this.colliderIndex = new ColliderIndex(this.world.colliders);
@@ -735,6 +749,21 @@ export class GameEngine {
             this.economy.dayCount += Math.floor(res.timeDeltaMinutes / (24 * 60));
           }
           if (res.scoreDelta) this.gameScore = Math.max(this.gameScore, this.gameScore + res.scoreDelta);
+          if (res.eatFood) {
+            const eatRes = this.lifeSim.eatFood(res.eatFood.amount, res.eatFood.label);
+            this.statusMessage = `${res.statusMessage} (${eatRes.message})`;
+          }
+          if (res.sleepInBed) {
+            const sleepRes = this.lifeSim.sleep(res.sleepInBed.hours);
+            this.statusMessage = `${res.statusMessage} (${sleepRes.message})`;
+          }
+          if (res.takeShower) {
+            const showerRes = this.lifeSim.shower(res.takeShower.label);
+            this.statusMessage = `${res.statusMessage} (${showerRes.message})`;
+          }
+          if (res.freelanceContractAction) {
+            this.executeFreelanceContract();
+          }
           this.saveGame();
           this.pushSnapshot(true);
           return;
@@ -796,6 +825,21 @@ export class GameEngine {
             }
             if (res.openFurnitureShop) {
               this.isFurnitureShopOpen = true;
+            }
+            if (res.eatFood) {
+              const eatRes = this.lifeSim.eatFood(res.eatFood.amount, res.eatFood.label);
+              this.statusMessage = `${res.statusMessage} (${eatRes.message})`;
+            }
+            if (res.sleepInBed) {
+              const sleepRes = this.lifeSim.sleep(res.sleepInBed.hours);
+              this.statusMessage = `${res.statusMessage} (${sleepRes.message})`;
+            }
+            if (res.takeShower) {
+              const showerRes = this.lifeSim.shower(res.takeShower.label);
+              this.statusMessage = `${res.statusMessage} (${showerRes.message})`;
+            }
+            if (res.freelanceContractAction) {
+              this.executeFreelanceContract();
             }
             if (res.socialContactId) {
               this.featuredContactId = res.socialContactId;
@@ -935,6 +979,34 @@ export class GameEngine {
         this.statusMessage = `KAROTA Officer: 'You have an outstanding fine of ₦${this.trafficFine.toLocaleString()}. Settle it inside the station desk.'`;
       } else {
         this.statusMessage = "KAROTA Officer: 'Driver documents and roadworthiness verified. Safe driving in Kano!'";
+      }
+      this.pushSnapshot(true);
+      return;
+    }
+
+    // Outdoor Food Vendor 1: Industrial Workers Canteen & Mai Shayi Hub at (-15, 0, -155)
+    if (this.playerPosition.distanceTo(new THREE.Vector3(-15, 0, -155)) <= 3.4) {
+      if (this.cash >= 1200) {
+        this.cash -= 1200;
+        const eatRes = this.lifeSim.eatFood(45, "Mai Shayi Spiced Tea & Fried Egg Bread");
+        this.statusMessage = `Mai Shayi: Served steaming spiced ginger tea and egg bread (₦1,200). ${eatRes.message}`;
+        this.saveGame();
+      } else {
+        this.statusMessage = "Mai Shayi: 'Sannu! Hot tea and egg bread requires ₦1,200 cash.'";
+      }
+      this.pushSnapshot(true);
+      return;
+    }
+
+    // Outdoor Food Vendor 2: Historic Dandali Community Square & Food Hub at (-72, 0, -72)
+    if (this.playerPosition.distanceTo(new THREE.Vector3(-72, 0, -72)) <= 3.4) {
+      if (this.cash >= 800) {
+        this.cash -= 800;
+        const eatRes = this.lifeSim.eatFood(40, "Dandali Hot Masa & Kosai");
+        this.statusMessage = `Dandali Food Stall: Hot Masa cakes and crispy Kosai bean patties served (₦800). ${eatRes.message}`;
+        this.saveGame();
+      } else {
+        this.statusMessage = "Dandali Food Stall: Hot Masa and Kosai requires ₦800 cash.";
       }
       this.pushSnapshot(true);
       return;
@@ -1188,6 +1260,13 @@ export class GameEngine {
       const isMovingOnFoot = this.mode === "on-foot" && (this.keys.has("w") || this.keys.has("s") || this.keys.has("a") || this.keys.has("d"));
       const isSprinting = this.keys.has("shift");
 
+      this.lifeSim.update(
+        dt,
+        isSprinting && isMovingOnFoot,
+        this.mode === "driving",
+        Boolean(this.interiorManager.activeInterior),
+      );
+
       this.audioSystem.update(dt, {
         mode: this.mode,
         vehicleSpeed: activeSpeed,
@@ -1213,7 +1292,8 @@ export class GameEngine {
     const sideways = (this.keys.has("d") ? 1 : 0) - (this.keys.has("a") ? 1 : 0);
     const movement = new THREE.Vector2(sideways, forward);
     if (movement.lengthSq() > 1) movement.normalize();
-    const speed = this.keys.has("shift") ? 7.1 : 4.15;
+    const speedMultiplier = this.lifeSim.getSpeedMultiplier();
+    const speed = (this.keys.has("shift") ? 7.1 : 4.15) * speedMultiplier;
     const sin = Math.sin(this.cameraYaw);
     const cos = Math.cos(this.cameraYaw);
     const moveX = (sin * movement.y + cos * movement.x) * speed * dt;
@@ -2104,7 +2184,8 @@ export class GameEngine {
             const role = (nearbyProperty.id === "unit-2b" && !this.economy.properties.get("unit-2b")?.isOwned)
               ? "Tenant"
               : "Owner";
-            interactionPrompt = `Enter ${nearbyProperty.name} (${role})`;
+            const isHome = this.economy.selectedHomePropertyId === nearbyProperty.id;
+            interactionPrompt = `Enter ${nearbyProperty.name} (${role}${isHome ? " · PRIMARY HOME" : ""})`;
           } else if (nearbyProperty.id === "unit-2b") {
             interactionPrompt = this.cash >= 75000
               ? "Lease Unit 2B Apartment (₦75,000 / month)"
@@ -2140,6 +2221,14 @@ export class GameEngine {
           interactionPrompt = "Talk to NPF Officer";
         } else if (this.playerPosition.distanceTo(new THREE.Vector3(20, 0, -9.5)) <= 3.2) {
           interactionPrompt = "Talk to KAROTA Officer";
+        }
+      }
+      // Check outdoor food vendors
+      if (!interactionPrompt) {
+        if (this.playerPosition.distanceTo(new THREE.Vector3(-15, 0, -155)) <= 3.4) {
+          interactionPrompt = "Mai Shayi: Order Spiced Tea & Fried Egg Bread (₦1,200)";
+        } else if (this.playerPosition.distanceTo(new THREE.Vector3(-72, 0, -72)) <= 3.4) {
+          interactionPrompt = "Dandali Food Stall: Buy Hot Masa & Kosai (₦800)";
         }
       }
       // Check Story Triggers
@@ -2274,10 +2363,146 @@ export class GameEngine {
         ? this.economy.getPlacedFurniture(this.getCurrentInteriorPropertyId()!).length
         : 0,
       isFurnitureShopOpen: this.isFurnitureShopOpen,
+      selectedHomePropertyId: this.economy.selectedHomePropertyId,
+      homeNavInfo: this.getHomeNavInfo(),
+      needs: this.lifeSim.getSnapshot(),
+      freelanceInfo: this.freelanceSystem.getSnapshot(),
     });
   }
 
+  public getHomeNavInfo(): HomeNavInfo | null {
+    const homeId = this.economy.resolveSelectedHome(this.hasApartmentRental);
+    if (!homeId) return null;
+    const reg = getPropertyRegistryEntry(homeId);
+    if (!reg) return null;
+    const distance = Math.round(
+      Math.hypot(this.playerPosition.x - reg.entranceDoor.x, this.playerPosition.z - reg.entranceDoor.z),
+    );
+    return {
+      propertyId: homeId,
+      name: reg.name,
+      district: reg.district,
+      distanceMeters: distance,
+      entranceCoords: { x: reg.entranceDoor.x, z: reg.entranceDoor.z },
+      isInsideHome: this.interiorManager.activeInterior === reg.interiorId,
+    };
+  }
+
+  public setSelectedHome(propertyId: PropertyId): { success: boolean; message: string } {
+    const res = this.economy.setSelectedHome(propertyId, this.hasApartmentRental);
+    this.statusMessage = res.message;
+    this.saveGame();
+    this.pushSnapshot(true);
+    return res;
+  }
+
+  public findMyHome(): { success: boolean; message: string } {
+    const nav = this.getHomeNavInfo();
+    if (!nav) {
+      this.statusMessage = "No home owned or leased. Lease Unit 2B or purchase a residence first.";
+      this.pushSnapshot(true);
+      return { success: false, message: this.statusMessage };
+    }
+    this.gpsTargetLandmark = "my-home";
+    this.statusMessage = `GPS Target set: My Home · ${nav.name} (${nav.distanceMeters}m away)`;
+    this.pushSnapshot(true);
+    return { success: true, message: this.statusMessage };
+  }
+
+  public teleportHome(destination: "entrance" | "interior" = "entrance"): { success: boolean; message: string } {
+    const homeId = this.economy.resolveSelectedHome(this.hasApartmentRental);
+    if (!homeId) {
+      this.statusMessage = "Cannot Teleport: No home owned or leased. Lease Unit 2B or purchase a property first.";
+      this.pushSnapshot(true);
+      return { success: false, message: this.statusMessage };
+    }
+    const reg = getPropertyRegistryEntry(homeId);
+    if (!reg) {
+      this.statusMessage = "Property registry information not found.";
+      this.pushSnapshot(true);
+      return { success: false, message: this.statusMessage };
+    }
+    if (!this.isPropertyAccessible(homeId)) {
+      this.statusMessage = `Access Denied: You do not have valid ownership or lease for ${reg.name}.`;
+      this.pushSnapshot(true);
+      return { success: false, message: this.statusMessage };
+    }
+
+    if (this.mode === "driving") {
+      this.toggleVehicle();
+    }
+
+    if (destination === "interior") {
+      const zone = this.interiorManager.interiors.get(reg.interiorId);
+      if (zone) {
+        if (!this.interiorManager.activeInterior) {
+          this.interiorManager.outdoorSavedPosition.copy(this.playerPosition);
+          this.interiorManager.outdoorSavedYaw = this.playerYaw;
+        }
+        this.interiorManager.activeInterior = reg.interiorId;
+        this.playerPosition.copy(zone.spawnPoint);
+        this.playerYaw = zone.spawnYaw;
+        this.isFurnishingMode = false;
+        this.statusMessage = `[FAST TRAVEL] Teleported inside ${reg.name}. Welcome home!`;
+      }
+    } else {
+      if (this.interiorManager.activeInterior) {
+        this.interiorManager.activeInterior = null;
+        this.isFurnishingMode = false;
+      }
+      const ground = this.surfaceHeight(reg.entranceDoor.x, reg.entranceDoor.z);
+      this.playerPosition.set(reg.entranceDoor.x, ground, reg.entranceDoor.z);
+      this.playerYaw = reg.entranceDoor.yaw;
+      this.statusMessage = `[FAST TRAVEL] Teleported to entrance of ${reg.name}.`;
+    }
+
+    this.updateTransform();
+    this.pushSnapshot(true);
+    return { success: true, message: this.statusMessage ?? "Teleported home." };
+  }
+
+  public executeFreelanceContract(contractId?: string): { success: boolean; message: string } {
+    const next = contractId
+      ? FREELANCE_CONTRACT_CATALOG.find((c) => c.id === contractId)
+      : this.freelanceSystem.getNextAvailableContract();
+
+    if (!next) {
+      const earnings = this.freelanceSystem.totalEarnings;
+      this.statusMessage = `All 8 Kano Freelance Contracts completed and archived (₦${earnings.toLocaleString()} total earned). Client roster full!`;
+      this.pushSnapshot(true);
+      return { success: false, message: this.statusMessage };
+    }
+
+    const res = this.freelanceSystem.completeContract(next.id);
+    if (res.success) {
+      this.cash += res.payout;
+      this.gameMinutes += res.durationMinutes;
+      this.economy.dayCount += Math.floor(res.durationMinutes / (24 * 60));
+      this.lifeSim.update(res.durationMinutes * 60, false, false, true);
+      this.gameScore += 35;
+      this.statusMessage = `[FREELANCE SUCCESS] ${res.message} Time advanced by ${res.durationMinutes}m.`;
+      this.saveGame();
+    } else {
+      this.statusMessage = res.message;
+    }
+
+    this.pushSnapshot(true);
+    return { success: res.success, message: this.statusMessage ?? res.message };
+  }
+
   public setGPSTarget(id: string | null) {
+    if (id === "my-home") {
+      const home = this.getHomeNavInfo();
+      if (!home) {
+        this.statusMessage = "Cannot set GPS to home: No residence owned or leased yet.";
+        this.pushSnapshot(true);
+        return;
+      }
+      this.gpsTargetLandmark = "my-home";
+      this.statusMessage = `GPS Target set: My Home · ${home.name} (${home.distanceMeters}m away)`;
+      this.pushSnapshot(true);
+      return;
+    }
     this.gpsTargetLandmark = id;
     if (id) {
       const lm = KANO_LANDMARKS.find((l) => l.id === id);
@@ -2341,6 +2566,10 @@ export class GameEngine {
       this.storySystem.getProgress(),
       this.weatherSystem.getPreset(),
       this.audioSystem.isMuted(),
+      this.economy.selectedHomePropertyId,
+      this.lifeSim.getSnapshot(),
+      this.freelanceSystem.getCompletedIds(),
+      this.freelanceSystem.totalEarnings,
     );
   }
 

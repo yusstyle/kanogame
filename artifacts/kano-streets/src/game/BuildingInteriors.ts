@@ -93,6 +93,10 @@ export interface InteriorZone {
       purchasedBusiness?: BusinessId;
       openFurnitureShop?: boolean;
       timeDeltaMinutes?: number;
+      eatFood?: { amount: number; label: string };
+      sleepInBed?: { hours: number };
+      takeShower?: { label: string };
+      freelanceContractAction?: boolean;
     };
   } | null;
 }
@@ -431,20 +435,64 @@ export class BuildingInteriorManager {
           };
         }
 
-        // 2. Safe / Deed Desk in Study at (cx - 6.5, cz - 2.8)
+        // 2. Safe / Deed Desk & Freelance Workstation in Study at (cx - 6.5, cz - 2.8)
         const distStudy = pos.distanceTo(new THREE.Vector3(cx - 6.5, cy + 0.1, cz - 2.8));
         if (distStudy <= 2.2) {
           if (state.ownedProperties?.includes("albaraka-villa")) {
             return {
-              prompt: "Al-Baraka Villa: Certificate of Occupancy Safe",
+              prompt: "Workstation: Check Remote Freelance Contracts & Title Safe",
               action: () => ({
-                statusMessage: "Official Kano State Certificate of Occupancy held for Al-Baraka Executive Villa (Plot 44, Gated Residential Quarter). Freehold title verified.",
+                statusMessage: "Al-Baraka Executive Desk: Accessing remote client contracts.",
+                freelanceContractAction: true,
               }),
             };
           }
         }
 
-        // 3. Parlour Chandelier / Light Switch at (cx - 0.5, cz + 4.5)
+        // 3. Master Suite Bed at (cx - 4.5, cz - 6.5)
+        const distBed = pos.distanceTo(new THREE.Vector3(cx - 4.5, cy + 0.1, cz - 6.5));
+        if (distBed <= 2.4) {
+          if (state.ownedProperties?.includes("albaraka-villa")) {
+            return {
+              prompt: "Sleep & Rest in Master Suite Bed (Advance 6 Hours)",
+              action: () => ({
+                statusMessage: "Resting peacefully in the Master Suite of Al-Baraka Villa. Energy fully restored!",
+                sleepInBed: { hours: 6 },
+                timeDeltaMinutes: 360,
+              }),
+            };
+          }
+        }
+
+        // 4. Ensuite Bathtub & Shower at (cx - 0.5, cz - 7.5)
+        const distBath = pos.distanceTo(new THREE.Vector3(cx - 0.5, cy + 0.1, cz - 7.5));
+        if (distBath <= 2.2) {
+          if (state.ownedProperties?.includes("albaraka-villa")) {
+            return {
+              prompt: "Take Warm Bath & Shower in Ensuite",
+              action: () => ({
+                statusMessage: "Refreshing bath taken in the ensuite! Hygiene restored to 100%.",
+                takeShower: { label: "Al-Baraka Ensuite Bathroom" },
+              }),
+            };
+          }
+        }
+
+        // 5. Family Kitchen & Pantry at (cx + 4.5, cz - 2.5)
+        const distKitchen = pos.distanceTo(new THREE.Vector3(cx + 4.5, cy + 0.1, cz - 2.5));
+        if (distKitchen <= 2.2) {
+          if (state.ownedProperties?.includes("albaraka-villa")) {
+            return {
+              prompt: "Prepare Home Meal in Kitchen",
+              action: () => ({
+                statusMessage: "Prepared and enjoyed a fresh hot northern meal in the kitchen. Hunger satisfied!",
+                eatFood: { amount: 50, label: "Home Cooked Family Meal" },
+              }),
+            };
+          }
+        }
+
+        // 6. Parlour Chandelier / Light Switch at (cx - 0.5, cz + 4.5)
         const distSwitch = pos.distanceTo(new THREE.Vector3(cx - 0.5, cy + 0.1, cz + 4.5));
         if (distSwitch <= 1.8) {
           return {
@@ -632,20 +680,79 @@ export class BuildingInteriorManager {
       outdoorDoorPosition: new THREE.Vector3(18, 0, 39.5),
       outdoorDoorYaw: Math.PI,
       checkInteraction: (pos, state) => {
-        // 1. Executive Wall Safe in Master Suite (cx - 8.7, cz + 2.8, y = -56.5)
+        // 1. Executive Wall Safe & Study Workstation in Master Suite (cx - 8.7, cz + 2.8, y = -56.5)
         const distSafe = pos.distanceTo(new THREE.Vector3(cx - 8.7, cy + floor2Elevation + 0.1, cz + 2.8));
         if (distSafe <= 2.4) {
           if (state.ownedProperties?.includes("bompai-penthouse")) {
             return {
-              prompt: "Bompai Heights Penthouse: Executive Deed Safe",
+              prompt: "Bompai Heights Penthouse: Executive Deed Safe & Workstation",
               action: () => ({
                 statusMessage: "Executive Safe: Freehold Title Deed #BH-PENT-08 verified. 12-Panel Solar Inverter Battery Bank: 100% capacity.",
+                freelanceContractAction: true,
               }),
             };
           }
         }
 
-        // 2. Rooftop Skyline Terrace Vista (cx, cz + 6.8, y = -56.5)
+        // 2. Master Penthouse Suite Bed (Upper floor, cx - 5.5, cz + 2.5)
+        const distMasterBed = pos.distanceTo(new THREE.Vector3(cx - 5.5, cy + floor2Elevation + 0.1, cz + 2.5));
+        if (distMasterBed <= 2.4) {
+          if (state.ownedProperties?.includes("bompai-penthouse")) {
+            return {
+              prompt: "Sleep & Rest in Master Penthouse Bed (Advance 6 Hours)",
+              action: () => ({
+                statusMessage: "Overnight rest in the Master Penthouse suite with Kano city lights below. Energy 100%!",
+                sleepInBed: { hours: 6 },
+                timeDeltaMinutes: 360,
+              }),
+            };
+          }
+        }
+
+        // 3. Guest Bedroom Bed (Lower floor, cx + 5.0, cz + 3.5)
+        const distGuestBed = pos.distanceTo(new THREE.Vector3(cx + 5.0, cy + 0.1, cz + 3.5));
+        if (distGuestBed <= 2.2) {
+          if (state.ownedProperties?.includes("bompai-penthouse")) {
+            return {
+              prompt: "Rest in Guest Bedroom Bed (Advance 6 Hours)",
+              action: () => ({
+                statusMessage: "Rested comfortably in the guest suite. Energy restored to 100%!",
+                sleepInBed: { hours: 6 },
+                timeDeltaMinutes: 360,
+              }),
+            };
+          }
+        }
+
+        // 4. Luxury Bathroom Shower (Lower floor, cx + 5.0, cz + 1.2)
+        const distBath = pos.distanceTo(new THREE.Vector3(cx + 5.0, cy + 0.1, cz + 1.2));
+        if (distBath <= 2.2) {
+          if (state.ownedProperties?.includes("bompai-penthouse")) {
+            return {
+              prompt: "Take Hot Rain Shower in Luxury Bathroom",
+              action: () => ({
+                statusMessage: "Hot rain shower taken! Sahel dust washed away and hygiene restored to 100%.",
+                takeShower: { label: "Bompai Luxury Rain Shower" },
+              }),
+            };
+          }
+        }
+
+        // 5. Gourmet Island Kitchen & Double-Door Fridge (cx + 5.0, cz - 3.5)
+        const distKitchen = pos.distanceTo(new THREE.Vector3(cx + 5.0, cy + 0.1, cz - 3.5));
+        if (distKitchen <= 2.2) {
+          if (state.ownedProperties?.includes("bompai-penthouse")) {
+            return {
+              prompt: "Prepare Meal at Gourmet Island Kitchen",
+              action: () => ({
+                statusMessage: "Gourmet meal prepared and enjoyed at the granite island bar. Hunger satisfied!",
+                eatFood: { amount: 55, label: "Gourmet Island Meal" },
+              }),
+            };
+          }
+        }
+
+        // 6. Rooftop Skyline Terrace Vista (cx, cz + 6.8, y = -56.5)
         const distTerrace = pos.distanceTo(new THREE.Vector3(cx, cy + floor2Elevation + 0.1, cz + 6.8));
         if (distTerrace <= 2.4) {
           return {
@@ -815,28 +922,32 @@ export class BuildingInteriorManager {
       outdoorDoorPosition: new THREE.Vector3(48, 0, -43.5),
       outdoorDoorYaw: 0,
       checkInteraction: (pos, state) => {
-        // Distance to rental & deed desk (cx + 4.0, cz - 3.2)
+        // Distance to rental & deed desk / study workstation (cx + 2.8, cz - 3.2)
         const d = pos.distanceTo(new THREE.Vector3(cx + 2.8, cy + 0.1, cz - 3.2));
         if (d <= 2.2) {
           if (state.ownedProperties?.includes("unit-2b")) {
             return {
-              prompt: "Unit 2B: Freehold Deed of Ownership Held",
+              prompt: "Workstation: Check Remote Freelance Contracts & Title Deed",
               action: () => ({
-                statusMessage: "You hold the official Certificate of Occupancy for Unit 2B Airport View Apartments. Freehold property with zero monthly rent.",
+                statusMessage: "Unit 2B Executive Desk: Accessing remote client contracts. Freehold title held.",
+                freelanceContractAction: true,
               }),
             };
           }
           if (state.hasApartmentRental) {
             return {
-              prompt: "Purchase Unit 2B Freehold Ownership (₦18,000,000)",
+              prompt: "Workstation: Remote Freelance Contracts (or Buy Freehold for ₦18,000,000)",
               action: () => {
-                if (state.cash < 18000000) {
-                  return { statusMessage: "Insufficient capital: Freehold deed of ownership requires ₦18,000,000." };
+                if (state.cash >= 18000000) {
+                  return {
+                    statusMessage: "Congratulations! Freehold Certificate of Occupancy acquired for Unit 2B Airport View Apartments!",
+                    cashDelta: -18000000,
+                    purchasedProperty: "unit-2b",
+                  };
                 }
                 return {
-                  statusMessage: "Congratulations! Freehold Certificate of Occupancy acquired for Unit 2B Airport View Apartments!",
-                  cashDelta: -18000000,
-                  purchasedProperty: "unit-2b",
+                  statusMessage: "Unit 2B Workstation: Checking remote client contracts.",
+                  freelanceContractAction: true,
                 };
               },
             };
@@ -854,6 +965,49 @@ export class BuildingInteriorManager {
               };
             },
           };
+        }
+
+        // Bedroom Bed at (cx - 3.8, cz + 3.8)
+        const distBed = pos.distanceTo(new THREE.Vector3(cx - 3.8, cy + 0.1, cz + 3.8));
+        if (distBed <= 2.4) {
+          if (state.hasApartmentRental || state.ownedProperties?.includes("unit-2b")) {
+            return {
+              prompt: "Sleep & Rest in Master Bedroom (Advance 6 Hours)",
+              action: () => ({
+                statusMessage: "Resting comfortably in Unit 2B bedroom. Morning has broken and energy is 100%!",
+                sleepInBed: { hours: 6 },
+                timeDeltaMinutes: 360,
+              }),
+            };
+          }
+        }
+
+        // Ensuite Bathroom Shower at (cx + 3.8, cz + 3.8)
+        const distShower = pos.distanceTo(new THREE.Vector3(cx + 3.8, cy + 0.1, cz + 3.8));
+        if (distShower <= 2.2) {
+          if (state.hasApartmentRental || state.ownedProperties?.includes("unit-2b")) {
+            return {
+              prompt: "Take Shower in Unit 2B Bathroom",
+              action: () => ({
+                statusMessage: "Took a refreshing shower! Hygiene restored to 100%.",
+                takeShower: { label: "Unit 2B Bathroom Shower" },
+              }),
+            };
+          }
+        }
+
+        // Kitchen at (cx + 2.8, cz - 1.5)
+        const distKitchen = pos.distanceTo(new THREE.Vector3(cx + 2.8, cy + 0.1, cz - 1.5));
+        if (distKitchen <= 2.2) {
+          if (state.hasApartmentRental || state.ownedProperties?.includes("unit-2b")) {
+            return {
+              prompt: "Grab Refreshment & Meal in Kitchen",
+              action: () => ({
+                statusMessage: "Had a chilled Zobo and fresh snack in the kitchen. Hunger satisfied!",
+                eatFood: { amount: 45, label: "Apartment Kitchen Snack" },
+              }),
+            };
+          }
         }
         return null;
       },
@@ -1223,14 +1377,15 @@ export class BuildingInteriorManager {
         const distCounter = pos.distanceTo(new THREE.Vector3(cx + counterX, cy + 0.1, cz + counterZ));
         if (distCounter <= 2.5) {
           return {
-            prompt: "Order Kano Suya & Jollof Platter (Ôéª3,500)",
+            prompt: "Order Kano Suya & Jollof Platter (₦3,500)",
             action: () => {
               if (state.cash < 3500) {
-                return { statusMessage: "Insufficient cash: You need Ôéª3,500 for the special platter." };
+                return { statusMessage: "Insufficient cash: You need ₦3,500 for the special platter." };
               }
               return {
-                statusMessage: "Delicious Kano Beef Suya & Jollof Rice served! Recharged and energized.",
+                statusMessage: "Delicious Kano Beef Suya & Jollof Rice served! Hunger fully satisfied and recharged.",
                 cashDelta: -3500,
+                eatFood: { amount: 65, label: "Kano Beef Suya & Jollof Platter" },
               };
             },
           };
@@ -1787,15 +1942,7 @@ export class BuildingInteriorManager {
     });
   }
 
-  public getFurnitureInteraction(playerPos: THREE.Vector3): {
-    prompt: string;
-    action: () => {
-      statusMessage: string;
-      cashDelta?: number;
-      timeDeltaMinutes?: number;
-      scoreDelta?: number;
-    };
-  } | null {
+  public getFurnitureInteraction(playerPos: THREE.Vector3): NonNullable<RenderedFurnitureResult["interaction"]> | null {
     if (!this.activeInterior) return null;
     const zone = this.interiors.get(this.activeInterior);
     if (!zone) return null;

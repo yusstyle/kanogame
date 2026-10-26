@@ -64,6 +64,10 @@ export interface RenderedFurnitureResult {
       cashDelta?: number;
       timeDeltaMinutes?: number;
       scoreDelta?: number;
+      eatFood?: { amount: number; label: string };
+      sleepInBed?: { hours: number };
+      takeShower?: { label: string };
+      freelanceContractAction?: boolean;
     };
   };
 }
@@ -299,6 +303,7 @@ export function buildFurnitureMesh(
         action: () => ({
           statusMessage: `You slept peacefully in the ${name}. Day has advanced and energy is fully restored!`,
           timeDeltaMinutes: 360,
+          sleepInBed: { hours: 6 },
           scoreDelta: 20,
         }),
       };
@@ -321,6 +326,7 @@ export function buildFurnitureMesh(
         action: () => ({
           statusMessage: `Rejuvenating overnight rest in the Queen Suite. Waking up fresh to a new day in Kano!`,
           timeDeltaMinutes: 360,
+          sleepInBed: { hours: 6 },
           scoreDelta: 25,
         }),
       };
@@ -346,6 +352,7 @@ export function buildFurnitureMesh(
         action: () => ({
           statusMessage: `Royal King Suite: Slept like an executive. Morning has broken over Kano metropolis!`,
           timeDeltaMinutes: 360,
+          sleepInBed: { hours: 6 },
           scoreDelta: 35,
         }),
       };
@@ -389,6 +396,14 @@ export function buildFurnitureMesh(
       addCyl(group, goldMat, 0, 1.15, -0.22, 0.44, 0.04);
       addCyl(group, glassMat, 0, 1.15, -0.2, 0.4, 0.02);
       colliders.push({ x: worldX, z: worldZ, halfX: 0.65, halfZ: 0.4, height: 1.6 });
+      interaction = {
+        prompt: `Freshen Up & Groom at Vanity Dresser`,
+        action: () => ({
+          statusMessage: `Freshened up at the illuminated vanity mirror. Hygiene fully restored!`,
+          takeShower: { label: "Vanity Restroom" },
+          scoreDelta: 10,
+        }),
+      };
       break;
     }
 
@@ -413,6 +428,7 @@ export function buildFurnitureMesh(
         prompt: `Sit for Dining Meal`,
         action: () => ({
           statusMessage: `You sat at the family dining table. Enjoying home-cooked Tuwo Shinkafa and Miyan Kuka!`,
+          eatFood: { amount: 50, label: "Home Cooked Dining Meal" },
           scoreDelta: 15,
         }),
       };
@@ -434,6 +450,7 @@ export function buildFurnitureMesh(
         prompt: `Host Banquet at Mahogany Dining Suite`,
         action: () => ({
           statusMessage: `Hosting an 8-seater banquet. Northern hospitality at its finest in your Kano residence!`,
+          eatFood: { amount: 60, label: "Mahogany Suite Banquet" },
           scoreDelta: 25,
         }),
       };
@@ -449,6 +466,7 @@ export function buildFurnitureMesh(
         prompt: `Open Refrigerator for Cold Refreshment`,
         action: () => ({
           statusMessage: `You opened the fridge and poured a chilled glass of fresh Zobo & ginger! Thirst quenched.`,
+          eatFood: { amount: 35, label: "Chilled Zobo & Ginger" },
           scoreDelta: 10,
         }),
       };
@@ -470,6 +488,7 @@ export function buildFurnitureMesh(
         prompt: `Dispense Chilled Water & Fresh Zobo`,
         action: () => ({
           statusMessage: `Dispensed chilled purified water and fresh hibiscus Zobo from the smart door. Energized!`,
+          eatFood: { amount: 40, label: "Purified Water & Hibiscus Zobo" },
           scoreDelta: 20,
         }),
       };
@@ -538,9 +557,10 @@ export function buildFurnitureMesh(
       addBox(group, darkMat, 0, 0.55, 0.65, 0.65, 0.75, 0.6);
       colliders.push({ x: worldX, z: worldZ, halfX: 1.0, halfZ: 0.65, height: 1.0 });
       interaction = {
-        prompt: `Conduct Executive Business at Desk`,
+        prompt: `Executive Workstation: Manage Enterprise & Freelance Contracts`,
         action: () => ({
-          statusMessage: `Drafted enterprise expansion documents from your executive desk. Business reputation +20!`,
+          statusMessage: `Executive Workstation: Accessing remote client contracts and enterprise ledger.`,
+          freelanceContractAction: true,
           scoreDelta: 20,
         }),
       };
@@ -556,11 +576,12 @@ export function buildFurnitureMesh(
       addBox(group, metalMat, 0.52, 0.25, 0.1, 0.22, 0.48, 0.45); // Tower PC
       colliders.push({ x: worldX, z: worldZ, halfX: 0.75, halfZ: 0.4, height: 1.0 });
       interaction = {
-        prompt: `Complete Remote Logistics Contract (Earn ₦25,000)`,
+        prompt: `Workstation: Execute Remote Freelance Contract (₦25,000)`,
         action: () => ({
-          statusMessage: `Completed dispatch routing for Kano–Kaduna highway freight. Earned ₦25,000 remote contract fee!`,
+          statusMessage: `Dual-monitor rig online. Completed dispatch routing for Kano–Kaduna highway freight. Earned ₦25,000!`,
           cashDelta: 25000,
           timeDeltaMinutes: 45,
+          freelanceContractAction: true,
           scoreDelta: 25,
         }),
       };

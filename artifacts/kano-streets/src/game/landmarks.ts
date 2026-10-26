@@ -1,3 +1,5 @@
+import type { HomeNavInfo } from "./types";
+
 export type LandmarkCategory = "civic" | "commercial" | "residence" | "worship" | "security" | "industrial" | "historic";
 
 export interface LandmarkLocation {
@@ -270,5 +272,24 @@ export function getNearestLandmark(x: number, z: number): { landmark: LandmarkLo
   }
 
   return { landmark: nearest, distance: Math.round(minDistance) };
+}
+
+export function getGpsLandmark(
+  id: string | null | undefined,
+  homeNavInfo?: HomeNavInfo | null,
+): LandmarkLocation | null {
+  if (!id) return null;
+  if (id === "my-home" && homeNavInfo) {
+    return {
+      id: "my-home",
+      name: `My Home (${homeNavInfo.name})`,
+      district: homeNavInfo.district,
+      x: homeNavInfo.entranceCoords.x,
+      z: homeNavInfo.entranceCoords.z,
+      category: "residence",
+      description: `Primary residence entrance at (${homeNavInfo.entranceCoords.x}, ${homeNavInfo.entranceCoords.z})`,
+    };
+  }
+  return KANO_LANDMARKS.find((l) => l.id === id) ?? null;
 }
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { KANO_LANDMARKS, type LandmarkCategory, type LandmarkLocation } from "../game/landmarks";
+import { KANO_LANDMARKS, getGpsLandmark, type LandmarkCategory, type LandmarkLocation } from "../game/landmarks";
 import { INDENTURE_1968 } from "../game/storySystem";
-import type { CareerPathChoice, InvestigationChoice, StorySnapshotInfo } from "../game/types";
+import type { CareerPathChoice, InvestigationChoice, StorySnapshotInfo, HomeNavInfo, PropertyId } from "../game/types";
 
 export interface CityMapModalProps {
   onClose: () => void;
@@ -10,6 +10,13 @@ export interface CityMapModalProps {
   gpsTarget?: string | null;
   onSetGPSTarget?: (id: string | null) => void;
   storyInfo?: StorySnapshotInfo | null;
+  selectedHomePropertyId?: PropertyId | null;
+  homeNavInfo?: HomeNavInfo | null;
+  ownedProperties?: string[];
+  hasApartmentRental?: boolean;
+  onSetSelectedHome?: (propertyId: PropertyId) => unknown;
+  onTeleportHome?: (destination?: "entrance" | "interior") => unknown;
+  onFindMyHome?: () => unknown;
   onExamineIndenture?: () => boolean;
   onChooseInvestigation?: (choice: "elders" | "bank") => unknown;
   onChooseCareer?: (choice: CareerPathChoice) => unknown;
@@ -43,6 +50,13 @@ export default function CityMapModal({
   gpsTarget,
   onSetGPSTarget,
   storyInfo,
+  selectedHomePropertyId,
+  homeNavInfo,
+  ownedProperties = [],
+  hasApartmentRental = false,
+  onSetSelectedHome,
+  onTeleportHome,
+  onFindMyHome,
   onChooseInvestigation,
   onChooseCareer,
   onResolveChapter1,
@@ -61,7 +75,7 @@ export default function CityMapModal({
     return matchesCategory && matchesSearch;
   });
 
-  const activeGpsLandmark = gpsTarget ? KANO_LANDMARKS.find((l) => l.id === gpsTarget) : null;
+  const activeGpsLandmark = getGpsLandmark(gpsTarget, homeNavInfo);
   const playerSvgX = toSvgX(playerCoords.x);
   const playerSvgY = toSvgY(playerCoords.z);
 
@@ -125,6 +139,104 @@ export default function CityMapModal({
               )}
               <div className="ks-map-hint">Click any landmark pin to view details or lock GPS navigation</div>
             </div>
+
+            {/* MY HOME Quick Nav Card / Advisor Banner */}
+            {homeNavInfo ? (
+              <div
+                className="ks-map-home-card"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: "10px",
+                  background: "linear-gradient(90deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 95, 70, 0.28) 100%)",
+                  border: "1px solid #10b981",
+                  borderRadius: "8px",
+                  padding: "8px 14px",
+                  margin: "6px 12px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <span style={{ fontSize: "20px" }}>🏠</span>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <strong style={{ color: "#34d399", fontSize: "13px", letterSpacing: "0.5px" }}>
+                        MY HOME: {homeNavInfo.name}
+                      </strong>
+                      <span style={{ background: "#059669", color: "#ecfdf5", fontSize: "10px", padding: "1px 6px", borderRadius: "4px", fontWeight: "bold" }}>
+                        ACTIVE
+                      </span>
+                    </div>
+                    <small style={{ color: "#cbd5e1", fontSize: "11px" }}>
+                      {homeNavInfo.district} · Entrance: ({homeNavInfo.entranceCoords.x}, {homeNavInfo.entranceCoords.z}) · {getDistanceToPlayer(homeNavInfo.entranceCoords.x, homeNavInfo.entranceCoords.z)}m away
+                    </small>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <button
+                    className={`ks-gps-btn ${gpsTarget === "my-home" ? "active" : ""}`}
+                    onClick={() => {
+                      if (gpsTarget === "my-home") onSetGPSTarget?.(null);
+                      else if (onFindMyHome) onFindMyHome();
+                      else onSetGPSTarget?.("my-home");
+                    }}
+                    style={{ padding: "4px 10px", fontSize: "11px" }}
+                  >
+                    {gpsTarget === "my-home" ? "GPS Locked to Home ✓" : "Find My Home ↗"}
+                  </button>
+                  {onTeleportHome && (
+                    <button
+                      className="ks-gps-btn"
+                      style={{ padding: "4px 10px", fontSize: "11px", background: "#4f46e5", borderColor: "#6366f1" }}
+                      onClick={() => {
+                        onTeleportHome("entrance");
+                        onClose();
+                      }}
+                      title="Fast travel test shortcut to home entrance"
+                    >
+                      Teleport Home [Dev]
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div
+                className="ks-map-no-home-card"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: "10px",
+                  background: "rgba(217, 119, 6, 0.15)",
+                  border: "1px solid #f59e0b",
+                  borderRadius: "8px",
+                  padding: "8px 14px",
+                  margin: "6px 12px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <span style={{ fontSize: "20px" }}>ℹ️</span>
+                  <div>
+                    <strong style={{ color: "#f59e0b", fontSize: "13px" }}>NO HOME OWNED OR LEASED YET</strong>
+                    <div style={{ color: "#cbd5e1", fontSize: "11px" }}>
+                      Lease Unit 2B at Airport View Apartments (₦75,000/mo) or purchase Bompai Penthouse (₦35M) / Al-Baraka Villa (₦65M).
+                    </div>
+                  </div>
+                </div>
+                <button
+                  className="ks-gps-btn"
+                  style={{ padding: "4px 10px", fontSize: "11px", background: "#d97706" }}
+                  onClick={() => {
+                    onSetGPSTarget?.("apartment");
+                    onClose();
+                  }}
+                >
+                  Route to Unit 2B (Airport Road) ↗
+                </button>
+              </div>
+            )}
 
             <div className="ks-map-svg-container">
               <svg viewBox="0 0 800 1000" className="ks-world-svg-map">
@@ -362,6 +474,33 @@ export default function CityMapModal({
                   );
                 })}
 
+                {/* Dedicated MY HOME Pin on Map */}
+                {homeNavInfo && (
+                  <g
+                    className="ks-map-pin ks-home-pin"
+                    onClick={() =>
+                      setSelectedLandmark({
+                        id: "my-home",
+                        name: `My Home · ${homeNavInfo.name}`,
+                        district: homeNavInfo.district,
+                        x: homeNavInfo.entranceCoords.x,
+                        z: homeNavInfo.entranceCoords.z,
+                        category: "residence",
+                        description: `Primary residence entrance at (${homeNavInfo.entranceCoords.x}, ${homeNavInfo.entranceCoords.z}). Distance: ${homeNavInfo.distanceMeters}m from current position.`,
+                      })
+                    }
+                    transform={`translate(${toSvgX(homeNavInfo.entranceCoords.x)}, ${toSvgY(homeNavInfo.entranceCoords.z)})`}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <circle r="20" fill="none" stroke="#f59e0b" strokeWidth="3" className="ks-pin-pulse" />
+                    <circle r="13" fill="#10b981" stroke="#fef08a" strokeWidth="2.5" />
+                    <text x="0" y="4" textAnchor="middle" fontSize="12" fill="#ffffff">🏠</text>
+                    <text x="0" y="-16" textAnchor="middle" className="ks-pin-text prominent" fill="#fef08a" fontWeight="bold">
+                      MY HOME
+                    </text>
+                  </g>
+                )}
+
                 {/* Live Player Position Marker with Directional Needle */}
                 <g transform={`translate(${playerSvgX}, ${playerSvgY})`} filter="url(#glow)">
                   <circle r="12" fill="rgba(16, 185, 129, 0.35)" />
@@ -452,10 +591,102 @@ export default function CityMapModal({
 
             {/* Landmarks List */}
             <div className="ks-directory-list">
+              {homeNavInfo ? (
+                <div
+                  className="ks-directory-card ks-home-dir-card"
+                  style={{
+                    background: "linear-gradient(90deg, rgba(16, 185, 129, 0.2) 0%, rgba(6, 95, 70, 0.25) 100%)",
+                    border: "1.5px solid #10b981",
+                  }}
+                >
+                  <div className="ks-card-main">
+                    <div className="ks-card-header-row">
+                      <span className="ks-cat-tag residence">🏠 MY HOME</span>
+                      <span className="ks-dist-tag">{getDistanceToPlayer(homeNavInfo.entranceCoords.x, homeNavInfo.entranceCoords.z)}m away</span>
+                    </div>
+                    <h3>{homeNavInfo.name}</h3>
+                    <p>Designated primary residence. Entrance door at coordinates ({homeNavInfo.entranceCoords.x}, {homeNavInfo.entranceCoords.z}).</p>
+                    <small className="ks-card-coords">
+                      {homeNavInfo.district} · Status: Active
+                    </small>
+                  </div>
+                  <div className="ks-card-actions">
+                    <button
+                      className={`ks-gps-btn ${gpsTarget === "my-home" ? "active" : ""}`}
+                      onClick={() => {
+                        if (gpsTarget === "my-home") onSetGPSTarget?.(null);
+                        else if (onFindMyHome) onFindMyHome();
+                        else onSetGPSTarget?.("my-home");
+                        onClose();
+                      }}
+                    >
+                      {gpsTarget === "my-home" ? "Active Waypoint ✓" : "Find My Home ↗"}
+                    </button>
+                    {onTeleportHome && (
+                      <button
+                        className="ks-gps-btn"
+                        style={{ background: "#4f46e5", borderColor: "#6366f1" }}
+                        onClick={() => {
+                          onTeleportHome("entrance");
+                          onClose();
+                        }}
+                      >
+                        Teleport [Dev]
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="ks-directory-card"
+                  style={{
+                    background: "rgba(217, 119, 6, 0.12)",
+                    border: "1.5px solid #f59e0b",
+                  }}
+                >
+                  <div className="ks-card-main">
+                    <div className="ks-card-header-row">
+                      <span className="ks-cat-tag residence">ℹ️ RESIDENCE GUIDE</span>
+                    </div>
+                    <h3>No Home Owned or Leased Yet</h3>
+                    <p>You can lease Unit 2B at Airport View Apartments for ₦75,000/month or purchase Bompai Penthouse (₦35M) or Al-Baraka Villa (₦65M).</p>
+                    <small className="ks-card-coords">
+                      Airport Road · Sabon Gari · Residential Quarter
+                    </small>
+                  </div>
+                  <div className="ks-card-actions">
+                    <button
+                      className="ks-gps-btn"
+                      style={{ background: "#d97706" }}
+                      onClick={() => {
+                        onSetGPSTarget?.("apartment");
+                        onClose();
+                      }}
+                    >
+                      Route to Unit 2B ↗
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {filteredLandmarks.map((lm) => {
                 const isGpsActive = gpsTarget === lm.id;
                 const distance = getDistanceToPlayer(lm.x, lm.z);
                 const colors = CATEGORY_COLORS[lm.category];
+
+                let propertyId: PropertyId | null = null;
+                let isPropertyAccessible = false;
+                if (lm.id === "apartment") {
+                  propertyId = "unit-2b";
+                  isPropertyAccessible = Boolean(hasApartmentRental || ownedProperties.includes("unit-2b"));
+                } else if (lm.id === "bompai-flats") {
+                  propertyId = "bompai-penthouse";
+                  isPropertyAccessible = Boolean(ownedProperties.includes("bompai-penthouse"));
+                } else if (lm.id === "villa") {
+                  propertyId = "albaraka-villa";
+                  isPropertyAccessible = Boolean(ownedProperties.includes("albaraka-villa"));
+                }
+                const isSelectedHome = propertyId && selectedHomePropertyId === propertyId;
 
                 return (
                   <div key={lm.id} className="ks-directory-card">
@@ -464,6 +695,11 @@ export default function CityMapModal({
                         <span className={`ks-cat-tag ${lm.category}`}>
                           {colors.icon} {lm.category.toUpperCase()}
                         </span>
+                        {isPropertyAccessible && (
+                          <span style={{ background: "rgba(16, 185, 129, 0.2)", color: "#34d399", padding: "2px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: "bold" }}>
+                            {isSelectedHome ? "⭐ PRIMARY HOME" : "OWNED / LEASED"}
+                          </span>
+                        )}
                         <span className="ks-dist-tag">{distance}m away</span>
                       </div>
                       <h3>{lm.name}</h3>
@@ -473,6 +709,17 @@ export default function CityMapModal({
                       </small>
                     </div>
                     <div className="ks-card-actions">
+                      {isPropertyAccessible && !isSelectedHome && propertyId && (
+                        <button
+                          className="ks-gps-btn"
+                          style={{ background: "#0d9488" }}
+                          onClick={() => {
+                            if (propertyId) onSetSelectedHome?.(propertyId);
+                          }}
+                        >
+                          Set as My Home
+                        </button>
+                      )}
                       {isGpsActive ? (
                         <button className="ks-gps-btn active" onClick={() => onSetGPSTarget?.(null)}>
                           Active Waypoint ✓

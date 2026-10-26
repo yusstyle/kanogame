@@ -16,12 +16,21 @@ export interface SaveData {
   weatherPreset?: string;
   audioMuted?: boolean;
   furnitureInventory?: FurnitureInstance[];
+  selectedHomePropertyId?: PropertyId | null;
+  needs?: {
+    hunger: number;
+    energy: number;
+    hygiene: number;
+  };
+  completedFreelanceContracts?: string[];
+  freelanceEarnings?: number;
   savedAt: number;
 }
 
 export class EconomySystem {
   public properties: Map<PropertyId, PropertyInfo> = new Map();
   public businesses: Map<BusinessId, BusinessInfo> = new Map();
+  public selectedHomePropertyId: PropertyId | null = null;
   public vehicleUpgrade: VehicleUpgrade = {
     engineStage: 0,
     paintColor: "#4a5568", // Stock graphite
@@ -155,6 +164,9 @@ export class EconomySystem {
 
     prop.isOwned = true;
     prop.isRented = false;
+    if (!this.selectedHomePropertyId) {
+      this.selectedHomePropertyId = id;
+    }
     return {
       success: true,
       cost: prop.purchasePrice,
@@ -219,6 +231,41 @@ export class EconomySystem {
       if (p.isOwned) list.push(id);
     });
     return list;
+  }
+
+  public getAccessibleProperties(hasApartmentRental = false): PropertyInfo[] {
+    const list: PropertyInfo[] = [];
+    this.properties.forEach((p) => {
+      if (p.isOwned || (p.id === "unit-2b" && (p.isRented || hasApartmentRental))) {
+        list.push(p);
+      }
+    });
+    return list;
+  }
+
+  public resolveSelectedHome(hasApartmentRental = false): PropertyId | null {
+    const accessible = this.getAccessibleProperties(hasApartmentRental);
+    if (accessible.length === 0) {
+      this.selectedHomePropertyId = null;
+      return null;
+    }
+    // If the currently selected home is valid and accessible, preserve it
+    if (this.selectedHomePropertyId && accessible.some((p) => p.id === this.selectedHomePropertyId)) {
+      return this.selectedHomePropertyId;
+    }
+    // Auto-suggest/set first accessible home
+    this.selectedHomePropertyId = accessible[0].id;
+    return this.selectedHomePropertyId;
+  }
+
+  public setSelectedHome(propertyId: PropertyId, hasApartmentRental = false): { success: boolean; message: string } {
+    const accessible = this.getAccessibleProperties(hasApartmentRental);
+    const target = accessible.find((p) => p.id === propertyId);
+    if (!target) {
+      return { success: false, message: "Cannot set as home: you do not own or lease this property." };
+    }
+    this.selectedHomePropertyId = propertyId;
+    return { success: true, message: `${target.name} set as primary home!` };
   }
 
   public getOwnedBusinessesList(): BusinessId[] {
@@ -347,6 +394,10 @@ export class EconomySystem {
     storyProgress?: StoryProgressData,
     weatherPreset?: string,
     audioMuted?: boolean,
+    selectedHomePropertyId?: PropertyId | null,
+    needs?: { hunger: number; energy: number; hygiene: number },
+    completedFreelanceContracts?: string[],
+    freelanceEarnings?: number,
   ): boolean {
     if (typeof window === "undefined" || !window.localStorage) return false;
     try {
@@ -368,6 +419,10 @@ export class EconomySystem {
           ...f,
           position: { ...f.position },
         })),
+        selectedHomePropertyId: selectedHomePropertyId !== undefined ? selectedHomePropertyId : this.selectedHomePropertyId,
+        needs: needs ? { ...needs } : undefined,
+        completedFreelanceContracts: completedFreelanceContracts ? [...completedFreelanceContracts] : [],
+        freelanceEarnings: freelanceEarnings ?? 0,
         savedAt: Date.now(),
       };
       window.localStorage.setItem("kano_streets_save_v1", JSON.stringify(data));
@@ -404,6 +459,9 @@ export class EconomySystem {
       if (data.dayCount) {
         this.dayCount = data.dayCount;
         this.lastProcessedDay = data.dayCount;
+      }
+      if (data.selectedHomePropertyId !== undefined) {
+        this.selectedHomePropertyId = data.selectedHomePropertyId;
       }
       if (Array.isArray(data.furnitureInventory)) {
         this.furnitureInventory = data.furnitureInventory

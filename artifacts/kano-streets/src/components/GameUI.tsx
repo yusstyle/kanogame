@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import './GameUI.css';
 import TouchControls from './TouchControls';
-import type { ActiveMissionInfo, CareerPathChoice, SocialContact, StorySnapshotInfo, VehicleType, FurnitureInstance, PropertyId } from '../game/types';
-import { KANO_LANDMARKS } from '../game/landmarks';
+import type { ActiveMissionInfo, CareerPathChoice, SocialContact, StorySnapshotInfo, VehicleType, FurnitureInstance, PropertyId, HomeNavInfo, NeedsState, FreelanceSnapshotInfo } from '../game/types';
+import { KANO_LANDMARKS, getGpsLandmark } from '../game/landmarks';
 import { CAREER_MISSIONS_CATALOG } from '../game/missionSystem';
 import CityMapModal from './CityMapModal';
 import FurnitureShopModal from './FurnitureShopModal';
@@ -45,6 +45,10 @@ export interface GameUIProps {
   unplacedFurnitureCount?: number;
   placedFurnitureCount?: number;
   isFurnitureShopOpen?: boolean;
+  selectedHomePropertyId?: PropertyId | null;
+  homeNavInfo?: HomeNavInfo | null;
+  needs?: NeedsState;
+  freelanceInfo?: FreelanceSnapshotInfo;
   graphicsQuality: GraphicsQuality;
   onStart: () => void;
   onPause: () => void;
@@ -52,6 +56,9 @@ export interface GameUIProps {
   onReset: () => void;
   onControlKey: (key: string, pressed: boolean) => void;
   onSetGPSTarget?: (id: string | null) => void;
+  onSetSelectedHome?: (propertyId: PropertyId) => unknown;
+  onTeleportHome?: (destination?: "entrance" | "interior") => unknown;
+  onFindMyHome?: () => unknown;
   onAcceptMission?: (id: string) => boolean;
   onCancelMission?: () => boolean;
   onExamineIndenture?: () => boolean;
@@ -130,6 +137,10 @@ export default function GameUI({
   unplacedFurnitureCount: _unplacedCount,
   placedFurnitureCount: _placedCount,
   isFurnitureShopOpen,
+  selectedHomePropertyId,
+  homeNavInfo,
+  needs,
+  freelanceInfo: _freelanceInfo,
   graphicsQuality,
   onStart,
   onPause,
@@ -137,6 +148,9 @@ export default function GameUI({
   onReset,
   onControlKey,
   onSetGPSTarget,
+  onSetSelectedHome,
+  onTeleportHome,
+  onFindMyHome,
   onAcceptMission,
   onCancelMission,
   onExamineIndenture,
@@ -171,6 +185,10 @@ export default function GameUI({
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === 'm' || e.key === 'M') {
         setShowDirectory((prev) => !prev);
+      } else if (e.key === 'h' || e.key === 'H') {
+        if (gpsTarget === "my-home") onSetGPSTarget?.(null);
+        else if (onFindMyHome) onFindMyHome();
+        else onSetGPSTarget?.("my-home");
       } else if (e.key === 'j' || e.key === 'J') {
         setShowMissions((prev) => !prev);
       } else if (e.key === 'n' || e.key === 'N') {
@@ -181,7 +199,7 @@ export default function GameUI({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [screen, onCycleWeather, onToggleAudioMute]);
+  }, [screen, onCycleWeather, onToggleAudioMute, gpsTarget, onFindMyHome, onSetGPSTarget]);
 
   if (screen === 'menu') {
     return (
@@ -227,7 +245,7 @@ export default function GameUI({
     );
   }
 
-  const activeGpsLandmark = gpsTarget ? KANO_LANDMARKS.find((l) => l.id === gpsTarget) : null;
+  const activeGpsLandmark = getGpsLandmark(gpsTarget, homeNavInfo);
 
   return (
     <div className={`ks-ui ks-gameplay ${screen === 'paused' ? 'is-paused' : ''}`}>
@@ -243,6 +261,21 @@ export default function GameUI({
             <div className="ks-hud-brand"><BrandMark /><span>KANO <i>/</i> STREETS</span></div>
             <div className="ks-hud-location"><span className="ks-live-dot" /> {location} <span className="ks-location-divider">/</span> FREE ROAM</div>
             <div className="ks-hud-time"><small>TIME</small> <strong>{timeString ?? "10:00"}</strong></div>
+            {homeNavInfo && (
+              <button
+                className={`ks-hud-directory-btn ks-hud-home-btn ${gpsTarget === "my-home" ? "active" : ""}`}
+                onClick={() => {
+                  if (gpsTarget === "my-home") onSetGPSTarget?.(null);
+                  else if (onFindMyHome) onFindMyHome();
+                  else onSetGPSTarget?.("my-home");
+                }}
+                title={`Set GPS navigation to your primary home (${homeNavInfo.name})`}
+                aria-label="Set GPS to My Home"
+              >
+                <Key>H</Key>
+                <span>🏠 HOME ({homeNavInfo.distanceMeters}m)</span>
+              </button>
+            )}
             <button
               className="ks-hud-directory-btn"
               onClick={() => setShowDirectory(!showDirectory)}
@@ -313,6 +346,33 @@ export default function GameUI({
             </button>
             <span className="ks-pause-hint"><Key>ESC</Key><span>PAUSE</span></span>
           </header>
+
+          {/* Needs Simulation HUD Bars */}
+          {needs && (
+            <div className="ks-hud-needs-bar" style={{ display: "flex", gap: "14px", alignItems: "center", background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "6px", padding: "5px 12px", margin: "6px 16px", backdropFilter: "blur(6px)", width: "fit-content", pointerEvents: "auto" }}>
+              <div title="Hunger Level: Eat Suya, Mai Shayi tea/bread, or home kitchen meal" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
+                <span>🍖</span>
+                <div style={{ width: "48px", height: "6px", background: "rgba(255,255,255,0.2)", borderRadius: "3px", overflow: "hidden" }}>
+                  <div style={{ width: `${needs.hunger}%`, height: "100%", background: needs.hunger < 20 ? "#ef4444" : needs.hunger < 50 ? "#f59e0b" : "#22c55e", transition: "width 0.3s" }} />
+                </div>
+                <span style={{ color: needs.hunger < 20 ? "#f87171" : "#e2e8f0", fontSize: "11px", fontWeight: "bold" }}>{needs.hunger}%</span>
+              </div>
+              <div title="Energy Level: Sleep in your bed at home to restore to 100%" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
+                <span>⚡</span>
+                <div style={{ width: "48px", height: "6px", background: "rgba(255,255,255,0.2)", borderRadius: "3px", overflow: "hidden" }}>
+                  <div style={{ width: `${needs.energy}%`, height: "100%", background: needs.energy < 20 ? "#ef4444" : needs.energy < 50 ? "#f59e0b" : "#38bdf8", transition: "width 0.3s" }} />
+                </div>
+                <span style={{ color: needs.energy < 20 ? "#f87171" : "#e2e8f0", fontSize: "11px", fontWeight: "bold" }}>{needs.energy}%</span>
+              </div>
+              <div title="Hygiene Level: Shower or bathe in your residence to wash Sahel dust" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
+                <span>🚿</span>
+                <div style={{ width: "48px", height: "6px", background: "rgba(255,255,255,0.2)", borderRadius: "3px", overflow: "hidden" }}>
+                  <div style={{ width: `${needs.hygiene}%`, height: "100%", background: needs.hygiene < 20 ? "#ef4444" : needs.hygiene < 50 ? "#f59e0b" : "#a855f7", transition: "width 0.3s" }} />
+                </div>
+                <span style={{ color: needs.hygiene < 20 ? "#f87171" : "#e2e8f0", fontSize: "11px", fontWeight: "bold" }}>{needs.hygiene}%</span>
+              </div>
+            </div>
+          )}
 
           {storyInfo && (
             <div
@@ -493,6 +553,13 @@ export default function GameUI({
               gpsTarget={gpsTarget}
               onSetGPSTarget={onSetGPSTarget}
               storyInfo={storyInfo}
+              selectedHomePropertyId={selectedHomePropertyId}
+              homeNavInfo={homeNavInfo}
+              ownedProperties={ownedProperties}
+              hasApartmentRental={hasApartmentRental}
+              onSetSelectedHome={onSetSelectedHome}
+              onTeleportHome={onTeleportHome}
+              onFindMyHome={onFindMyHome}
               onExamineIndenture={onExamineIndenture}
               onChooseInvestigation={onChooseInvestigation}
               onChooseCareer={onChooseCareer}

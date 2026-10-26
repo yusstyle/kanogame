@@ -181,6 +181,39 @@ export interface StorySnapshotInfo {
   canInspectIndenture: boolean;
 }
 
+export interface NeedsState {
+  hunger: number; // 0 to 100
+  energy: number; // 0 to 100
+  hygiene: number; // 0 to 100
+}
+
+export interface HomeNavInfo {
+  propertyId: PropertyId;
+  name: string;
+  district: string;
+  distanceMeters: number;
+  entranceCoords: { x: number; z: number };
+  isInsideHome: boolean;
+}
+
+export interface FreelanceContract {
+  id: string;
+  title: string;
+  category: "logistics" | "software" | "trading" | "architecture" | "finance";
+  client: string;
+  payout: number;
+  durationMinutes: number;
+  description: string;
+  isCompleted: boolean;
+}
+
+export interface FreelanceSnapshotInfo {
+  totalContracts: number;
+  completedCount: number;
+  totalEarnings: number;
+  nextAvailableContract: FreelanceContract | null;
+}
+
 export type GameSnapshot = {
   mode: GameMode;
   vehicleType?: VehicleType | null;
@@ -213,6 +246,10 @@ export type GameSnapshot = {
   unplacedFurnitureCount?: number;
   placedFurnitureCount?: number;
   isFurnitureShopOpen?: boolean;
+  selectedHomePropertyId?: PropertyId | null;
+  homeNavInfo?: HomeNavInfo | null;
+  needs?: NeedsState;
+  freelanceInfo?: FreelanceSnapshotInfo;
 };
 
 export type GameMaterials = {

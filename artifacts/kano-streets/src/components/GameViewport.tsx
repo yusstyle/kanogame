@@ -41,6 +41,10 @@ export type GameViewportHandle = {
   rotateFurnitureItem: (instanceId: string, deltaYaw: number) => { success: boolean; message: string };
   getUnplacedFurniture: () => FurnitureInstance[];
   getPlacedFurniture: (propertyId?: PropertyId) => FurnitureInstance[];
+  setSelectedHome: (propertyId: PropertyId) => { success: boolean; message: string };
+  teleportHome: (destination?: "entrance" | "interior") => { success: boolean; message: string };
+  findMyHome: () => { success: boolean; message: string };
+  executeFreelanceContract: (contractId?: string) => { success: boolean; message: string };
 };
 
 type GameViewportProps = {
@@ -93,6 +97,10 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
           engineRef.current?.rotateFurnitureItem(instId, delta) ?? { success: false, message: "Engine not ready" },
         getUnplacedFurniture: () => engineRef.current?.getUnplacedFurniture() ?? [],
         getPlacedFurniture: (propId) => engineRef.current?.getPlacedFurniture(propId) ?? [],
+        setSelectedHome: (propId) => engineRef.current?.setSelectedHome(propId) ?? { success: false, message: "Engine not ready" },
+        teleportHome: (dest) => engineRef.current?.teleportHome(dest) ?? { success: false, message: "Engine not ready" },
+        findMyHome: () => engineRef.current?.findMyHome() ?? { success: false, message: "Engine not ready" },
+        executeFreelanceContract: (contractId) => engineRef.current?.executeFreelanceContract(contractId) ?? { success: false, message: "Engine not ready" },
       }),
       [],
     );

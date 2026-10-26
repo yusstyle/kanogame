@@ -133,6 +133,18 @@ function App() {
     return viewportRef.current?.getPlacedFurniture(propertyId) ?? [];
   }, []);
 
+  const setSelectedHome = useCallback((propertyId: PropertyId) => {
+    return viewportRef.current?.setSelectedHome(propertyId);
+  }, []);
+
+  const teleportHome = useCallback((destination?: "entrance" | "interior") => {
+    return viewportRef.current?.teleportHome(destination);
+  }, []);
+
+  const findMyHome = useCallback(() => {
+    return viewportRef.current?.findMyHome();
+  }, []);
+
   const receiveSnapshot = useCallback((next: GameSnapshot) => {
     setSnapshot((current) => {
       if (
@@ -166,7 +178,13 @@ function App() {
         current.furnishingTargetName === next.furnishingTargetName &&
         current.unplacedFurnitureCount === next.unplacedFurnitureCount &&
         current.placedFurnitureCount === next.placedFurnitureCount &&
-        current.isFurnitureShopOpen === next.isFurnitureShopOpen
+        current.isFurnitureShopOpen === next.isFurnitureShopOpen &&
+        current.selectedHomePropertyId === next.selectedHomePropertyId &&
+        current.homeNavInfo?.propertyId === next.homeNavInfo?.propertyId &&
+        current.homeNavInfo?.distanceMeters === next.homeNavInfo?.distanceMeters &&
+        current.needs?.hunger === next.needs?.hunger &&
+        current.needs?.energy === next.needs?.energy &&
+        current.needs?.hygiene === next.needs?.hygiene
       ) {
         return current;
       }
@@ -216,6 +234,10 @@ function App() {
         unplacedFurnitureCount={snapshot.unplacedFurnitureCount}
         placedFurnitureCount={snapshot.placedFurnitureCount}
         isFurnitureShopOpen={snapshot.isFurnitureShopOpen}
+        selectedHomePropertyId={snapshot.selectedHomePropertyId}
+        homeNavInfo={snapshot.homeNavInfo}
+        needs={snapshot.needs}
+        freelanceInfo={snapshot.freelanceInfo}
         graphicsQuality={graphicsQuality}
         onStart={start}
         onPause={pause}
@@ -223,6 +245,9 @@ function App() {
         onReset={reset}
         onControlKey={setControlKey}
         onSetGPSTarget={setGPSTarget}
+        onSetSelectedHome={setSelectedHome}
+        onTeleportHome={teleportHome}
+        onFindMyHome={findMyHome}
         onAcceptMission={acceptMission}
         onCancelMission={cancelMission}
         onExamineIndenture={examineIndenture}
