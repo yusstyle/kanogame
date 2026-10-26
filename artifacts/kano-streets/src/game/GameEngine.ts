@@ -21,7 +21,7 @@ import { buildNavigationNetwork, type NavigationNetwork } from "./navigation";
 import { PedestrianSystem } from "./PedestrianSystem";
 import { TrafficSystem } from "./TrafficSystem";
 import { createWorld } from "./world";
-import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType, CareerPathChoice, PropertyId, InteriorId, FurnitureInstance, HomeNavInfo } from "./types";
+import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType, CareerPathChoice, PropertyId, InteriorId, FurnitureInstance, HomeNavInfo, PlayerHomeEntry } from "./types";
 import { SocialSystem } from "./socialSystem";
 import { EconomySystem } from "./economySystem";
 import { KANO_LANDMARKS, getNearestLandmark, getGpsLandmark } from "./landmarks";
@@ -810,6 +810,7 @@ export class GameEngine {
               this.hasApartmentRental = true;
               const prop = this.economy.properties.get("unit-2b");
               if (prop) prop.isRented = true;
+              this.economy.resolveSelectedHome(true);
             }
             if (res.scoreDelta) this.gameScore = Math.max(this.gameScore, res.scoreDelta);
             if (res.purchasedProperty) {
@@ -818,6 +819,7 @@ export class GameEngine {
                 p.isOwned = true;
                 p.isRented = false;
               }
+              this.economy.resolveSelectedHome(this.hasApartmentRental);
             }
             if (res.purchasedBusiness) {
               const b = this.economy.businesses.get(res.purchasedBusiness);
@@ -886,6 +888,7 @@ export class GameEngine {
             this.hasApartmentRental = true;
             const prop = this.economy.properties.get("unit-2b");
             if (prop) prop.isRented = true;
+            this.economy.resolveSelectedHome(true);
             const zone = this.interiorManager.interiors.get("apartment");
             if (zone) {
               this.interiorManager.outdoorSavedPosition.copy(this.playerPosition);
@@ -911,6 +914,7 @@ export class GameEngine {
             const purchaseRes = this.economy.purchaseProperty(nearbyProperty.id, this.cash);
             if (purchaseRes.success) {
               this.cash -= purchaseRes.cost;
+              this.economy.resolveSelectedHome(this.hasApartmentRental);
               const zone = this.interiorManager.interiors.get(nearbyProperty.interiorId);
               if (zone) {
                 this.interiorManager.outdoorSavedPosition.copy(this.playerPosition);
@@ -2365,8 +2369,36 @@ export class GameEngine {
       isFurnitureShopOpen: this.isFurnitureShopOpen,
       selectedHomePropertyId: this.economy.selectedHomePropertyId,
       homeNavInfo: this.getHomeNavInfo(),
+      playerHomes: this.getPlayerHomes(),
       needs: this.lifeSim.getSnapshot(),
       freelanceInfo: this.freelanceSystem.getSnapshot(),
+    });
+  }
+
+  public getPlayerHomes(): PlayerHomeEntry[] {
+    const accessible = this.economy.getAccessibleProperties(this.hasApartmentRental);
+    const selectedId = this.economy.resolveSelectedHome(this.hasApartmentRental);
+    return accessible.map((p) => {
+      const reg = getPropertyRegistryEntry(p.id);
+      const entranceCoords = reg
+        ? { x: reg.entranceDoor.x, z: reg.entranceDoor.z }
+        : { x: 0, z: 0 };
+      const dist = Math.round(
+        Math.hypot(this.playerPosition.x - entranceCoords.x, this.playerPosition.z - entranceCoords.z),
+      );
+      const isLeased = p.id === "unit-2b" && !p.isOwned && (p.isRented || this.hasApartmentRental);
+      const landmarkId = p.id === "unit-2b" ? "apartment" : p.id === "bompai-penthouse" ? "bompai-flats" : "villa";
+      return {
+        propertyId: p.id,
+        name: reg?.name ?? p.name,
+        district: reg?.district ?? "KANO",
+        status: isLeased ? "LEASED" : "OWNED",
+        isSelectedHome: p.id === selectedId,
+        entranceCoords,
+        distanceMeters: dist,
+        description: reg?.description ?? p.description,
+        landmarkId,
+      };
     });
   }
 
@@ -2391,6 +2423,9 @@ export class GameEngine {
   public setSelectedHome(propertyId: PropertyId): { success: boolean; message: string } {
     const res = this.economy.setSelectedHome(propertyId, this.hasApartmentRental);
     this.statusMessage = res.message;
+    if (res.success && this.gpsTargetLandmark === "my-home") {
+      this.gpsTargetLandmark = "my-home";
+    }
     this.saveGame();
     this.pushSnapshot(true);
     return res;

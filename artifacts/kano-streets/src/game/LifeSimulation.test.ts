@@ -74,29 +74,30 @@ function setupMockDOM() {
       removeEventListener: () => {},
     };
 
-    class FakeResizeObserver {
-      observe() {}
-      disconnect() {}
-    }
-
-    const fakeWindow = {
-      devicePixelRatio: 1.5,
-      matchMedia: () => ({ matches: false }),
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      localStorage: {
-        getItem: () => null,
-        setItem: () => {},
-        removeItem: () => {},
-      },
-    };
-
     (globalThis as any).document = fakeDocument;
-    (globalThis as any).window = fakeWindow;
-    (globalThis as any).ResizeObserver = FakeResizeObserver;
-    (globalThis as any).requestAnimationFrame = () => 1;
-    (globalThis as any).cancelAnimationFrame = () => {};
   }
+
+  class FakeResizeObserver {
+    observe() {}
+    disconnect() {}
+  }
+
+  const fakeWindow = {
+    devicePixelRatio: 1.5,
+    matchMedia: () => ({ matches: false }),
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    localStorage: {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {},
+    },
+  };
+
+  (globalThis as any).window = fakeWindow;
+  (globalThis as any).ResizeObserver = FakeResizeObserver;
+  (globalThis as any).requestAnimationFrame = () => 1;
+  (globalThis as any).cancelAnimationFrame = () => {};
 }
 
 test("Milestone 10: My Home Selection, Auto-Suggest & Save Persistence", () => {
@@ -135,12 +136,11 @@ test("Milestone 10: My Home Selection, Auto-Suggest & Save Persistence", () => {
 
   // Mock localStorage for save/load verification
   const storageMap: Record<string, string> = {};
-  (globalThis as any).window = {
-    localStorage: {
-      getItem: (k: string) => storageMap[k] ?? null,
-      setItem: (k: string, v: string) => {
-        storageMap[k] = v;
-      },
+  setupMockDOM();
+  (globalThis as any).window.localStorage = {
+    getItem: (k: string) => storageMap[k] ?? null,
+    setItem: (k: string, v: string) => {
+      storageMap[k] = v;
     },
   };
 
@@ -380,12 +380,11 @@ test("Milestone 10: Save/Load Schema Backward Compatibility with Legacy Saves", 
   };
   storageMap["kano_streets_save_v1"] = JSON.stringify(legacySaveData);
 
-  (globalThis as any).window = {
-    localStorage: {
-      getItem: (k: string) => storageMap[k] ?? null,
-      setItem: (k: string, v: string) => {
-        storageMap[k] = v;
-      },
+  setupMockDOM();
+  (globalThis as any).window.localStorage = {
+    getItem: (k: string) => storageMap[k] ?? null,
+    setItem: (k: string, v: string) => {
+      storageMap[k] = v;
     },
   };
 
@@ -408,4 +407,149 @@ test("Milestone 10: Save/Load Schema Backward Compatibility with Legacy Saves", 
   const freelance = new FreelanceSystem(loaded.completedFreelanceContracts, loaded.freelanceEarnings);
   assert.equal(freelance.totalEarnings, 0);
   assert.equal(freelance.getAvailableContracts().length, 8);
+});
+
+test("Milestone 10 Bugfix: Home List Population, Status, Multi-Property & GPS Synchronization", () => {
+  setupMockDOM();
+  const renderer = {
+    pixelRatio: 1,
+    shadowMap: { enabled: true, type: THREE.PCFSoftShadowMap },
+    setPixelRatio() {},
+    setSize() {},
+    render() {},
+    dispose() {},
+  } as unknown as THREE.WebGLRenderer;
+
+  let latestSnapshot!: GameSnapshot;
+  const canvas = (globalThis as any).document.createElement("canvas");
+  const engine = new GameEngine(
+    canvas,
+    {
+      onSnapshot: (snap) => {
+        latestSnapshot = snap;
+      },
+      onPause: () => {},
+    },
+    () => renderer,
+  );
+
+  // Condition 8: Empty state when player owns/leases NO properties
+  let homes = engine.getPlayerHomes();
+  assert.equal(homes.length, 0, "Initial player homes list is empty");
+  (engine as any).pushSnapshot(true);
+  assert.equal(latestSnapshot.playerHomes?.length, 0);
+  assert.equal(engine.getHomeNavInfo(), null);
+
+  // Condition 2: One leased property appears in the Home List with status 'LEASED'
+  (engine as any).cash = 100_000;
+  (engine as any).hasApartmentRental = true;
+  const u2b = engine.economy.properties.get("unit-2b");
+  if (u2b) u2b.isRented = true;
+  engine.economy.resolveSelectedHome(true);
+
+  homes = engine.getPlayerHomes();
+  assert.equal(homes.length, 1, "Exactly 1 leased property in home list");
+  assert.equal(homes[0].propertyId, "unit-2b");
+  assert.equal(homes[0].status, "LEASED");
+  assert.equal(homes[0].isSelectedHome, true, "Sole property is auto-selected as primary home");
+  assert.equal(homes[0].entranceCoords.x, 48);
+  assert.equal(homes[0].entranceCoords.z, -43.5);
+
+  // Condition 3: Unowned and unleased properties do not appear as eligible homes
+  assert.ok(!homes.some((h) => h.propertyId === "bompai-penthouse"), "Unowned penthouse does not appear");
+  assert.ok(!homes.some((h) => h.propertyId === "albaraka-villa"), "Unowned villa does not appear");
+
+  // Condition 1 & 4: Multiple eligible properties (owned + leased) all appear
+  // Player acquires Bompai Penthouse (freehold)
+  const pentProp = engine.economy.properties.get("bompai-penthouse");
+  if (pentProp) pentProp.isOwned = true;
+
+  homes = engine.getPlayerHomes();
+  assert.equal(homes.length, 2, "Both leased and owned properties appear in home list");
+  const pentHome = homes.find((h) => h.propertyId === "bompai-penthouse");
+  assert.ok(pentHome, "Penthouse found in homes list");
+  assert.equal(pentHome.status, "OWNED");
+  assert.equal(pentHome.isSelectedHome, false, "Existing selection (unit-2b) remains primary");
+  assert.equal(pentHome.entranceCoords.x, 18);
+  assert.equal(pentHome.entranceCoords.z, 39.5);
+
+  // Player also acquires Al-Baraka Villa
+  const villaProp = engine.economy.properties.get("albaraka-villa");
+  if (villaProp) villaProp.isOwned = true;
+
+  homes = engine.getPlayerHomes();
+  assert.equal(homes.length, 3, "All 3 eligible properties appear in home list");
+  const villaHome = homes.find((h) => h.propertyId === "albaraka-villa");
+  assert.ok(villaHome);
+  assert.equal(villaHome.status, "OWNED");
+
+  // Condition 5: Selecting a home updates UI state and GPS target
+  const switchRes = engine.setSelectedHome("bompai-penthouse");
+  assert.ok(switchRes.success);
+  homes = engine.getPlayerHomes();
+  const updatedPent = homes.find((h) => h.propertyId === "bompai-penthouse");
+  const updatedU2b = homes.find((h) => h.propertyId === "unit-2b");
+  assert.equal(updatedPent?.isSelectedHome, true, "Bompai Penthouse is now primary");
+  assert.equal(updatedU2b?.isSelectedHome, false, "Unit 2B is no longer primary");
+
+  // Trigger findMyHome -> locks GPS to new primary home's entrance (18, 39.5)
+  const findRes = engine.findMyHome();
+  assert.ok(findRes.success);
+  const gpsLm = getGpsLandmark("my-home", engine.getHomeNavInfo());
+  assert.ok(gpsLm);
+  assert.equal(gpsLm.x, 18);
+  assert.equal(gpsLm.z, 39.5, "GPS routes to newly selected Bompai Penthouse entrance");
+
+  // Condition 6: Selection persists after save/reload
+  const storageMap: Record<string, string> = {};
+  (globalThis as any).window.localStorage = {
+    getItem: (k: string) => storageMap[k] ?? null,
+    setItem: (k: string, v: string) => {
+      storageMap[k] = v;
+    },
+  };
+
+  engine.saveGame();
+  const savedJson = storageMap["kano_streets_save_v1"];
+  assert.ok(savedJson, "Game saved to localStorage");
+  const parsedSave = JSON.parse(savedJson);
+  assert.equal(parsedSave.selectedHomePropertyId, "bompai-penthouse");
+  assert.equal(parsedSave.hasApartmentRental, true);
+  assert.ok(parsedSave.ownedProperties.includes("bompai-penthouse"));
+  assert.ok(parsedSave.ownedProperties.includes("albaraka-villa"));
+
+  // Reload save into fresh EconomySystem
+  const reloadedEconomy = new EconomySystem();
+  const reloadedData = reloadedEconomy.loadFromStorage();
+  assert.ok(reloadedData);
+  assert.equal(reloadedEconomy.selectedHomePropertyId, "bompai-penthouse");
+  assert.equal(reloadedEconomy.properties.get("unit-2b")?.isRented, true, "Unit 2B lease restored");
+  assert.equal(reloadedEconomy.properties.get("bompai-penthouse")?.isOwned, true, "Penthouse ownership restored");
+  assert.equal(reloadedEconomy.properties.get("albaraka-villa")?.isOwned, true, "Villa ownership restored");
+  assert.equal(reloadedEconomy.getAccessibleProperties().length, 3, "All 3 properties accessible after reload");
+
+  // Condition 7: Legacy save backward compatibility test
+  const legacyStorage: Record<string, string> = {
+    kano_streets_save_v1: JSON.stringify({
+      version: 1,
+      cash: 180_000,
+      trafficFine: 0,
+      hasApartmentRental: true,
+      ownedProperties: ["bompai-penthouse"],
+      dayCount: 3,
+      savedAt: 1600000000000,
+    }),
+  };
+  (globalThis as any).window.localStorage.getItem = (k: string) => legacyStorage[k] ?? null;
+
+  const legacyEcon = new EconomySystem();
+  const legacyLoaded = legacyEcon.loadFromStorage();
+  assert.ok(legacyLoaded);
+  assert.equal(legacyLoaded.hasApartmentRental, true);
+  assert.equal(legacyEcon.properties.get("unit-2b")?.isRented, true, "Restores lease on legacy save");
+  assert.equal(legacyEcon.properties.get("bompai-penthouse")?.isOwned, true);
+  const resolvedLegacy = legacyEcon.resolveSelectedHome(true);
+  assert.ok(resolvedLegacy === "unit-2b" || resolvedLegacy === "bompai-penthouse");
+
+  engine.dispose();
 });

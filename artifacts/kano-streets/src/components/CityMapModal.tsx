@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { KANO_LANDMARKS, getGpsLandmark, type LandmarkCategory, type LandmarkLocation } from "../game/landmarks";
 import { INDENTURE_1968 } from "../game/storySystem";
-import type { CareerPathChoice, InvestigationChoice, StorySnapshotInfo, HomeNavInfo, PropertyId } from "../game/types";
+import { PROPERTY_REGISTRY } from "../game/propertyRegistry";
+import type { CareerPathChoice, InvestigationChoice, StorySnapshotInfo, HomeNavInfo, PropertyId, PlayerHomeEntry } from "../game/types";
 
 export interface CityMapModalProps {
   onClose: () => void;
@@ -12,6 +13,7 @@ export interface CityMapModalProps {
   storyInfo?: StorySnapshotInfo | null;
   selectedHomePropertyId?: PropertyId | null;
   homeNavInfo?: HomeNavInfo | null;
+  playerHomes?: PlayerHomeEntry[];
   ownedProperties?: string[];
   hasApartmentRental?: boolean;
   onSetSelectedHome?: (propertyId: PropertyId) => unknown;
@@ -23,7 +25,7 @@ export interface CityMapModalProps {
   onResolveChapter1?: () => unknown;
 }
 
-type TabType = "map" | "directory" | "story";
+type TabType = "map" | "homes" | "directory" | "story";
 
 export function toSvgX(worldX: number): number {
   return Math.round(((worldX + 136) / 272) * 800);
@@ -52,6 +54,7 @@ export default function CityMapModal({
   storyInfo,
   selectedHomePropertyId,
   homeNavInfo,
+  playerHomes,
   ownedProperties = [],
   hasApartmentRental = false,
   onSetSelectedHome,
@@ -65,6 +68,107 @@ export default function CityMapModal({
   const [categoryFilter, setCategoryFilter] = useState<LandmarkCategory | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLandmark, setSelectedLandmark] = useState<LandmarkLocation | null>(null);
+
+  // Local state for instantaneous UI response when switching primary home
+  const [currentSelectedHomeId, setCurrentSelectedHomeId] = useState<PropertyId | null>(
+    selectedHomePropertyId ?? homeNavInfo?.propertyId ?? null,
+  );
+
+  useEffect(() => {
+    if (selectedHomePropertyId !== undefined) {
+      setCurrentSelectedHomeId(selectedHomePropertyId);
+    } else if (homeNavInfo?.propertyId) {
+      setCurrentSelectedHomeId(homeNavInfo.propertyId);
+    }
+  }, [selectedHomePropertyId, homeNavInfo?.propertyId]);
+
+  // Derive eligible homes dynamically from actual property records
+  const eligibleHomes = useMemo<PlayerHomeEntry[]>(() => {
+    // 1. If playerHomes was passed via props and is populated, sync selection state
+    if (playerHomes && playerHomes.length > 0) {
+      return playerHomes.map((h) => ({
+        ...h,
+        isSelectedHome: currentSelectedHomeId ? h.propertyId === currentSelectedHomeId : h.isSelectedHome,
+      }));
+    }
+
+    // 2. Otherwise derive dynamically from property records
+    const list: PlayerHomeEntry[] = [];
+    const effectiveSelectedId = currentSelectedHomeId ?? (hasApartmentRental ? "unit-2b" : (ownedProperties[0] as PropertyId | null));
+
+    // Unit 2B (Airport Road)
+    const hasU2bLease = Boolean(hasApartmentRental);
+    const hasU2bOwnership = Boolean(ownedProperties && ownedProperties.includes("unit-2b"));
+    if (hasU2bLease || hasU2bOwnership) {
+      const reg = PROPERTY_REGISTRY["unit-2b"];
+      const dist = Math.round(Math.hypot(playerCoords.x - reg.entranceDoor.x, playerCoords.z - reg.entranceDoor.z));
+      list.push({
+        propertyId: "unit-2b",
+        name: reg.name,
+        district: reg.district,
+        status: hasU2bOwnership ? "OWNED" : "LEASED",
+        isSelectedHome: effectiveSelectedId === "unit-2b" || (!effectiveSelectedId && list.length === 0),
+        entranceCoords: { x: reg.entranceDoor.x, z: reg.entranceDoor.z },
+        distanceMeters: dist,
+        description: reg.description,
+        landmarkId: "apartment",
+      });
+    }
+
+    // Bompai Penthouse
+    if (ownedProperties && ownedProperties.includes("bompai-penthouse")) {
+      const reg = PROPERTY_REGISTRY["bompai-penthouse"];
+      const dist = Math.round(Math.hypot(playerCoords.x - reg.entranceDoor.x, playerCoords.z - reg.entranceDoor.z));
+      list.push({
+        propertyId: "bompai-penthouse",
+        name: reg.name,
+        district: reg.district,
+        status: "OWNED",
+        isSelectedHome: effectiveSelectedId === "bompai-penthouse",
+        entranceCoords: { x: reg.entranceDoor.x, z: reg.entranceDoor.z },
+        distanceMeters: dist,
+        description: reg.description,
+        landmarkId: "bompai-flats",
+      });
+    }
+
+    // Al-Baraka Villa
+    if (ownedProperties && ownedProperties.includes("albaraka-villa")) {
+      const reg = PROPERTY_REGISTRY["albaraka-villa"];
+      const dist = Math.round(Math.hypot(playerCoords.x - reg.entranceDoor.x, playerCoords.z - reg.entranceDoor.z));
+      list.push({
+        propertyId: "albaraka-villa",
+        name: reg.name,
+        district: reg.district,
+        status: "OWNED",
+        isSelectedHome: effectiveSelectedId === "albaraka-villa",
+        entranceCoords: { x: reg.entranceDoor.x, z: reg.entranceDoor.z },
+        distanceMeters: dist,
+        description: reg.description,
+        landmarkId: "villa",
+      });
+    }
+
+    return list;
+  }, [playerHomes, ownedProperties, hasApartmentRental, currentSelectedHomeId, playerCoords]);
+
+  // Development diagnostic warning when property records exist but 0 homes resolved
+  const devDiagnosticMessage = useMemo(() => {
+    const hasAnyRecord = Boolean(hasApartmentRental || (ownedProperties && ownedProperties.length > 0));
+    if (hasAnyRecord && eligibleHomes.length === 0) {
+      return `Discrepancy detected: Player has property records (hasApartmentRental=${hasApartmentRental}, ownedProperties=[${ownedProperties?.join(", ")}]), but 0 eligible homes were resolved in the Home List. Check property ID matching.`;
+    }
+    return null;
+  }, [hasApartmentRental, ownedProperties, eligibleHomes.length]);
+
+  const activeSelectedHome = useMemo(() => {
+    return eligibleHomes.find((h) => h.isSelectedHome) ?? eligibleHomes[0] ?? null;
+  }, [eligibleHomes]);
+
+  const handleSelectHome = (propertyId: PropertyId) => {
+    setCurrentSelectedHomeId(propertyId);
+    onSetSelectedHome?.(propertyId);
+  };
 
   const filteredLandmarks = KANO_LANDMARKS.filter((lm) => {
     const matchesCategory = categoryFilter === "all" || lm.category === categoryFilter;
@@ -98,6 +202,12 @@ export default function CityMapModal({
               onClick={() => setActiveTab("map")}
             >
               🗺️ Visual Map
+            </button>
+            <button
+              className={`ks-map-tab-btn ${activeTab === "homes" ? "active" : ""}`}
+              onClick={() => setActiveTab("homes")}
+            >
+              🏡 My Properties / Home List {eligibleHomes.length > 0 ? `(${eligibleHomes.length})` : ""}
             </button>
             <button
               className={`ks-map-tab-btn ${activeTab === "directory" ? "active" : ""}`}
@@ -141,7 +251,7 @@ export default function CityMapModal({
             </div>
 
             {/* MY HOME Quick Nav Card / Advisor Banner */}
-            {homeNavInfo ? (
+            {activeSelectedHome ? (
               <div
                 className="ks-map-home-card"
                 style={{
@@ -160,20 +270,46 @@ export default function CityMapModal({
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <span style={{ fontSize: "20px" }}>🏠</span>
                   <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
                       <strong style={{ color: "#34d399", fontSize: "13px", letterSpacing: "0.5px" }}>
-                        MY HOME: {homeNavInfo.name}
+                        MY HOME: {activeSelectedHome.name}
                       </strong>
                       <span style={{ background: "#059669", color: "#ecfdf5", fontSize: "10px", padding: "1px 6px", borderRadius: "4px", fontWeight: "bold" }}>
-                        ACTIVE
+                        {activeSelectedHome.status === "LEASED" ? "LEASED" : "OWNED"}
+                      </span>
+                      <span style={{ background: "#047857", color: "#d1fae5", fontSize: "10px", padding: "1px 6px", borderRadius: "4px", fontWeight: "bold" }}>
+                        PRIMARY
                       </span>
                     </div>
                     <small style={{ color: "#cbd5e1", fontSize: "11px" }}>
-                      {homeNavInfo.district} · Entrance: ({homeNavInfo.entranceCoords.x}, {homeNavInfo.entranceCoords.z}) · {getDistanceToPlayer(homeNavInfo.entranceCoords.x, homeNavInfo.entranceCoords.z)}m away
+                      {activeSelectedHome.district} · Entrance: ({activeSelectedHome.entranceCoords.x}, {activeSelectedHome.entranceCoords.z}) · {activeSelectedHome.distanceMeters}m away
                     </small>
+                    {eligibleHomes.length > 1 && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px", flexWrap: "wrap" }}>
+                        <span style={{ color: "#94a3b8", fontSize: "11px" }}>Switch Home:</span>
+                        {eligibleHomes.map((h) => (
+                          <button
+                            key={h.propertyId}
+                            onClick={() => handleSelectHome(h.propertyId)}
+                            style={{
+                              background: h.isSelectedHome ? "#10b981" : "rgba(255, 255, 255, 0.1)",
+                              color: h.isSelectedHome ? "#ffffff" : "#cbd5e1",
+                              border: h.isSelectedHome ? "1px solid #34d399" : "1px solid rgba(255, 255, 255, 0.2)",
+                              borderRadius: "4px",
+                              padding: "2px 6px",
+                              fontSize: "10px",
+                              cursor: "pointer",
+                              fontWeight: h.isSelectedHome ? "bold" : "normal",
+                            }}
+                          >
+                            {h.isSelectedHome ? `★ ${h.name.split("·")[0]}` : h.name.split("·")[0]}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                   <button
                     className={`ks-gps-btn ${gpsTarget === "my-home" ? "active" : ""}`}
                     onClick={() => {
@@ -184,6 +320,13 @@ export default function CityMapModal({
                     style={{ padding: "4px 10px", fontSize: "11px" }}
                   >
                     {gpsTarget === "my-home" ? "GPS Locked to Home ✓" : "Find My Home ↗"}
+                  </button>
+                  <button
+                    className="ks-gps-btn"
+                    style={{ padding: "4px 10px", fontSize: "11px", background: "#059669" }}
+                    onClick={() => setActiveTab("homes")}
+                  >
+                    My Properties ({eligibleHomes.length}) ↗
                   </button>
                   {onTeleportHome && (
                     <button
@@ -219,22 +362,33 @@ export default function CityMapModal({
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <span style={{ fontSize: "20px" }}>ℹ️</span>
                   <div>
-                    <strong style={{ color: "#f59e0b", fontSize: "13px" }}>NO HOME OWNED OR LEASED YET</strong>
+                    <strong style={{ color: "#f59e0b", fontSize: "13px" }}>
+                      You don't own or lease a home yet. Visit the property listings to buy or lease one.
+                    </strong>
                     <div style={{ color: "#cbd5e1", fontSize: "11px" }}>
                       Lease Unit 2B at Airport View Apartments (₦75,000/mo) or purchase Bompai Penthouse (₦35M) / Al-Baraka Villa (₦65M).
                     </div>
                   </div>
                 </div>
-                <button
-                  className="ks-gps-btn"
-                  style={{ padding: "4px 10px", fontSize: "11px", background: "#d97706" }}
-                  onClick={() => {
-                    onSetGPSTarget?.("apartment");
-                    onClose();
-                  }}
-                >
-                  Route to Unit 2B (Airport Road) ↗
-                </button>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    className="ks-gps-btn"
+                    style={{ padding: "4px 10px", fontSize: "11px", background: "#d97706" }}
+                    onClick={() => {
+                      onSetGPSTarget?.("apartment");
+                      onClose();
+                    }}
+                  >
+                    Route to Unit 2B (Airport Road) ↗
+                  </button>
+                  <button
+                    className="ks-gps-btn"
+                    style={{ padding: "4px 10px", fontSize: "11px" }}
+                    onClick={() => setActiveTab("directory")}
+                  >
+                    Browse Directory ↗
+                  </button>
+                </div>
               </div>
             )}
 
@@ -564,7 +718,208 @@ export default function CityMapModal({
           </div>
         )}
 
-        {/* Tab 2: Searchable Landmark Directory */}
+        {/* Tab 2: Dedicated MY PROPERTIES / HOME LIST */}
+        {activeTab === "homes" && (
+          <div className="ks-directory-tab-content ks-homes-tab-content">
+            <div className="ks-directory-controls" style={{ padding: "14px 20px 8px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "16px", color: "#f8fafc", fontFamily: "'Fraunces', Georgia, serif" }}>
+                    🏡 MY PROPERTIES / HOME LIST
+                  </h3>
+                  <small style={{ color: "#94a3b8", fontSize: "12px" }}>
+                    Dynamic registry of all properties owned or leased by you across Kano.
+                  </small>
+                </div>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  <span style={{ background: "#065f46", color: "#34d399", padding: "4px 10px", borderRadius: "12px", fontSize: "11px", fontWeight: "bold" }}>
+                    {eligibleHomes.length} Registered {eligibleHomes.length === 1 ? "Property" : "Properties"}
+                  </span>
+                </div>
+              </div>
+
+              {devDiagnosticMessage && (
+                <div
+                  className="ks-dev-diagnostic-banner"
+                  style={{
+                    background: "#7f1d1d",
+                    border: "1px solid #ef4444",
+                    color: "#fef2f2",
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                    marginTop: "8px",
+                  }}
+                >
+                  ⚠️ <strong>DEV DIAGNOSTIC:</strong> {devDiagnosticMessage}
+                </div>
+              )}
+            </div>
+
+            <div className="ks-directory-list">
+              {eligibleHomes.length === 0 ? (
+                <div
+                  className="ks-directory-card ks-home-list-empty"
+                  style={{
+                    background: "rgba(217, 119, 6, 0.12)",
+                    border: "1.5px dashed #f59e0b",
+                    padding: "24px 20px",
+                    textAlign: "center",
+                    gridColumn: "1 / -1",
+                  }}
+                >
+                  <div style={{ fontSize: "36px", marginBottom: "8px" }}>🏡</div>
+                  <h3 style={{ color: "#f59e0b", fontSize: "16px", margin: "0 0 6px 0" }}>
+                    You don't own or lease a home yet. Visit the property listings to buy or lease one.
+                  </h3>
+                  <p style={{ color: "#cbd5e1", fontSize: "13px", maxWidth: "600px", margin: "0 auto 16px" }}>
+                    Explore residential real estate options across the city: lease Unit 2B at Airport View Apartments for ₦75,000/month or acquire freehold deeds for Bompai Heights Luxury Penthouse (₦35M) or Al-Baraka Executive Villa (₦65M).
+                  </p>
+                  <div style={{ display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap" }}>
+                    <button
+                      className="ks-gps-btn"
+                      style={{ background: "#d97706", borderColor: "#f59e0b", padding: "8px 16px", fontSize: "12px" }}
+                      onClick={() => {
+                        onSetGPSTarget?.("apartment");
+                        onClose();
+                      }}
+                    >
+                      Route to Unit 2B Leasing Office (Airport Road) ↗
+                    </button>
+                    <button
+                      className="ks-gps-btn"
+                      style={{ padding: "8px 16px", fontSize: "12px" }}
+                      onClick={() => setActiveTab("directory")}
+                    >
+                      Browse All City Landmarks &amp; Real Estate ↗
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                eligibleHomes.map((home) => {
+                  const isCurrentGps = gpsTarget === "my-home" ? home.isSelectedHome : (gpsTarget === home.propertyId || gpsTarget === home.landmarkId);
+                  return (
+                    <div
+                      key={home.propertyId}
+                      className="ks-directory-card ks-home-entry-card"
+                      style={{
+                        background: home.isSelectedHome
+                          ? "linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 95, 70, 0.3) 100%)"
+                          : "linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%)",
+                        border: home.isSelectedHome ? "2px solid #10b981" : "1px solid rgba(255, 255, 255, 0.15)",
+                        boxShadow: home.isSelectedHome ? "0 0 15px rgba(16, 185, 129, 0.25)" : "none",
+                      }}
+                    >
+                      <div className="ks-card-main">
+                        <div className="ks-card-header-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
+                          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                            <span
+                              style={{
+                                background: home.status === "LEASED" ? "rgba(14, 165, 233, 0.2)" : "rgba(234, 179, 8, 0.2)",
+                                color: home.status === "LEASED" ? "#38bdf8" : "#facc15",
+                                border: home.status === "LEASED" ? "1px solid #0284c7" : "1px solid #ca8a04",
+                                padding: "2px 8px",
+                                borderRadius: "4px",
+                                fontSize: "10px",
+                                fontWeight: "bold",
+                                letterSpacing: "0.5px",
+                              }}
+                            >
+                              {home.status === "LEASED" ? "LEASED (ACTIVE RENTAL)" : "OWNED (FREEHOLD DEED)"}
+                            </span>
+                            {home.isSelectedHome && (
+                              <span
+                                style={{
+                                  background: "#059669",
+                                  color: "#ecfdf5",
+                                  padding: "2px 8px",
+                                  borderRadius: "4px",
+                                  fontSize: "10px",
+                                  fontWeight: "bold",
+                                  letterSpacing: "0.5px",
+                                }}
+                              >
+                                ⭐ MY HOME (PRIMARY)
+                              </span>
+                            )}
+                          </div>
+                          <span className="ks-dist-tag">{home.distanceMeters}m away</span>
+                        </div>
+
+                        <h3 style={{ margin: "8px 0 4px", fontSize: "16px", color: home.isSelectedHome ? "#34d399" : "#f8fafc" }}>
+                          {home.name}
+                        </h3>
+                        <p style={{ margin: "0 0 8px", fontSize: "12px", color: "#cbd5e1" }}>
+                          {home.description}
+                        </p>
+                        <small className="ks-card-coords" style={{ color: "#94a3b8", display: "block" }}>
+                          {home.district} · Physical Entrance: ({home.entranceCoords.x}, {home.entranceCoords.z})
+                        </small>
+                      </div>
+
+                      <div className="ks-card-actions" style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
+                        {home.isSelectedHome ? (
+                          <button
+                            className={`ks-gps-btn ${isCurrentGps ? "active" : ""}`}
+                            style={{ flex: 1 }}
+                            onClick={() => {
+                              if (isCurrentGps) onSetGPSTarget?.(null);
+                              else if (onFindMyHome) onFindMyHome();
+                              else onSetGPSTarget?.("my-home");
+                              onClose();
+                            }}
+                          >
+                            {isCurrentGps ? "FIND MY HOME (ACTIVE GPS ✓)" : "FIND MY HOME ↗"}
+                          </button>
+                        ) : (
+                          <button
+                            className="ks-gps-btn"
+                            style={{ background: "#0d9488", borderColor: "#14b8a6", flex: 1 }}
+                            onClick={() => handleSelectHome(home.propertyId)}
+                          >
+                            SET AS MY HOME
+                          </button>
+                        )}
+
+                        {!home.isSelectedHome && (
+                          <button
+                            className={`ks-gps-btn ${isCurrentGps ? "active" : ""}`}
+                            onClick={() => {
+                              if (isCurrentGps) onSetGPSTarget?.(null);
+                              else onSetGPSTarget?.(home.propertyId);
+                              onClose();
+                            }}
+                          >
+                            {isCurrentGps ? "Waypoint Set ✓" : "Route to Entrance ↗"}
+                          </button>
+                        )}
+
+                        {onTeleportHome && (
+                          <button
+                            className="ks-gps-btn"
+                            style={{ background: "#4f46e5", borderColor: "#6366f1" }}
+                            onClick={() => {
+                              if (!home.isSelectedHome) {
+                                handleSelectHome(home.propertyId);
+                              }
+                              onTeleportHome("entrance");
+                              onClose();
+                            }}
+                            title="Fast-travel test dev shortcut to this property's entrance"
+                          >
+                            Teleport [Dev]
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Searchable Landmark Directory */}
         {activeTab === "directory" && (
           <div className="ks-directory-tab-content">
             {/* Filter controls */}
@@ -591,83 +946,146 @@ export default function CityMapModal({
 
             {/* Landmarks List */}
             <div className="ks-directory-list">
-              {homeNavInfo ? (
-                <div
-                  className="ks-directory-card ks-home-dir-card"
-                  style={{
-                    background: "linear-gradient(90deg, rgba(16, 185, 129, 0.2) 0%, rgba(6, 95, 70, 0.25) 100%)",
-                    border: "1.5px solid #10b981",
-                  }}
-                >
-                  <div className="ks-card-main">
-                    <div className="ks-card-header-row">
-                      <span className="ks-cat-tag residence">🏠 MY HOME</span>
-                      <span className="ks-dist-tag">{getDistanceToPlayer(homeNavInfo.entranceCoords.x, homeNavInfo.entranceCoords.z)}m away</span>
-                    </div>
-                    <h3>{homeNavInfo.name}</h3>
-                    <p>Designated primary residence. Entrance door at coordinates ({homeNavInfo.entranceCoords.x}, {homeNavInfo.entranceCoords.z}).</p>
-                    <small className="ks-card-coords">
-                      {homeNavInfo.district} · Status: Active
-                    </small>
+              {/* MY PROPERTIES / HOME LIST Section in Directory */}
+              <div style={{ gridColumn: "1 / -1", margin: "4px 0 8px 0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <h4 style={{ margin: 0, fontSize: "14px", color: "#34d399", letterSpacing: "0.5px" }}>
+                    🏡 MY PROPERTIES / HOME LIST ({eligibleHomes.length})
+                  </h4>
+                  <button
+                    onClick={() => setActiveTab("homes")}
+                    style={{ background: "transparent", border: "none", color: "#38bdf8", fontSize: "11px", cursor: "pointer", textDecoration: "underline" }}
+                  >
+                    Manage Homes ↗
+                  </button>
+                </div>
+
+                {devDiagnosticMessage && (
+                  <div
+                    className="ks-dev-diagnostic-banner"
+                    style={{
+                      background: "#7f1d1d",
+                      border: "1px solid #ef4444",
+                      color: "#fef2f2",
+                      padding: "8px 12px",
+                      borderRadius: "6px",
+                      fontSize: "12px",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    ⚠️ <strong>DEV DIAGNOSTIC:</strong> {devDiagnosticMessage}
                   </div>
-                  <div className="ks-card-actions">
-                    <button
-                      className={`ks-gps-btn ${gpsTarget === "my-home" ? "active" : ""}`}
-                      onClick={() => {
-                        if (gpsTarget === "my-home") onSetGPSTarget?.(null);
-                        else if (onFindMyHome) onFindMyHome();
-                        else onSetGPSTarget?.("my-home");
-                        onClose();
-                      }}
-                    >
-                      {gpsTarget === "my-home" ? "Active Waypoint ✓" : "Find My Home ↗"}
-                    </button>
-                    {onTeleportHome && (
+                )}
+
+                {eligibleHomes.length === 0 ? (
+                  <div
+                    className="ks-directory-card"
+                    style={{
+                      background: "rgba(217, 119, 6, 0.12)",
+                      border: "1.5px solid #f59e0b",
+                    }}
+                  >
+                    <div className="ks-card-main">
+                      <div className="ks-card-header-row">
+                        <span className="ks-cat-tag residence">ℹ️ RESIDENCE GUIDE</span>
+                      </div>
+                      <h3>You don't own or lease a home yet. Visit the property listings to buy or lease one.</h3>
+                      <p>You can lease Unit 2B at Airport View Apartments for ₦75,000/month or purchase Bompai Penthouse (₦35M) or Al-Baraka Villa (₦65M).</p>
+                      <small className="ks-card-coords">
+                        Airport Road · Sabon Gari · Residential Quarter
+                      </small>
+                    </div>
+                    <div className="ks-card-actions">
                       <button
                         className="ks-gps-btn"
-                        style={{ background: "#4f46e5", borderColor: "#6366f1" }}
+                        style={{ background: "#d97706" }}
                         onClick={() => {
-                          onTeleportHome("entrance");
+                          onSetGPSTarget?.("apartment");
                           onClose();
                         }}
                       >
-                        Teleport [Dev]
+                        Route to Unit 2B ↗
                       </button>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div
-                  className="ks-directory-card"
-                  style={{
-                    background: "rgba(217, 119, 6, 0.12)",
-                    border: "1.5px solid #f59e0b",
-                  }}
-                >
-                  <div className="ks-card-main">
-                    <div className="ks-card-header-row">
-                      <span className="ks-cat-tag residence">ℹ️ RESIDENCE GUIDE</span>
                     </div>
-                    <h3>No Home Owned or Leased Yet</h3>
-                    <p>You can lease Unit 2B at Airport View Apartments for ₦75,000/month or purchase Bompai Penthouse (₦35M) or Al-Baraka Villa (₦65M).</p>
-                    <small className="ks-card-coords">
-                      Airport Road · Sabon Gari · Residential Quarter
-                    </small>
                   </div>
-                  <div className="ks-card-actions">
-                    <button
-                      className="ks-gps-btn"
-                      style={{ background: "#d97706" }}
-                      onClick={() => {
-                        onSetGPSTarget?.("apartment");
-                        onClose();
-                      }}
-                    >
-                      Route to Unit 2B ↗
-                    </button>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "10px", marginBottom: "12px" }}>
+                    {eligibleHomes.map((home) => {
+                      const isCurrentGps = gpsTarget === "my-home" ? home.isSelectedHome : (gpsTarget === home.propertyId || gpsTarget === home.landmarkId);
+                      return (
+                        <div
+                          key={home.propertyId}
+                          className="ks-directory-card ks-home-dir-card"
+                          style={{
+                            background: home.isSelectedHome
+                              ? "linear-gradient(90deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 95, 70, 0.28) 100%)"
+                              : "linear-gradient(90deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.6) 100%)",
+                            border: home.isSelectedHome ? "1.5px solid #10b981" : "1px solid rgba(255, 255, 255, 0.15)",
+                            margin: 0,
+                          }}
+                        >
+                          <div className="ks-card-main">
+                            <div className="ks-card-header-row">
+                              <span className="ks-cat-tag residence">
+                                {home.status === "LEASED" ? "LEASED" : "OWNED"}
+                              </span>
+                              {home.isSelectedHome && (
+                                <span style={{ background: "#059669", color: "#ecfdf5", padding: "1px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: "bold" }}>
+                                  ⭐ MY HOME
+                                </span>
+                              )}
+                              <span className="ks-dist-tag">{home.distanceMeters}m away</span>
+                            </div>
+                            <h3 style={{ fontSize: "14px", margin: "4px 0" }}>{home.name}</h3>
+                            <small className="ks-card-coords">
+                              {home.district} · Entrance: ({home.entranceCoords.x}, {home.entranceCoords.z})
+                            </small>
+                          </div>
+                          <div className="ks-card-actions" style={{ marginTop: "8px" }}>
+                            {home.isSelectedHome ? (
+                              <button
+                                className={`ks-gps-btn ${isCurrentGps ? "active" : ""}`}
+                                onClick={() => {
+                                  if (isCurrentGps) onSetGPSTarget?.(null);
+                                  else if (onFindMyHome) onFindMyHome();
+                                  else onSetGPSTarget?.("my-home");
+                                  onClose();
+                                }}
+                              >
+                                {isCurrentGps ? "Active Waypoint ✓" : "FIND MY HOME ↗"}
+                              </button>
+                            ) : (
+                              <button
+                                className="ks-gps-btn"
+                                style={{ background: "#0d9488" }}
+                                onClick={() => handleSelectHome(home.propertyId)}
+                              >
+                                SET AS MY HOME
+                              </button>
+                            )}
+                            {onTeleportHome && (
+                              <button
+                                className="ks-gps-btn"
+                                style={{ background: "#4f46e5", borderColor: "#6366f1" }}
+                                onClick={() => {
+                                  if (!home.isSelectedHome) {
+                                    handleSelectHome(home.propertyId);
+                                  }
+                                  onTeleportHome("entrance");
+                                  onClose();
+                                }}
+                              >
+                                Teleport [Dev]
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
-              )}
+                )}
+                <div style={{ borderBottom: "1px solid rgba(244, 238, 223, 0.15)", margin: "10px 0 16px" }} />
+              </div>
 
               {filteredLandmarks.map((lm) => {
                 const isGpsActive = gpsTarget === lm.id;
@@ -686,7 +1104,7 @@ export default function CityMapModal({
                   propertyId = "albaraka-villa";
                   isPropertyAccessible = Boolean(ownedProperties.includes("albaraka-villa"));
                 }
-                const isSelectedHome = propertyId && selectedHomePropertyId === propertyId;
+                const isSelectedHome = propertyId && (currentSelectedHomeId ? currentSelectedHomeId === propertyId : selectedHomePropertyId === propertyId);
 
                 return (
                   <div key={lm.id} className="ks-directory-card">
@@ -714,10 +1132,10 @@ export default function CityMapModal({
                           className="ks-gps-btn"
                           style={{ background: "#0d9488" }}
                           onClick={() => {
-                            if (propertyId) onSetSelectedHome?.(propertyId);
+                            if (propertyId) handleSelectHome(propertyId);
                           }}
                         >
-                          Set as My Home
+                          SET AS MY HOME
                         </button>
                       )}
                       {isGpsActive ? (

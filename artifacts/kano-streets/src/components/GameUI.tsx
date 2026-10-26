@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import './GameUI.css';
 import TouchControls from './TouchControls';
-import type { ActiveMissionInfo, CareerPathChoice, SocialContact, StorySnapshotInfo, VehicleType, FurnitureInstance, PropertyId, HomeNavInfo, NeedsState, FreelanceSnapshotInfo } from '../game/types';
+import type { ActiveMissionInfo, CareerPathChoice, SocialContact, StorySnapshotInfo, VehicleType, FurnitureInstance, PropertyId, HomeNavInfo, NeedsState, FreelanceSnapshotInfo, PlayerHomeEntry } from '../game/types';
 import { KANO_LANDMARKS, getGpsLandmark } from '../game/landmarks';
 import { CAREER_MISSIONS_CATALOG } from '../game/missionSystem';
 import CityMapModal from './CityMapModal';
@@ -47,6 +47,7 @@ export interface GameUIProps {
   isFurnitureShopOpen?: boolean;
   selectedHomePropertyId?: PropertyId | null;
   homeNavInfo?: HomeNavInfo | null;
+  playerHomes?: PlayerHomeEntry[];
   needs?: NeedsState;
   freelanceInfo?: FreelanceSnapshotInfo;
   graphicsQuality: GraphicsQuality;
@@ -139,6 +140,7 @@ export default function GameUI({
   isFurnitureShopOpen,
   selectedHomePropertyId,
   homeNavInfo,
+  playerHomes,
   needs,
   freelanceInfo: _freelanceInfo,
   graphicsQuality,
@@ -555,6 +557,7 @@ export default function GameUI({
               storyInfo={storyInfo}
               selectedHomePropertyId={selectedHomePropertyId}
               homeNavInfo={homeNavInfo}
+              playerHomes={playerHomes}
               ownedProperties={ownedProperties}
               hasApartmentRental={hasApartmentRental}
               onSetSelectedHome={onSetSelectedHome}

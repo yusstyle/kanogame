@@ -1,4 +1,5 @@
-import type { HomeNavInfo } from "./types";
+import type { HomeNavInfo, PropertyId } from "./types";
+import { PROPERTY_REGISTRY } from "./propertyRegistry";
 
 export type LandmarkCategory = "civic" | "commercial" | "residence" | "worship" | "security" | "industrial" | "historic";
 
@@ -287,9 +288,62 @@ export function getGpsLandmark(
       x: homeNavInfo.entranceCoords.x,
       z: homeNavInfo.entranceCoords.z,
       category: "residence",
-      description: `Primary residence entrance at (${homeNavInfo.entranceCoords.x}, ${homeNavInfo.entranceCoords.z})`,
+      description: `Primary residence entrance door at (${homeNavInfo.entranceCoords.x}, ${homeNavInfo.entranceCoords.z})`,
     };
   }
+
+  // Check Property Registry entries by PropertyId
+  const propReg = PROPERTY_REGISTRY[id as PropertyId];
+  if (propReg) {
+    return {
+      id: propReg.id,
+      name: propReg.name,
+      district: propReg.district,
+      x: propReg.entranceDoor.x,
+      z: propReg.entranceDoor.z,
+      category: "residence",
+      description: `${propReg.description} (Entrance door at ${propReg.entranceDoor.x}, ${propReg.entranceDoor.z})`,
+    };
+  }
+
+  // Handle landmark aliases for residential properties
+  if (id === "apartment") {
+    const reg = PROPERTY_REGISTRY["unit-2b"];
+    return {
+      id: "apartment",
+      name: reg.name,
+      district: reg.district,
+      x: reg.entranceDoor.x,
+      z: reg.entranceDoor.z,
+      category: "residence",
+      description: reg.description,
+    };
+  }
+  if (id === "bompai-flats") {
+    const reg = PROPERTY_REGISTRY["bompai-penthouse"];
+    return {
+      id: "bompai-flats",
+      name: reg.name,
+      district: reg.district,
+      x: reg.entranceDoor.x,
+      z: reg.entranceDoor.z,
+      category: "residence",
+      description: reg.description,
+    };
+  }
+  if (id === "villa") {
+    const reg = PROPERTY_REGISTRY["albaraka-villa"];
+    return {
+      id: "villa",
+      name: reg.name,
+      district: reg.district,
+      x: reg.entranceDoor.x,
+      z: reg.entranceDoor.z,
+      category: "residence",
+      description: reg.description,
+    };
+  }
+
   return KANO_LANDMARKS.find((l) => l.id === id) ?? null;
 }
 

@@ -244,6 +244,10 @@ export class EconomySystem {
   }
 
   public resolveSelectedHome(hasApartmentRental = false): PropertyId | null {
+    if (hasApartmentRental) {
+      const u2b = this.properties.get("unit-2b");
+      if (u2b) u2b.isRented = true;
+    }
     const accessible = this.getAccessibleProperties(hasApartmentRental);
     if (accessible.length === 0) {
       this.selectedHomePropertyId = null;
@@ -259,6 +263,10 @@ export class EconomySystem {
   }
 
   public setSelectedHome(propertyId: PropertyId, hasApartmentRental = false): { success: boolean; message: string } {
+    if (hasApartmentRental && propertyId === "unit-2b") {
+      const u2b = this.properties.get("unit-2b");
+      if (u2b) u2b.isRented = true;
+    }
     const accessible = this.getAccessibleProperties(hasApartmentRental);
     const target = accessible.find((p) => p.id === propertyId);
     if (!target) {
@@ -446,6 +454,10 @@ export class EconomySystem {
           const p = this.properties.get(id);
           if (p) p.isOwned = true;
         });
+      }
+      if (data.hasApartmentRental) {
+        const u2b = this.properties.get("unit-2b");
+        if (u2b) u2b.isRented = true;
       }
       if (Array.isArray(data.ownedBusinesses)) {
         data.ownedBusinesses.forEach((id) => {

@@ -196,6 +196,18 @@ export interface HomeNavInfo {
   isInsideHome: boolean;
 }
 
+export interface PlayerHomeEntry {
+  propertyId: PropertyId;
+  name: string;
+  district: string;
+  status: "OWNED" | "LEASED";
+  isSelectedHome: boolean;
+  entranceCoords: { x: number; z: number };
+  distanceMeters: number;
+  description: string;
+  landmarkId: string;
+}
+
 export interface FreelanceContract {
   id: string;
   title: string;
@@ -248,6 +260,7 @@ export type GameSnapshot = {
   isFurnitureShopOpen?: boolean;
   selectedHomePropertyId?: PropertyId | null;
   homeNavInfo?: HomeNavInfo | null;
+  playerHomes?: PlayerHomeEntry[];
   needs?: NeedsState;
   freelanceInfo?: FreelanceSnapshotInfo;
 };

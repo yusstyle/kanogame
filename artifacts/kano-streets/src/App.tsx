@@ -182,6 +182,8 @@ function App() {
         current.selectedHomePropertyId === next.selectedHomePropertyId &&
         current.homeNavInfo?.propertyId === next.homeNavInfo?.propertyId &&
         current.homeNavInfo?.distanceMeters === next.homeNavInfo?.distanceMeters &&
+        current.playerHomes?.length === next.playerHomes?.length &&
+        current.ownedProperties?.length === next.ownedProperties?.length &&
         current.needs?.hunger === next.needs?.hunger &&
         current.needs?.energy === next.needs?.energy &&
         current.needs?.hygiene === next.needs?.hygiene
@@ -236,6 +238,7 @@ function App() {
         isFurnitureShopOpen={snapshot.isFurnitureShopOpen}
         selectedHomePropertyId={snapshot.selectedHomePropertyId}
         homeNavInfo={snapshot.homeNavInfo}
+        playerHomes={snapshot.playerHomes}
         needs={snapshot.needs}
         freelanceInfo={snapshot.freelanceInfo}
         graphicsQuality={graphicsQuality}

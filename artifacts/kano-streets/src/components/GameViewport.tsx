@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import type { GameEngine } from "../game/GameEngine";
-import type { CareerPathChoice, GameScreen, GameSnapshot, GraphicsQuality, FurnitureInstance, PropertyId } from "../game/types";
+import type { CareerPathChoice, GameScreen, GameSnapshot, GraphicsQuality, FurnitureInstance, PropertyId, PlayerHomeEntry } from "../game/types";
 
 export type GameViewportHandle = {
   requestPointerLock: () => void;
@@ -44,6 +44,7 @@ export type GameViewportHandle = {
   setSelectedHome: (propertyId: PropertyId) => { success: boolean; message: string };
   teleportHome: (destination?: "entrance" | "interior") => { success: boolean; message: string };
   findMyHome: () => { success: boolean; message: string };
+  getPlayerHomes: () => PlayerHomeEntry[];
   executeFreelanceContract: (contractId?: string) => { success: boolean; message: string };
 };
 
@@ -100,6 +101,7 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
         setSelectedHome: (propId) => engineRef.current?.setSelectedHome(propId) ?? { success: false, message: "Engine not ready" },
         teleportHome: (dest) => engineRef.current?.teleportHome(dest) ?? { success: false, message: "Engine not ready" },
         findMyHome: () => engineRef.current?.findMyHome() ?? { success: false, message: "Engine not ready" },
+        getPlayerHomes: () => engineRef.current?.getPlayerHomes() ?? [],
         executeFreelanceContract: (contractId) => engineRef.current?.executeFreelanceContract(contractId) ?? { success: false, message: "Engine not ready" },
       }),
       [],
