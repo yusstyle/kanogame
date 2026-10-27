@@ -267,6 +267,7 @@ export class PedestrianSystem {
   private time = 0;
   private timeOfDayHours = 10;
   private frameCounter = 0;
+  public trafficVehicles: { position: THREE.Vector3; speed: number; yaw: number }[] = [];
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -278,6 +279,10 @@ export class PedestrianSystem {
     this.root.name = "pedestrian-system-root";
     this.scene.add(this.root);
     this.spawnCrowd();
+  }
+
+  public setTrafficVehicles(vehicles: { position: THREE.Vector3; speed: number; yaw: number }[]) {
+    this.trafficVehicles = vehicles;
   }
 
   public setQuality(quality: GraphicsQuality) {
@@ -841,6 +846,20 @@ export class PedestrianSystem {
         scheduleSpeedMult = 0.75; // Quiet night hours
       }
       p.schedulePhase = schedulePhase;
+
+      // Safe road crossing behavior at crosswalks
+      if (p.targetWaypoint?.area === "crosswalk") {
+        const oncomingFastVeh = this.trafficVehicles.some((v) => {
+          const dist = Math.hypot(v.position.x - p.position.x, v.position.z - p.position.z);
+          return dist < 14.0 && v.speed > 2.0;
+        });
+        if (oncomingFastVeh && p.stateTimer > 0) {
+          p.speed = 0; // Pause safely at curb
+          p.state = "idle";
+          p.stateTimer = 1.8;
+          return;
+        }
+      }
 
       p.speed = THREE.MathUtils.damp(p.speed, p.personalSpeed * scheduleSpeedMult, 6, dt);
 

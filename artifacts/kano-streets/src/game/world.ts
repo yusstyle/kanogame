@@ -210,6 +210,49 @@ function addStreetSign(root: THREE.Group, colliders: Collider[], x: number, z: n
   colliders.push({ x, z, halfX: 0.18, halfZ: 0.18, height: 3 });
 }
 
+function makeBusStopShelter(
+  root: THREE.Group,
+  materials: GameMaterials,
+  colliders: Collider[],
+  x: number,
+  z: number,
+  yaw: number,
+  label = "KANO COMMUTER BUS & KEKE STOP",
+) {
+  const shelter = new THREE.Group();
+  shelter.position.set(x, 0, z);
+  shelter.rotation.y = yaw;
+  root.add(shelter);
+
+  // Vertical steel support posts
+  addCylinder(shelter, materials.metal, -1.8, 1.4, -0.6, 0.08, 0.08, 2.8);
+  addCylinder(shelter, materials.metal, 1.8, 1.4, -0.6, 0.08, 0.08, 2.8);
+  addCylinder(shelter, materials.metal, -1.8, 1.4, 0.6, 0.08, 0.08, 2.8);
+  addCylinder(shelter, materials.metal, 1.8, 1.4, 0.6, 0.08, 0.08, 2.8);
+
+  // Curved corrugated metal canopy
+  addBox(shelter, materials.metal, 0, 2.85, 0, 4.2, 0.1, 1.8, false);
+
+  // Back windbreak panel
+  addBox(shelter, materials.glassLit || materials.glass, 0, 1.4, -0.58, 3.8, 2.0, 0.06, false);
+
+  // Commuter wooden seating bench
+  addBox(shelter, materials.wood, 0, 0.48, -0.2, 3.2, 0.08, 0.45);
+  addBox(shelter, materials.wood, 0, 0.85, -0.42, 3.2, 0.45, 0.06);
+
+  // Top header signboard
+  addBox(shelter, makeSignMaterial(label, "#1a4f3a"), 0, 3.15, 0, 3.6, 0.42, 0.1);
+
+  colliders.push(
+    transformCollider(
+      { x: 0, z: 0, halfX: 2.1, halfZ: 0.9, height: 3.2 },
+      x,
+      z,
+      yaw,
+    ),
+  );
+}
+
 function addRoad(
   root: THREE.Group,
   materials: GameMaterials,
@@ -969,6 +1012,18 @@ export function createWorld(materials: GameMaterials): WorldResult {
   addStreetSign(root, colliders, -48, 14, "ST. STEPHEN'S ANGLICAN CHURCH ↗", 0);
   addStreetSign(root, colliders, 64, -14, "AREWA COMMERCIAL BANK & CYBER HUB ↗", 0);
   addStreetSign(root, colliders, 16, -14, "AREWA FAST FOOD & SUYA LOUNGE ↘", 0);
+
+  // Milestone 13: Kano Commuter Bus Stops & Keke Passenger Shelters
+  makeBusStopShelter(root, materials, colliders, 14, -11.8, 0, "MURTALA MOHAMMED WAY · COMMUTER STAND");
+  makeBusStopShelter(root, materials, colliders, 65.2, -22, Math.PI / 2, "AIRPORT ROAD · CENTRAL BUS & KEKE STOP");
+  makeBusStopShelter(root, materials, colliders, -46, 18.8, 0, "SABON GARI KASUWA · TRICYCLE TERMINAL");
+
+  // Milestone 13: Kano Road Safety, Speed Limit & Warning Regulatory Signs
+  addStreetSign(root, colliders, 18, -11.5, "SPEED LIMIT 50 KM/H · KAROTA MONITORED", 0);
+  addStreetSign(root, colliders, 64.5, 12, "SPEED LIMIT 50 KM/H · RADAR ACTIVE", Math.PI / 2);
+  addStreetSign(root, colliders, -12, -11.5, "ZEBRA CROSSING · YIELD TO PEDESTRIANS", 0);
+  addStreetSign(root, colliders, 32, -125, "HEAVY TRUCKS ONLY · KAWU FREIGHT TERMINAL ↘", 0);
+  addStreetSign(root, colliders, -62, -11.5, "KAROTA CHECKPOINT AHEAD · PREPARE TO STOP", 0);
 
   // Small neighborhood benches and public water points.
   const benchLocations = [[-44, 27], [-20, 35], [32, -34], [40, -27]] as const;

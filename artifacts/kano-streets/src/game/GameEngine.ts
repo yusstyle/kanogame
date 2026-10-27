@@ -1345,7 +1345,17 @@ export class GameEngine {
         isInterior: Boolean(this.interiorManager.activeInterior),
       });
 
-      this.trafficSystem.update(dt, this.playerPosition, activeVehPos, activeSpeed);
+      const hour = (this.gameMinutes / 60) % 24;
+      this.trafficSystem.setTimeOfDay(hour);
+      this.pedestrianSystem.setTimeOfDay(hour);
+      this.pedestrianSystem.setTrafficVehicles(this.trafficSystem.vehicles);
+      this.trafficSystem.update(
+        dt,
+        this.playerPosition,
+        activeVehPos,
+        activeSpeed,
+        this.pedestrianSystem.pedestrians,
+      );
       this.pedestrianSystem.update(dt, this.playerPosition, activeVehPos);
     }
     this.updateLighting();
@@ -1486,6 +1496,34 @@ export class GameEngine {
       this.trafficFine = 5000;
       this.statusMessage = "NPF Traffic Citation: Failed to stop at Sabon Gari checkpoint! ₦5,000 penalty registered.";
       this.pushSnapshot(true);
+    } else if (this.trafficFine === 0 && vehSpeed > 16) {
+      // Check Red-Light Running at major arterial intersections
+      const majorIntersections = [
+        { x: 0, z: 0 },
+        { x: 62, z: 0 },
+        { x: 0, z: -62 },
+        { x: 62, z: -62 },
+        { x: -62, z: 0 },
+        { x: -62, z: -62 },
+      ];
+      for (const inter of majorIntersections) {
+        if (Math.hypot(vehPos.x - inter.x, vehPos.z - inter.z) < 8.5) {
+          const isRed = this.trafficSystem.isIntersectionRedForHeading(inter, this.getActiveVehicleYaw());
+          if (isRed) {
+            const triggered = this.trafficSystem.triggerCitation(
+              5000,
+              "KAROTA Traffic Citation: Running Red Light at intersection! ₦5,000 penalty registered. Settle at Station desk.",
+            );
+            if (triggered) {
+              this.trafficFine = 5000;
+              this.statusMessage = "KAROTA Traffic Citation: Running Red Light at intersection! ₦5,000 penalty registered.";
+              this.pushSnapshot(true);
+              this.saveGame();
+            }
+          }
+          break;
+        }
+      }
     }
   }
 
