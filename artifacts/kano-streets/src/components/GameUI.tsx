@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import './GameUI.css';
 import TouchControls from './TouchControls';
 import type { ActiveMissionInfo, CareerPathChoice, SocialContact, StorySnapshotInfo, VehicleType, FurnitureInstance, PropertyId, HomeNavInfo, NeedsState, FreelanceSnapshotInfo, PlayerHomeEntry } from '../game/types';
-import { KANO_LANDMARKS, getGpsLandmark } from '../game/landmarks';
+import { KANO_LANDMARKS, getGpsLandmark, computeGpsGuidance } from '../game/landmarks';
 import { CAREER_MISSIONS_CATALOG } from '../game/missionSystem';
 import CityMapModal from './CityMapModal';
 import FurnitureShopModal from './FurnitureShopModal';
@@ -393,22 +393,42 @@ export default function GameUI({
             </div>
           )}
 
-          {activeGpsLandmark && (
-            <div className="ks-gps-chip" role="status">
-              <span className="ks-gps-icon">↗</span>
-              <div className="ks-gps-info">
-                <strong>GPS: {activeGpsLandmark.name}</strong>
-                <small>{activeGpsLandmark.district} ({activeGpsLandmark.x}, {activeGpsLandmark.z})</small>
+          {activeGpsLandmark && (() => {
+            const guidance = playerCoords
+              ? computeGpsGuidance(playerCoords, { x: activeGpsLandmark.x, z: activeGpsLandmark.z }, activeGpsLandmark.name, activeGpsLandmark.district)
+              : null;
+            const isHome = gpsTarget === "my-home" || activeGpsLandmark.id === "my-home" || activeGpsLandmark.category === "residence";
+            return (
+              <div className="ks-gps-chip" role="status" style={{ minWidth: "290px", borderColor: isHome ? "#10b981" : undefined }}>
+                <span className="ks-gps-icon">{isHome ? "🏠" : "↗"}</span>
+                <div className="ks-gps-info">
+                  <strong style={{ color: isHome ? "#34d399" : undefined }}>
+                    {isHome ? `MY HOUSE: ${activeGpsLandmark.name}` : `GPS: ${activeGpsLandmark.name}`}
+                  </strong>
+                  {guidance ? (
+                    guidance.isArrived ? (
+                      <span style={{ color: "#34d399", fontWeight: "bold", display: "block", fontSize: "11px" }}>
+                        🎉 ARRIVED AT ENTRANCE DOOR · Press [E] to Enter
+                      </span>
+                    ) : (
+                      <span style={{ color: "#e2e8f0", fontSize: "11px", display: "block" }}>
+                        📍 <strong>{guidance.distanceMeters}m</strong> · {guidance.instructionText}
+                      </span>
+                    )
+                  ) : (
+                    <small>{activeGpsLandmark.district} ({activeGpsLandmark.x}, {activeGpsLandmark.z})</small>
+                  )}
+                </div>
+                <button
+                  className="ks-gps-clear"
+                  onClick={() => onSetGPSTarget?.(null)}
+                  title="Clear GPS waypoint"
+                >
+                  ✕
+                </button>
               </div>
-              <button
-                className="ks-gps-clear"
-                onClick={() => onSetGPSTarget?.(null)}
-                title="Clear GPS waypoint"
-              >
-                ✕
-              </button>
-            </div>
-          )}
+            );
+          })()}
 
           {activeMission && (
             <div className="ks-mission-chip" role="status">

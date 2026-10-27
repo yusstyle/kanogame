@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { KANO_LANDMARKS, getGpsLandmark, type LandmarkCategory, type LandmarkLocation } from "../game/landmarks";
+import { KANO_LANDMARKS, getGpsLandmark, computeGpsGuidance, type LandmarkCategory, type LandmarkLocation } from "../game/landmarks";
 import { INDENTURE_1968 } from "../game/storySystem";
 import { PROPERTY_REGISTRY } from "../game/propertyRegistry";
 import type { CareerPathChoice, InvestigationChoice, StorySnapshotInfo, HomeNavInfo, PropertyId, PlayerHomeEntry } from "../game/types";
@@ -35,6 +35,19 @@ export function toSvgY(worldZ: number): number {
   return Math.round(((worldZ + 230) / 366) * 1000);
 }
 
+export function getPropertyStreetDescription(id: PropertyId): string {
+  switch (id) {
+    case "unit-2b":
+      return "Airport Road Commercial Corridor · Opposite Central Banking Plaza, Near Police Post";
+    case "bompai-penthouse":
+      return "Bompai Avenue · Luxury Heights Executive Quarter, North-East Corner";
+    case "albaraka-villa":
+      return "Residential Quarter · Gated Perimeter Villa Estates, Southern Gate";
+    default:
+      return "Kano City Residential District";
+  }
+}
+
 const CATEGORY_COLORS: Record<LandmarkCategory, { bg: string; border: string; text: string; icon: string }> = {
   historic: { bg: "#78350f", border: "#d97706", text: "#fef3c7", icon: "🏛️" },
   commercial: { bg: "#ca8a04", border: "#f59e0b", text: "#fef9c3", icon: "🛍️" },
@@ -68,6 +81,10 @@ export default function CityMapModal({
   const [categoryFilter, setCategoryFilter] = useState<LandmarkCategory | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLandmark, setSelectedLandmark] = useState<LandmarkLocation | null>(null);
+
+  // Map zoom and centering state
+  const [isMapZoomed, setIsMapZoomed] = useState<boolean>(false);
+  const [mapZoomTarget, setMapZoomTarget] = useState<{ x: number; z: number; name: string } | null>(null);
 
   // Local state for instantaneous UI response when switching primary home
   const [currentSelectedHomeId, setCurrentSelectedHomeId] = useState<PropertyId | null>(
@@ -170,6 +187,48 @@ export default function CityMapModal({
     onSetSelectedHome?.(propertyId);
   };
 
+  const handleShowHomeOnMap = (home: PlayerHomeEntry) => {
+    handleSelectHome(home.propertyId);
+    setMapZoomTarget({
+      x: home.entranceCoords.x,
+      z: home.entranceCoords.z,
+      name: home.name,
+    });
+    setIsMapZoomed(true);
+    setSelectedLandmark({
+      id: "my-home",
+      name: `My Home · ${home.name}`,
+      district: home.district,
+      x: home.entranceCoords.x,
+      z: home.entranceCoords.z,
+      category: "residence",
+      description: `Primary residence entrance door at (${home.entranceCoords.x}, ${home.entranceCoords.z}). Distance: ${home.distanceMeters}m from current position.`,
+    });
+    setActiveTab("map");
+  };
+
+  const handleGuideMeThere = (home: PlayerHomeEntry) => {
+    handleSelectHome(home.propertyId);
+    if (onFindMyHome) {
+      onFindMyHome();
+    } else {
+      onSetGPSTarget?.("my-home");
+    }
+    onClose();
+  };
+
+  const defaultViewBox = "0 0 800 1000";
+  const svgViewBox = useMemo(() => {
+    if (!isMapZoomed || !mapZoomTarget) return defaultViewBox;
+    const centerSvgX = toSvgX(mapZoomTarget.x);
+    const centerSvgY = toSvgY(mapZoomTarget.z);
+    const zoomW = 300;
+    const zoomH = 380;
+    const minX = Math.max(0, Math.min(800 - zoomW, centerSvgX - zoomW / 2));
+    const minY = Math.max(0, Math.min(1000 - zoomH, centerSvgY - zoomH / 2));
+    return `${minX} ${minY} ${zoomW} ${zoomH}`;
+  }, [isMapZoomed, mapZoomTarget]);
+
   const filteredLandmarks = KANO_LANDMARKS.filter((lm) => {
     const matchesCategory = categoryFilter === "all" || lm.category === categoryFilter;
     const matchesSearch =
@@ -237,113 +296,176 @@ export default function CityMapModal({
                   X: {playerCoords.x}m · Z: {playerCoords.z}m
                 </span>
               </div>
-              {activeGpsLandmark && (
-                <div className="ks-map-active-gps">
-                  <strong>ACTIVE GPS:</strong>
-                  <span>{activeGpsLandmark.name}</span>
-                  <em>({getDistanceToPlayer(activeGpsLandmark.x, activeGpsLandmark.z)}m away)</em>
-                  <button className="ks-gps-clear-btn" onClick={() => onSetGPSTarget?.(null)}>
-                    Clear ✕
+              {activeGpsLandmark && (() => {
+                const guidance = computeGpsGuidance(
+                  playerCoords,
+                  { x: activeGpsLandmark.x, z: activeGpsLandmark.z },
+                  activeGpsLandmark.name,
+                  activeGpsLandmark.district,
+                );
+                return (
+                  <div className="ks-map-active-gps" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <strong>ACTIVE GPS:</strong>
+                    <span>{activeGpsLandmark.name}</span>
+                    <span style={{ color: "#34d399", fontWeight: "bold" }}>
+                      ({guidance.distanceMeters}m · {guidance.directionCardinal})
+                    </span>
+                    <span style={{ color: "#cbd5e1", fontSize: "11px" }}>
+                      · {guidance.instructionText}
+                    </span>
+                    <button className="ks-gps-clear-btn" onClick={() => onSetGPSTarget?.(null)}>
+                      Clear ✕
+                    </button>
+                  </div>
+                );
+              })()}
+              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                {isMapZoomed ? (
+                  <button
+                    className="ks-gps-btn"
+                    style={{ background: "#475569", borderColor: "#94a3b8", padding: "3px 8px", fontSize: "11px" }}
+                    onClick={() => {
+                      setIsMapZoomed(false);
+                      setMapZoomTarget(null);
+                    }}
+                    title="Zoom out to whole city map"
+                  >
+                    🔍 Whole City View (100%)
                   </button>
-                </div>
-              )}
-              <div className="ks-map-hint">Click any landmark pin to view details or lock GPS navigation</div>
+                ) : activeSelectedHome ? (
+                  <button
+                    className="ks-gps-btn"
+                    style={{ background: "#059669", borderColor: "#10b981", padding: "3px 8px", fontSize: "11px", fontWeight: "bold" }}
+                    onClick={() => {
+                      setIsMapZoomed(true);
+                      setMapZoomTarget({
+                        x: activeSelectedHome.entranceCoords.x,
+                        z: activeSelectedHome.entranceCoords.z,
+                        name: activeSelectedHome.name,
+                      });
+                    }}
+                    title="Zoom in directly on your house entrance"
+                  >
+                    🔍 Zoom in on My House (2.5x)
+                  </button>
+                ) : null}
+              </div>
             </div>
 
             {/* MY HOME Quick Nav Card / Advisor Banner */}
-            {activeSelectedHome ? (
-              <div
-                className="ks-map-home-card"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  flexWrap: "wrap",
-                  gap: "10px",
-                  background: "linear-gradient(90deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 95, 70, 0.28) 100%)",
-                  border: "1px solid #10b981",
-                  borderRadius: "8px",
-                  padding: "8px 14px",
-                  margin: "6px 12px",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <span style={{ fontSize: "20px" }}>🏠</span>
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                      <strong style={{ color: "#34d399", fontSize: "13px", letterSpacing: "0.5px" }}>
-                        MY HOME: {activeSelectedHome.name}
-                      </strong>
-                      <span style={{ background: "#059669", color: "#ecfdf5", fontSize: "10px", padding: "1px 6px", borderRadius: "4px", fontWeight: "bold" }}>
-                        {activeSelectedHome.status === "LEASED" ? "LEASED" : "OWNED"}
-                      </span>
-                      <span style={{ background: "#047857", color: "#d1fae5", fontSize: "10px", padding: "1px 6px", borderRadius: "4px", fontWeight: "bold" }}>
-                        PRIMARY
-                      </span>
-                    </div>
-                    <small style={{ color: "#cbd5e1", fontSize: "11px" }}>
-                      {activeSelectedHome.district} · Entrance: ({activeSelectedHome.entranceCoords.x}, {activeSelectedHome.entranceCoords.z}) · {activeSelectedHome.distanceMeters}m away
-                    </small>
-                    {eligibleHomes.length > 1 && (
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px", flexWrap: "wrap" }}>
-                        <span style={{ color: "#94a3b8", fontSize: "11px" }}>Switch Home:</span>
-                        {eligibleHomes.map((h) => (
-                          <button
-                            key={h.propertyId}
-                            onClick={() => handleSelectHome(h.propertyId)}
-                            style={{
-                              background: h.isSelectedHome ? "#10b981" : "rgba(255, 255, 255, 0.1)",
-                              color: h.isSelectedHome ? "#ffffff" : "#cbd5e1",
-                              border: h.isSelectedHome ? "1px solid #34d399" : "1px solid rgba(255, 255, 255, 0.2)",
-                              borderRadius: "4px",
-                              padding: "2px 6px",
-                              fontSize: "10px",
-                              cursor: "pointer",
-                              fontWeight: h.isSelectedHome ? "bold" : "normal",
-                            }}
-                          >
-                            {h.isSelectedHome ? `★ ${h.name.split("·")[0]}` : h.name.split("·")[0]}
-                          </button>
-                        ))}
+            {activeSelectedHome ? (() => {
+              const homeGuidance = computeGpsGuidance(
+                playerCoords,
+                activeSelectedHome.entranceCoords,
+                activeSelectedHome.name,
+                activeSelectedHome.district,
+              );
+              const streetDesc = getPropertyStreetDescription(activeSelectedHome.propertyId);
+              return (
+                <div
+                  className="ks-map-home-card"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: "10px",
+                    background: "linear-gradient(90deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 95, 70, 0.28) 100%)",
+                    border: "1px solid #10b981",
+                    borderRadius: "8px",
+                    padding: "8px 14px",
+                    margin: "6px 12px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "22px" }}>🏠</span>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                        <strong style={{ color: "#34d399", fontSize: "13px", letterSpacing: "0.5px" }}>
+                          MY HOUSE: {activeSelectedHome.name}
+                        </strong>
+                        <span style={{ background: "#059669", color: "#ecfdf5", fontSize: "10px", padding: "1px 6px", borderRadius: "4px", fontWeight: "bold" }}>
+                          {activeSelectedHome.status === "LEASED" ? "LEASED" : "OWNED"}
+                        </span>
+                        <span style={{ background: "#047857", color: "#d1fae5", fontSize: "10px", padding: "1px 6px", borderRadius: "4px", fontWeight: "bold" }}>
+                          PRIMARY
+                        </span>
                       </div>
+                      <small style={{ color: "#cbd5e1", fontSize: "11px", display: "block" }}>
+                        {streetDesc} · Physical Entrance: ({activeSelectedHome.entranceCoords.x}, {activeSelectedHome.entranceCoords.z})
+                      </small>
+                      <small style={{ color: "#34d399", fontSize: "11px", fontWeight: "bold" }}>
+                        🧭 {homeGuidance.instructionText}
+                      </small>
+                      {eligibleHomes.length > 1 && (
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px", flexWrap: "wrap" }}>
+                          <span style={{ color: "#94a3b8", fontSize: "11px" }}>Switch Home:</span>
+                          {eligibleHomes.map((h) => (
+                            <button
+                              key={h.propertyId}
+                              onClick={() => {
+                                handleSelectHome(h.propertyId);
+                                if (isMapZoomed) {
+                                  setMapZoomTarget({ x: h.entranceCoords.x, z: h.entranceCoords.z, name: h.name });
+                                }
+                              }}
+                              style={{
+                                background: h.isSelectedHome ? "#10b981" : "rgba(255, 255, 255, 0.1)",
+                                color: h.isSelectedHome ? "#ffffff" : "#cbd5e1",
+                                border: h.isSelectedHome ? "1px solid #34d399" : "1px solid rgba(255, 255, 255, 0.2)",
+                                borderRadius: "4px",
+                                padding: "2px 6px",
+                                fontSize: "10px",
+                                cursor: "pointer",
+                                fontWeight: h.isSelectedHome ? "bold" : "normal",
+                              }}
+                            >
+                              {h.isSelectedHome ? `★ ${h.name.split("·")[0]}` : h.name.split("·")[0]}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                    <button
+                      className="ks-gps-btn"
+                      style={{ padding: "5px 12px", fontSize: "11px", background: "#059669", borderColor: "#10b981", fontWeight: "bold" }}
+                      onClick={() => handleShowHomeOnMap(activeSelectedHome)}
+                    >
+                      🗺️ Show My House on Map ↗
+                    </button>
+                    <button
+                      className={`ks-gps-btn ${gpsTarget === "my-home" ? "active" : ""}`}
+                      onClick={() => handleGuideMeThere(activeSelectedHome)}
+                      style={{ padding: "5px 12px", fontSize: "11px", fontWeight: "bold" }}
+                    >
+                      {gpsTarget === "my-home" ? "🧭 Guiding Active ✓" : "🧭 Guide Me There ↗"}
+                    </button>
+                    <button
+                      className="ks-gps-btn"
+                      style={{ padding: "5px 12px", fontSize: "11px", background: "#0f766e" }}
+                      onClick={() => setActiveTab("homes")}
+                    >
+                      Home List ({eligibleHomes.length}) ↗
+                    </button>
+                    {onTeleportHome && (
+                      <button
+                        className="ks-gps-btn"
+                        style={{ padding: "5px 12px", fontSize: "11px", background: "#4f46e5", borderColor: "#6366f1", fontWeight: "bold" }}
+                        onClick={() => {
+                          onTeleportHome("entrance");
+                          onClose();
+                        }}
+                        title="Fast travel test shortcut to home entrance"
+                      >
+                        ⚡ Teleport Home (Dev)
+                      </button>
                     )}
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                  <button
-                    className={`ks-gps-btn ${gpsTarget === "my-home" ? "active" : ""}`}
-                    onClick={() => {
-                      if (gpsTarget === "my-home") onSetGPSTarget?.(null);
-                      else if (onFindMyHome) onFindMyHome();
-                      else onSetGPSTarget?.("my-home");
-                    }}
-                    style={{ padding: "4px 10px", fontSize: "11px" }}
-                  >
-                    {gpsTarget === "my-home" ? "GPS Locked to Home ✓" : "Find My Home ↗"}
-                  </button>
-                  <button
-                    className="ks-gps-btn"
-                    style={{ padding: "4px 10px", fontSize: "11px", background: "#059669" }}
-                    onClick={() => setActiveTab("homes")}
-                  >
-                    My Properties ({eligibleHomes.length}) ↗
-                  </button>
-                  {onTeleportHome && (
-                    <button
-                      className="ks-gps-btn"
-                      style={{ padding: "4px 10px", fontSize: "11px", background: "#4f46e5", borderColor: "#6366f1" }}
-                      onClick={() => {
-                        onTeleportHome("entrance");
-                        onClose();
-                      }}
-                      title="Fast travel test shortcut to home entrance"
-                    >
-                      Teleport Home [Dev]
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
+              );
+            })() : (
               <div
                 className="ks-map-no-home-card"
                 style={{
@@ -393,7 +515,7 @@ export default function CityMapModal({
             )}
 
             <div className="ks-map-svg-container">
-              <svg viewBox="0 0 800 1000" className="ks-world-svg-map">
+              <svg viewBox={svgViewBox} className="ks-world-svg-map">
                 <defs>
                   {/* Subtle Grid Pattern */}
                   <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -575,18 +697,23 @@ export default function CityMapModal({
                 <line x1={toSvgX(0)} y1={toSvgY(-124)} x2={toSvgX(0)} y2={toSvgY(-220)} stroke="#1e293b" strokeWidth="18" />
 
                 {/* Active GPS Route Line from Player to Landmark */}
-                {activeGpsLandmark && (
-                  <line
-                    x1={playerSvgX}
-                    y1={playerSvgY}
-                    x2={toSvgX(activeGpsLandmark.x)}
-                    y2={toSvgY(activeGpsLandmark.z)}
-                    stroke="#10b981"
-                    strokeWidth="3.5"
-                    strokeDasharray="8,6"
-                    className="ks-gps-svg-line"
-                  />
-                )}
+                {/* Active GPS or Map Zoom Navigation Route Line */}
+                {(() => {
+                  const lineTarget = activeGpsLandmark ?? (isMapZoomed && mapZoomTarget ? mapZoomTarget : null);
+                  if (!lineTarget) return null;
+                  return (
+                    <line
+                      x1={playerSvgX}
+                      y1={playerSvgY}
+                      x2={toSvgX(lineTarget.x)}
+                      y2={toSvgY(lineTarget.z)}
+                      stroke="#10b981"
+                      strokeWidth="3.5"
+                      strokeDasharray="8,6"
+                      className="ks-gps-svg-line"
+                    />
+                  );
+                })()}
 
                 {/* Landmark Pins */}
                 {KANO_LANDMARKS.map((lm) => {
@@ -628,32 +755,137 @@ export default function CityMapModal({
                   );
                 })}
 
-                {/* Dedicated MY HOME Pin on Map */}
-                {homeNavInfo && (
-                  <g
-                    className="ks-map-pin ks-home-pin"
-                    onClick={() =>
-                      setSelectedLandmark({
-                        id: "my-home",
-                        name: `My Home · ${homeNavInfo.name}`,
-                        district: homeNavInfo.district,
-                        x: homeNavInfo.entranceCoords.x,
-                        z: homeNavInfo.entranceCoords.z,
-                        category: "residence",
-                        description: `Primary residence entrance at (${homeNavInfo.entranceCoords.x}, ${homeNavInfo.entranceCoords.z}). Distance: ${homeNavInfo.distanceMeters}m from current position.`,
-                      })
-                    }
-                    transform={`translate(${toSvgX(homeNavInfo.entranceCoords.x)}, ${toSvgY(homeNavInfo.entranceCoords.z)})`}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <circle r="20" fill="none" stroke="#f59e0b" strokeWidth="3" className="ks-pin-pulse" />
-                    <circle r="13" fill="#10b981" stroke="#fef08a" strokeWidth="2.5" />
-                    <text x="0" y="4" textAnchor="middle" fontSize="12" fill="#ffffff">🏠</text>
-                    <text x="0" y="-16" textAnchor="middle" className="ks-pin-text prominent" fill="#fef08a" fontWeight="bold">
-                      MY HOME
-                    </text>
-                  </g>
-                )}
+                {/* Dedicated Player Residences / Homes on Map */}
+                {(() => {
+                  const activeBeaconPropertyId = mapZoomTarget
+                    ? (eligibleHomes.find((h) => h.entranceCoords.x === mapZoomTarget.x && h.entranceCoords.z === mapZoomTarget.z)?.propertyId ?? currentSelectedHomeId)
+                    : (currentSelectedHomeId ?? homeNavInfo?.propertyId ?? (eligibleHomes[0]?.propertyId));
+
+                  if (eligibleHomes.length > 0) {
+                    return eligibleHomes.map((home) => {
+                      const isTargetBeacon = home.propertyId === activeBeaconPropertyId;
+                      const hx = toSvgX(home.entranceCoords.x);
+                      const hy = toSvgY(home.entranceCoords.z);
+                      const streetDesc = getPropertyStreetDescription(home.propertyId);
+
+                      if (isTargetBeacon) {
+                        return (
+                          <g
+                            key={home.propertyId}
+                            className="ks-map-pin ks-home-pin ks-home-beacon"
+                            onClick={() =>
+                              setSelectedLandmark({
+                                id: "my-home",
+                                name: `My Home · ${home.name}`,
+                                district: home.district,
+                                x: home.entranceCoords.x,
+                                z: home.entranceCoords.z,
+                                category: "residence",
+                                description: `${streetDesc} · Primary entrance door at (${home.entranceCoords.x}, ${home.entranceCoords.z}). Distance: ${home.distanceMeters}m from current position.`,
+                              })
+                            }
+                            transform={`translate(${hx}, ${hy})`}
+                            style={{ cursor: "pointer" }}
+                          >
+                            {/* Large Double-Pulsing Beacon Rings */}
+                            <circle r="36" fill="rgba(16, 185, 129, 0.2)" stroke="#10b981" strokeWidth="2.5" strokeDasharray="6,4" className="ks-pin-pulse" />
+                            <circle r="24" fill="none" stroke="#f59e0b" strokeWidth="3" className="ks-pin-pulse" />
+
+                            {/* Solid Vibrant Pin Head with Gold Border */}
+                            <circle r="15" fill="#059669" stroke="#fef08a" strokeWidth="3" filter="url(#glow)" />
+                            <text x="0" y="5" textAnchor="middle" fontSize="13" fill="#ffffff">🏠</text>
+
+                            {/* Prominent High-Contrast Callout Banner */}
+                            <g transform="translate(0, -32)">
+                              <rect
+                                x="-95"
+                                y="-22"
+                                width="190"
+                                height="25"
+                                rx="6"
+                                fill="#0f172a"
+                                stroke="#f59e0b"
+                                strokeWidth="2"
+                              />
+                              <text x="0" y="-6" textAnchor="middle" fill="#fef08a" fontSize="11" fontWeight="bold" letterSpacing="0.5px">
+                                ★ MY HOUSE: {home.name.replace(/ \([^)]*\)/, "")}
+                              </text>
+                            </g>
+
+                            {/* Entrance Coordinates Badge below */}
+                            <g transform="translate(0, 26)">
+                              <rect
+                                x="-60"
+                                y="-10"
+                                width="120"
+                                height="16"
+                                rx="4"
+                                fill="rgba(15, 23, 42, 0.88)"
+                                stroke="#34d399"
+                                strokeWidth="1"
+                              />
+                              <text x="0" y="2" textAnchor="middle" fill="#34d399" fontSize="9" fontWeight="bold">
+                                Door: ({home.entranceCoords.x}, {home.entranceCoords.z})
+                              </text>
+                            </g>
+                          </g>
+                        );
+                      }
+
+                      // Secondary owned/leased home
+                      return (
+                        <g
+                          key={home.propertyId}
+                          className="ks-map-pin ks-secondary-home-pin"
+                          onClick={() => handleShowHomeOnMap(home)}
+                          transform={`translate(${hx}, ${hy})`}
+                          style={{ cursor: "pointer" }}
+                        >
+                          <circle r="12" fill="#065f46" stroke="#34d399" strokeWidth="2" />
+                          <text x="0" y="4" textAnchor="middle" fontSize="10">🏠</text>
+                          <text x="0" y="-16" textAnchor="middle" className="ks-pin-text prominent" fill="#a7f3d0">
+                            {home.name.split(" ")[0]}
+                          </text>
+                        </g>
+                      );
+                    });
+                  }
+
+                  // Fallback if eligibleHomes is empty but homeNavInfo is present
+                  if (homeNavInfo) {
+                    return (
+                      <g
+                        className="ks-map-pin ks-home-pin ks-home-beacon"
+                        onClick={() =>
+                          setSelectedLandmark({
+                            id: "my-home",
+                            name: `My Home · ${homeNavInfo.name}`,
+                            district: homeNavInfo.district,
+                            x: homeNavInfo.entranceCoords.x,
+                            z: homeNavInfo.entranceCoords.z,
+                            category: "residence",
+                            description: `Primary residence entrance at (${homeNavInfo.entranceCoords.x}, ${homeNavInfo.entranceCoords.z}). Distance: ${homeNavInfo.distanceMeters}m from current position.`,
+                          })
+                        }
+                        transform={`translate(${toSvgX(homeNavInfo.entranceCoords.x)}, ${toSvgY(homeNavInfo.entranceCoords.z)})`}
+                        style={{ cursor: "pointer" }}
+                      >
+                        <circle r="36" fill="rgba(16, 185, 129, 0.2)" stroke="#10b981" strokeWidth="2.5" strokeDasharray="6,4" className="ks-pin-pulse" />
+                        <circle r="24" fill="none" stroke="#f59e0b" strokeWidth="3" className="ks-pin-pulse" />
+                        <circle r="15" fill="#059669" stroke="#fef08a" strokeWidth="3" />
+                        <text x="0" y="5" textAnchor="middle" fontSize="13" fill="#ffffff">🏠</text>
+                        <g transform="translate(0, -32)">
+                          <rect x="-95" y="-22" width="190" height="25" rx="6" fill="#0f172a" stroke="#f59e0b" strokeWidth="2" />
+                          <text x="0" y="-6" textAnchor="middle" fill="#fef08a" fontSize="11" fontWeight="bold">
+                            ★ MY HOUSE: {homeNavInfo.name}
+                          </text>
+                        </g>
+                      </g>
+                    );
+                  }
+
+                  return null;
+                })()}
 
                 {/* Live Player Position Marker with Directional Needle */}
                 <g transform={`translate(${playerSvgX}, ${playerSvgY})`} filter="url(#glow)">
@@ -798,16 +1030,26 @@ export default function CityMapModal({
               ) : (
                 eligibleHomes.map((home) => {
                   const isCurrentGps = gpsTarget === "my-home" ? home.isSelectedHome : (gpsTarget === home.propertyId || gpsTarget === home.landmarkId);
+                  const streetDesc = getPropertyStreetDescription(home.propertyId);
+                  const guidance = computeGpsGuidance(
+                    playerCoords,
+                    home.entranceCoords,
+                    home.name,
+                    home.district,
+                  );
+
                   return (
                     <div
                       key={home.propertyId}
                       className="ks-directory-card ks-home-entry-card"
                       style={{
                         background: home.isSelectedHome
-                          ? "linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 95, 70, 0.3) 100%)"
+                          ? "linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 95, 70, 0.35) 100%)"
                           : "linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%)",
                         border: home.isSelectedHome ? "2px solid #10b981" : "1px solid rgba(255, 255, 255, 0.15)",
-                        boxShadow: home.isSelectedHome ? "0 0 15px rgba(16, 185, 129, 0.25)" : "none",
+                        boxShadow: home.isSelectedHome ? "0 0 18px rgba(16, 185, 129, 0.3)" : "none",
+                        borderRadius: "10px",
+                        padding: "16px",
                       }}
                     >
                       <div className="ks-card-main">
@@ -843,61 +1085,125 @@ export default function CityMapModal({
                               </span>
                             )}
                           </div>
-                          <span className="ks-dist-tag">{home.distanceMeters}m away</span>
+                          <span className="ks-dist-tag" style={{ fontSize: "12px", fontWeight: "bold" }}>
+                            {guidance.distanceMeters}m away
+                          </span>
                         </div>
 
-                        <h3 style={{ margin: "8px 0 4px", fontSize: "16px", color: home.isSelectedHome ? "#34d399" : "#f8fafc" }}>
+                        <h3 style={{ margin: "10px 0 4px", fontSize: "17px", color: home.isSelectedHome ? "#34d399" : "#f8fafc" }}>
                           {home.name}
                         </h3>
-                        <p style={{ margin: "0 0 8px", fontSize: "12px", color: "#cbd5e1" }}>
+                        <p style={{ margin: "0 0 8px", fontSize: "12px", color: "#cbd5e1", lineHeight: 1.4 }}>
                           {home.description}
                         </p>
-                        <small className="ks-card-coords" style={{ color: "#94a3b8", display: "block" }}>
-                          {home.district} · Physical Entrance: ({home.entranceCoords.x}, {home.entranceCoords.z})
-                        </small>
+
+                        {/* Location & Street Details Box */}
+                        <div
+                          style={{
+                            background: "rgba(15, 23, 42, 0.6)",
+                            border: "1px solid rgba(255, 255, 255, 0.1)",
+                            borderRadius: "6px",
+                            padding: "8px 10px",
+                            margin: "8px 0",
+                            fontSize: "12px",
+                          }}
+                        >
+                          <div style={{ color: "#94a3b8", marginBottom: "3px" }}>
+                            📍 <strong style={{ color: "#e2e8f0" }}>Street / Area:</strong> {streetDesc}
+                          </div>
+                          <div style={{ color: "#94a3b8" }}>
+                            🚪 <strong style={{ color: "#e2e8f0" }}>Physical Entrance:</strong> Map Location (X: <span style={{ color: "#34d399", fontWeight: "bold" }}>{home.entranceCoords.x}</span>, Z: <span style={{ color: "#34d399", fontWeight: "bold" }}>{home.entranceCoords.z}</span>)
+                          </div>
+                        </div>
+
+                        {/* Simple Directions & Live Distance */}
+                        <div
+                          style={{
+                            background: guidance.isArrived ? "rgba(16, 185, 129, 0.2)" : "rgba(6, 95, 70, 0.2)",
+                            border: `1px solid ${guidance.isArrived ? "#34d399" : "#10b981"}`,
+                            borderRadius: "6px",
+                            padding: "6px 10px",
+                            margin: "6px 0 10px 0",
+                            fontSize: "12px",
+                            color: guidance.isArrived ? "#34d399" : "#a7f3d0",
+                            fontWeight: 500,
+                          }}
+                        >
+                          {guidance.isArrived ? (
+                            <span>🎉 <strong>ARRIVED:</strong> You are standing right at the entrance door! Press [E] to Enter.</span>
+                          ) : (
+                            <span>🧭 <strong>DIRECTIONS:</strong> Head {guidance.directionCardinal} · {guidance.distanceMeters}m directly to the entrance door. ({guidance.instructionText})</span>
+                          )}
+                        </div>
                       </div>
 
+                      {/* Prominent Action Buttons */}
                       <div className="ks-card-actions" style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
-                        {home.isSelectedHome ? (
-                          <button
-                            className={`ks-gps-btn ${isCurrentGps ? "active" : ""}`}
-                            style={{ flex: 1 }}
-                            onClick={() => {
-                              if (isCurrentGps) onSetGPSTarget?.(null);
-                              else if (onFindMyHome) onFindMyHome();
-                              else onSetGPSTarget?.("my-home");
-                              onClose();
-                            }}
-                          >
-                            {isCurrentGps ? "FIND MY HOME (ACTIVE GPS ✓)" : "FIND MY HOME ↗"}
-                          </button>
-                        ) : (
-                          <button
-                            className="ks-gps-btn"
-                            style={{ background: "#0d9488", borderColor: "#14b8a6", flex: 1 }}
-                            onClick={() => handleSelectHome(home.propertyId)}
-                          >
-                            SET AS MY HOME
-                          </button>
-                        )}
+                        <button
+                          className="ks-gps-btn ks-show-on-map-btn"
+                          style={{
+                            background: "linear-gradient(135deg, #059669 0%, #047857 100%)",
+                            borderColor: "#34d399",
+                            color: "#ffffff",
+                            fontWeight: "bold",
+                            fontSize: "12px",
+                            padding: "8px 14px",
+                            flex: "1 1 180px",
+                          }}
+                          onClick={() => handleShowHomeOnMap(home)}
+                          title="Open visual map, center on this entrance door, and zoom in with a large pulsing beacon"
+                        >
+                          🗺️ SHOW MY HOUSE ON MAP ↗
+                        </button>
+
+                        <button
+                          className={`ks-gps-btn ${isCurrentGps ? "active" : ""}`}
+                          style={{
+                            background: isCurrentGps
+                              ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+                              : "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)",
+                            borderColor: isCurrentGps ? "#34d399" : "#38bdf8",
+                            fontWeight: "bold",
+                            fontSize: "12px",
+                            padding: "8px 14px",
+                            flex: "1 1 180px",
+                          }}
+                          onClick={() => handleGuideMeThere(home)}
+                          title="Activate live GPS navigation needle and simple turn-by-turn guidance to this door"
+                        >
+                          {isCurrentGps ? "🧭 GUIDING ACTIVE (WAYPOINT SET ✓)" : "🧭 GUIDE ME THERE ↗"}
+                        </button>
 
                         {!home.isSelectedHome && (
                           <button
-                            className={`ks-gps-btn ${isCurrentGps ? "active" : ""}`}
-                            onClick={() => {
-                              if (isCurrentGps) onSetGPSTarget?.(null);
-                              else onSetGPSTarget?.(home.propertyId);
-                              onClose();
+                            className="ks-gps-btn"
+                            style={{
+                              background: "#334155",
+                              borderColor: "#64748b",
+                              color: "#e2e8f0",
+                              fontSize: "12px",
+                              padding: "8px 12px",
+                              flex: "1 1 150px",
                             }}
+                            onClick={() => handleSelectHome(home.propertyId)}
+                            title="Set as your primary home for GPS and life simulation"
                           >
-                            {isCurrentGps ? "Waypoint Set ✓" : "Route to Entrance ↗"}
+                            ★ Set as Primary Home
                           </button>
                         )}
 
                         {onTeleportHome && (
                           <button
                             className="ks-gps-btn"
-                            style={{ background: "#4f46e5", borderColor: "#6366f1" }}
+                            style={{
+                              background: "linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)",
+                              borderColor: "#818cf8",
+                              color: "#ffffff",
+                              fontSize: "12px",
+                              padding: "8px 14px",
+                              fontWeight: "bold",
+                              flex: "1 1 160px",
+                            }}
                             onClick={() => {
                               if (!home.isSelectedHome) {
                                 handleSelectHome(home.propertyId);
@@ -905,9 +1211,9 @@ export default function CityMapModal({
                               onTeleportHome("entrance");
                               onClose();
                             }}
-                            title="Fast-travel test dev shortcut to this property's entrance"
+                            title="Instantaneous fast-travel dev shortcut: places player safely right at this entrance door"
                           >
-                            Teleport [Dev]
+                            ⚡ TELEPORT HOME (DEV)
                           </button>
                         )}
                       </div>
@@ -1041,32 +1347,25 @@ export default function CityMapModal({
                               {home.district} · Entrance: ({home.entranceCoords.x}, {home.entranceCoords.z})
                             </small>
                           </div>
-                          <div className="ks-card-actions" style={{ marginTop: "8px" }}>
-                            {home.isSelectedHome ? (
-                              <button
-                                className={`ks-gps-btn ${isCurrentGps ? "active" : ""}`}
-                                onClick={() => {
-                                  if (isCurrentGps) onSetGPSTarget?.(null);
-                                  else if (onFindMyHome) onFindMyHome();
-                                  else onSetGPSTarget?.("my-home");
-                                  onClose();
-                                }}
-                              >
-                                {isCurrentGps ? "Active Waypoint ✓" : "FIND MY HOME ↗"}
-                              </button>
-                            ) : (
-                              <button
-                                className="ks-gps-btn"
-                                style={{ background: "#0d9488" }}
-                                onClick={() => handleSelectHome(home.propertyId)}
-                              >
-                                SET AS MY HOME
-                              </button>
-                            )}
+                          <div className="ks-card-actions" style={{ marginTop: "8px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                            <button
+                              className="ks-gps-btn"
+                              style={{ background: "#059669", borderColor: "#10b981", fontSize: "11px", padding: "4px 8px" }}
+                              onClick={() => handleShowHomeOnMap(home)}
+                            >
+                              Show on Map ↗
+                            </button>
+                            <button
+                              className={`ks-gps-btn ${isCurrentGps ? "active" : ""}`}
+                              style={{ fontSize: "11px", padding: "4px 8px" }}
+                              onClick={() => handleGuideMeThere(home)}
+                            >
+                              {isCurrentGps ? "Guiding Active ✓" : "Guide Me There ↗"}
+                            </button>
                             {onTeleportHome && (
                               <button
                                 className="ks-gps-btn"
-                                style={{ background: "#4f46e5", borderColor: "#6366f1" }}
+                                style={{ background: "#4f46e5", borderColor: "#6366f1", fontSize: "11px", padding: "4px 8px" }}
                                 onClick={() => {
                                   if (!home.isSelectedHome) {
                                     handleSelectHome(home.propertyId);

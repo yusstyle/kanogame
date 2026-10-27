@@ -913,8 +913,19 @@
 }
 
 @keyframes ks-pulse-ring {
-  0% { r: 10; opacity: 1; }
-  100% { r: 28; opacity: 0; }
+  0% { r: 10; opacity: 1; stroke-width: 3.5px; }
+  50% { opacity: 0.8; }
+  100% { r: 36; opacity: 0; stroke-width: 1px; }
+}
+
+.ks-home-beacon {
+  cursor: pointer;
+  filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.75));
+}
+
+.ks-show-on-map-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.45);
 }
 
 .ks-selected-landmark-card {

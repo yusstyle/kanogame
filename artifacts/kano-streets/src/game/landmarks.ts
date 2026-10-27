@@ -347,3 +347,62 @@ export function getGpsLandmark(
   return KANO_LANDMARKS.find((l) => l.id === id) ?? null;
 }
 
+export interface GpsGuidance {
+  targetName: string;
+  district: string;
+  targetCoords: { x: number; z: number };
+  distanceMeters: number;
+  directionCardinal: string;
+  instructionText: string;
+  isArrived: boolean;
+}
+
+export function computeGpsGuidance(
+  playerPos: { x: number; z: number },
+  targetPos: { x: number; z: number },
+  targetName: string,
+  district: string,
+): GpsGuidance {
+  const dx = targetPos.x - playerPos.x;
+  const dz = targetPos.z - playerPos.z;
+  const distance = Math.round(Math.hypot(dx, dz));
+
+  let cardinal = "";
+  // In Kano Streets coordinate layout:
+  // -Z is North (Airport Road, Kawu Industrial)
+  // +Z is South (Murtala Mohammed Way, Residential Quarter, Sabon Gari)
+  // +X is East (Modern District, Bompai)
+  // -X is West (Historic Kano, Dala, Kurmi)
+  if (Math.abs(dz) > 2.2 * Math.abs(dx)) {
+    cardinal = dz < 0 ? "North" : "South";
+  } else if (Math.abs(dx) > 2.2 * Math.abs(dz)) {
+    cardinal = dx > 0 ? "East" : "West";
+  } else {
+    const ns = dz < 0 ? "North" : "South";
+    const ew = dx > 0 ? "East" : "West";
+    cardinal = `${ns}-${ew}`;
+  }
+
+  let instruction = "";
+  const isArrived = distance <= 3.8;
+
+  if (isArrived) {
+    instruction = `Arrived at Entrance Door! Press [E] to Enter.`;
+  } else if (distance <= 10) {
+    instruction = `Almost there (${distance}m)! Entrance door is right ahead facing ${cardinal}.`;
+  } else {
+    instruction = `Head ${cardinal} · ${distance}m to physical entrance door (${targetPos.x}, ${targetPos.z}).`;
+  }
+
+  return {
+    targetName,
+    district,
+    targetCoords: targetPos,
+    distanceMeters: distance,
+    directionCardinal: cardinal,
+    instructionText: instruction,
+    isArrived,
+  };
+}
+
+
