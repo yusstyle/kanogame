@@ -153,6 +153,7 @@ export class GameEngine {
   private hasApartmentRental = false;
   private gameMinutes = 600; // 10:00 AM
   private gameScore = 0;
+  private isSeated = false;
   private featuredContactId: string | null = null;
   private gpsTargetLandmark: string | null = null;
   private isFurnishingMode = false;
@@ -533,6 +534,9 @@ export class GameEngine {
       this.keys.delete(movementKey);
       return;
     }
+    if (this.isSeated) {
+      this.isSeated = false;
+    }
     if (normalized === "e" && this.screen === "playing") {
       this.handleInteract();
       return;
@@ -769,6 +773,28 @@ export class GameEngine {
             const showerRes = this.lifeSim.shower(res.takeShower.label);
             this.statusMessage = `${res.statusMessage} (${showerRes.message})`;
           }
+          if (res.sitDown) {
+            this.isSeated = true;
+            const sitRes = this.lifeSim.sitAndRest(res.sitDown.label, res.sitDown.energyRestored ?? 20);
+            this.statusMessage = `${res.statusMessage} (${sitRes.message})`;
+          }
+          if (res.watchTv) {
+            this.isSeated = true;
+            const tvRes = this.lifeSim.watchTelevision(res.watchTv.label, res.watchTv.energyRestored ?? 15);
+            this.statusMessage = `${res.statusMessage} (${tvRes.message})`;
+          }
+          if (res.washHands) {
+            const washRes = this.lifeSim.washHands(res.washHands.label);
+            this.statusMessage = `${res.statusMessage} (${washRes.message})`;
+          }
+          if (res.drinkBeverage) {
+            const drinkRes = this.lifeSim.drinkBeverage(
+              res.drinkBeverage.label,
+              res.drinkBeverage.hungerGain ?? 25,
+              res.drinkBeverage.energyGain ?? 10,
+            );
+            this.statusMessage = `${res.statusMessage} (${drinkRes.message})`;
+          }
           if (res.freelanceContractAction) {
             this.executeFreelanceContract();
           }
@@ -847,6 +873,28 @@ export class GameEngine {
             if (res.takeShower) {
               const showerRes = this.lifeSim.shower(res.takeShower.label);
               this.statusMessage = `${res.statusMessage} (${showerRes.message})`;
+            }
+            if (res.sitDown) {
+              this.isSeated = true;
+              const sitRes = this.lifeSim.sitAndRest(res.sitDown.label, res.sitDown.energyRestored ?? 20);
+              this.statusMessage = `${res.statusMessage} (${sitRes.message})`;
+            }
+            if (res.watchTv) {
+              this.isSeated = true;
+              const tvRes = this.lifeSim.watchTelevision(res.watchTv.label, res.watchTv.energyRestored ?? 15);
+              this.statusMessage = `${res.statusMessage} (${tvRes.message})`;
+            }
+            if (res.washHands) {
+              const washRes = this.lifeSim.washHands(res.washHands.label);
+              this.statusMessage = `${res.statusMessage} (${washRes.message})`;
+            }
+            if (res.drinkBeverage) {
+              const drinkRes = this.lifeSim.drinkBeverage(
+                res.drinkBeverage.label,
+                res.drinkBeverage.hungerGain ?? 25,
+                res.drinkBeverage.energyGain ?? 10,
+              );
+              this.statusMessage = `${res.statusMessage} (${drinkRes.message})`;
             }
             if (res.freelanceContractAction) {
               this.executeFreelanceContract();
@@ -1347,6 +1395,7 @@ export class GameEngine {
     }
 
     if (isWalking) {
+      this.isSeated = false;
       const targetYaw = Math.atan2(moveX, moveZ);
       this.playerYaw = this.lerpAngle(this.playerYaw, targetYaw, 1 - Math.exp(-12 * dt));
       this.walkPhase += dt * (this.keys.has("shift") ? 12.4 : 8.3);
@@ -1358,7 +1407,14 @@ export class GameEngine {
     const idleBreath = !isWalking && this.playerGrounded ? Math.sin(now * 2.2) * 0.04 : 0;
     const idleSway = !isWalking && this.playerGrounded ? Math.sin(now * 1.1) * 0.015 : 0;
 
-    if (this.playerGrounded) {
+    if (this.isSeated) {
+      this.player.leftLeg.rotation.x = THREE.MathUtils.damp(this.player.leftLeg.rotation.x, Math.PI * 0.44, 9, dt);
+      this.player.rightLeg.rotation.x = THREE.MathUtils.damp(this.player.rightLeg.rotation.x, Math.PI * 0.44, 9, dt);
+      this.player.leftArm.rotation.x = THREE.MathUtils.damp(this.player.leftArm.rotation.x, 0.35, 9, dt);
+      this.player.rightArm.rotation.x = THREE.MathUtils.damp(this.player.rightArm.rotation.x, 0.35, 9, dt);
+      this.player.leftArm.rotation.z = THREE.MathUtils.damp(this.player.leftArm.rotation.z, 0, 7, dt);
+      this.player.rightArm.rotation.z = THREE.MathUtils.damp(this.player.rightArm.rotation.z, 0, 7, dt);
+    } else if (this.playerGrounded) {
       this.player.leftArm.rotation.x = THREE.MathUtils.damp(this.player.leftArm.rotation.x, -swing + idleBreath, 9, dt);
       this.player.rightArm.rotation.x = THREE.MathUtils.damp(this.player.rightArm.rotation.x, swing - idleBreath, 9, dt);
       this.player.leftLeg.rotation.x = THREE.MathUtils.damp(this.player.leftLeg.rotation.x, swing, 9, dt);
@@ -1375,7 +1431,7 @@ export class GameEngine {
     }
 
     if (this.player.head) {
-      const headTurn = !isWalking ? Math.sin(now * 0.7) * 0.16 : 0;
+      const headTurn = !isWalking && !this.isSeated ? Math.sin(now * 0.7) * 0.16 : 0;
       this.player.head.rotation.y = THREE.MathUtils.damp(this.player.head.rotation.y, headTurn, 5, dt);
     }
 
@@ -1396,9 +1452,10 @@ export class GameEngine {
       !this.player.riggedCharacter && isWalking && this.playerGrounded
         ? Math.abs(Math.sin(this.walkPhase * 2)) * 0.035
         : 0;
+    const heightOffset = this.isSeated ? -0.28 : 0;
     this.player.root.position.set(
       this.playerPosition.x,
-      this.playerPosition.y + verticalBounce,
+      this.playerPosition.y + verticalBounce + heightOffset,
       this.playerPosition.z,
     );
     this.player.root.rotation.y = this.playerYaw;

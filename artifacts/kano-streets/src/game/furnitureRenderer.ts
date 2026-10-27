@@ -68,6 +68,10 @@ export interface RenderedFurnitureResult {
       sleepInBed?: { hours: number };
       takeShower?: { label: string };
       freelanceContractAction?: boolean;
+      sitDown?: { label: string; energyRestored?: number };
+      watchTv?: { label: string; energyRestored?: number };
+      washHands?: { label: string };
+      drinkBeverage?: { label: string; hungerGain?: number; energyGain?: number };
     };
   };
 }
@@ -134,6 +138,8 @@ export function buildFurnitureMesh(
         prompt: `Sit & Rest on ${name}`,
         action: () => ({
           statusMessage: `You sat down on the ${name}. Enjoying peaceful moments at home in Kano.`,
+          sitDown: { label: name, energyRestored: 20 },
+          timeDeltaMinutes: 15,
           scoreDelta: 10,
         }),
       };
@@ -155,6 +161,8 @@ export function buildFurnitureMesh(
         prompt: `Relax on ${name}`,
         action: () => ({
           statusMessage: `You reclined comfortably across the ${name}. Energy refreshed.`,
+          sitDown: { label: name, energyRestored: 20 },
+          timeDeltaMinutes: 15,
           scoreDelta: 15,
         }),
       };
@@ -179,6 +187,8 @@ export function buildFurnitureMesh(
         prompt: `Lounge on ${name}`,
         action: () => ({
           statusMessage: `Lounging on the ${name}. The epitome of luxury living in Kano.`,
+          sitDown: { label: name, energyRestored: 25 },
+          timeDeltaMinutes: 15,
           scoreDelta: 25,
         }),
       };
@@ -211,6 +221,8 @@ export function buildFurnitureMesh(
         prompt: `Watch News & Sports on ${name}`,
         action: () => ({
           statusMessage: `Watching NTA Kano & Arewa 24 News. Premier League match highlights broadcasted!`,
+          watchTv: { label: name, energyRestored: 15 },
+          timeDeltaMinutes: 30,
           scoreDelta: 15,
         }),
       };
@@ -232,6 +244,8 @@ export function buildFurnitureMesh(
         prompt: `Watch 4K Cinema on ${name}`,
         action: () => ({
           statusMessage: `65" OLED Theater: Immersive surround sound sports commentary filling the room!`,
+          watchTv: { label: name, energyRestored: 20 },
+          timeDeltaMinutes: 30,
           scoreDelta: 20,
         }),
       };

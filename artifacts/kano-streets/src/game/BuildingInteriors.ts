@@ -97,6 +97,10 @@ export interface InteriorZone {
       sleepInBed?: { hours: number };
       takeShower?: { label: string };
       freelanceContractAction?: boolean;
+      sitDown?: { label: string; energyRestored?: number };
+      watchTv?: { label: string; energyRestored?: number };
+      washHands?: { label: string };
+      drinkBeverage?: { label: string; hungerGain?: number; energyGain?: number };
     };
   } | null;
 }
@@ -275,6 +279,13 @@ export class BuildingInteriorManager {
     const floorMat = this.materials.tileFloor || this.materials.concrete;
     const wallMat = this.materials.white;
     const woodMat = this.materials.wood;
+    const glassMat = this.materials.glassLit || this.materials.glass;
+    const metalMat = this.materials.metal;
+    const darkMat = this.materials.darkTrim;
+    const whiteMat = this.materials.white;
+    const blackMat = this.materials.black;
+    const cyanMat = this.materials.neonCyan || this.materials.glassLit;
+    const goldMat = this.materials.goldTrim || this.materials.trim;
 
     // 1. Floor & Ceiling Slabs
     addBox(group, floorMat, 0, 0, 0, width, 0.1, depth, false);
@@ -296,79 +307,142 @@ export class BuildingInteriorManager {
       { x: cx + 3.2, z: cz + 7.2, halfX: 0.6, halfZ: 1.6, height: 0.8 },
     );
 
-    // Double Mahogany Entrance Doors
+    // Double Mahogany Entrance Doors with wrought iron studs
     addBox(group, woodMat, -0.7, 1.2, depth / 2 - 0.08, 1.2, 2.4, 0.12);
     addBox(group, woodMat, 0.7, 1.2, depth / 2 - 0.08, 1.2, 2.4, 0.12);
+    // Illuminated Exit Sign above door
+    const exitSignMat = makeSignMaterial("EXIT TO RESIDENTIAL QUARTER", "#065f46");
+    addBox(group, exitSignMat, 0, 2.65, depth / 2 - 0.08, 1.8, 0.4, 0.06);
 
-    // 4. Grand Family Parlour (Palour) (x: -8 to 0, z: -1 to 5.5)
+    // 4. Grand Family Parlour (Palour) (x: -9.5 to 0.5, z: -1.0 to 5.5)
     // Rich Northern Patterned Carpet
-    addBox(group, this.materials.carpetRed || this.materials.clothRed, -4.0, 0.05, 2.2, 7.2, 0.02, 6.2, false);
+    addBox(group, this.materials.carpetRed || this.materials.clothRed, -4.2, 0.05, 2.2, 7.6, 0.02, 6.2, false);
     // 8-Seater Northern Modular Sectional Sofa Set
-    addBox(group, this.materials.darkTrim, -4.0, 0.48, 4.2, 5.8, 0.52, 1.1); // Back sofa
-    addBox(group, this.materials.darkTrim, -7.0, 0.48, 2.2, 1.1, 0.52, 4.8); // Left sofa
-    addBox(group, this.materials.darkTrim, -1.0, 0.48, 2.2, 1.1, 0.52, 3.2); // Right sofa
-    // Carved mahogany coffee table
-    addBox(group, woodMat, -4.0, 0.35, 2.2, 2.2, 0.38, 1.4);
+    addBox(group, darkMat, -4.2, 0.48, 4.4, 6.2, 0.52, 1.1); // Back sofa
+    addBox(group, darkMat, -7.5, 0.48, 2.2, 1.1, 0.52, 5.0); // Left sofa
+    addBox(group, darkMat, -0.9, 0.48, 2.2, 1.1, 0.52, 3.4); // Right sofa
+    // Scatter cushions
+    addBox(group, this.materials.clothRed, -5.5, 0.65, 4.2, 0.45, 0.35, 0.15);
+    addBox(group, goldMat, -2.8, 0.65, 4.2, 0.45, 0.35, 0.15);
+    // Carved mahogany coffee table with brass filigree trays
+    addBox(group, woodMat, -4.2, 0.35, 2.2, 2.4, 0.38, 1.4);
+    addBox(group, goldMat, -4.2, 0.4, 2.2, 0.8, 0.04, 0.6); // Brass filigree tray
     // Brass Kano Ornamental Urns & Water Pots
-    addCyl(group, this.materials.goldTrim || this.materials.trim, -7.2, 0.55, 5.0, 0.35, 1.1);
-    addCyl(group, this.materials.goldTrim || this.materials.trim, -0.8, 0.55, 5.0, 0.35, 1.1);
+    addCyl(group, goldMat, -7.6, 0.55, 5.0, 0.35, 1.1);
+    addCyl(group, goldMat, -0.8, 0.55, 5.0, 0.35, 1.1);
 
     // 75-inch Flat Screen Media Wall & Credenza (West Wall)
-    addBox(group, woodMat, -9.6, 0.5, 2.2, 0.6, 0.65, 4.4);
-    addBox(group, this.materials.black, -9.7, 1.8, 2.2, 0.1, 1.6, 2.8);
+    addBox(group, woodMat, -9.6, 0.5, 2.2, 0.6, 0.65, 4.6);
+    addBox(group, blackMat, -9.7, 1.8, 2.2, 0.1, 1.6, 3.0);
+    addBox(group, cyanMat, -9.64, 1.8, 2.2, 0.02, 1.45, 2.8); // QLED Screen glow
+    addBox(group, goldMat, -9.6, 1.8, 0.6, 0.06, 1.7, 0.06);  // Brass corner trim
+    addBox(group, goldMat, -9.6, 1.8, 3.8, 0.06, 1.7, 0.06);
 
-    // 5. Formal Dining Room & Closed Family Kitchen (x: 1 to 9.5, z: 0 to 5.5)
-    // Partition Wall between Parlour and Dining
-    addBox(group, wallMat, 0.8, height / 2, 2.5, 0.2, height, 6.0);
+    // Wall Switch for Parlour Chandelier
+    addBox(group, whiteMat, -0.5, 1.4, 4.5, 0.1, 0.14, 0.04);
+
+    // 5. Formal Dining Room (x: 1.0 to 9.5, z: 0.5 to 5.5)
+    // Partition Wall between Parlour and Dining with Arched Passage
+    addBox(group, wallMat, 0.8, height / 2, 4.0, 0.2, height, 3.0);
+    addBox(group, wallMat, 0.8, height / 2, 1.0, 0.2, height, 1.0);
+    addBox(group, wallMat, 0.8, 3.2, 2.5, 0.2, 1.6, 2.0); // Arch lintel
     // 8-Seater Solid Mahogany Dining Table & Chairs
-    addBox(group, woodMat, 5.0, 0.78, 2.8, 3.4, 0.08, 1.8);
-    for (const dx of [-1.2, 0, 1.2]) {
-      addBox(group, this.materials.darkTrim, 5.0 + dx, 0.48, 1.6, 0.45, 0.5, 0.45);
-      addBox(group, this.materials.darkTrim, 5.0 + dx, 0.48, 4.0, 0.45, 0.5, 0.45);
+    addBox(group, woodMat, 5.2, 0.78, 2.8, 3.6, 0.08, 1.8);
+    for (const dx of [-1.3, 0, 1.3]) {
+      addBox(group, darkMat, 5.2 + dx, 0.48, 1.5, 0.45, 0.5, 0.45);
+      addBox(group, darkMat, 5.2 + dx, 0.48, 4.1, 0.45, 0.5, 0.45);
     }
-    // Kitchen Partition & Counters (x: 4 to 9.5, z: -1 to 0)
-    addBox(group, wallMat, 5.0, height / 2, 0, 9.5, height, 0.2);
-    addBox(group, this.materials.concrete, 6.5, 0.95, -2.5, 1.0, 1.0, 4.0);
-    addBox(group, this.materials.metal, 6.5, 1.02, -2.5, 1.1, 0.08, 4.2); // Stainless counter
-    addBox(group, this.materials.metal, 8.5, 1.3, -4.0, 1.2, 2.2, 1.0);  // Refrigerator
+    // Sideboard buffet credenza with brass serving dishes
+    addBox(group, woodMat, 8.8, 0.5, 2.8, 0.6, 0.9, 3.2);
+    addBox(group, goldMat, 8.8, 1.02, 2.8, 0.4, 0.12, 1.4); // Serving platters
 
-    // 6. Central Corridor Wall (z: -1 to -8)
+    // 6. Executive Family Kitchen & Store (x: 1.0 to 9.5, z: -5.0 to 0.5)
+    // Kitchen Partition Wall with Doorway
+    addBox(group, wallMat, 5.2, height / 2, 0.5, 9.5, height, 0.2);
+    // L-Shaped Kitchen Counter & Cabinets
+    addBox(group, this.materials.concrete, 6.8, 0.95, -2.5, 1.2, 1.0, 4.2);
+    addBox(group, darkMat, 6.8, 1.02, -2.5, 1.3, 0.08, 4.4); // Granite top
+    // Double stainless sink & swivel tap
+    addBox(group, metalMat, 6.8, 1.03, -1.5, 0.8, 0.02, 1.2);
+    addBox(group, metalMat, 7.2, 1.28, -1.5, 0.08, 0.3, 0.15);
+    // 4-Burner gas cooker & range hood
+    addBox(group, darkMat, 6.8, 0.95, -3.6, 1.1, 0.95, 0.85);
+    addBox(group, blackMat, 6.8, 1.03, -3.6, 0.85, 0.04, 0.75);
+    addBox(group, metalMat, 6.8, 2.4, -3.6, 0.9, 0.5, 0.7); // Extractor hood
+    // Upper wall cabinets
+    addBox(group, woodMat, 7.2, 2.3, -2.0, 0.6, 0.85, 2.5);
+    // French-Door Stainless Refrigerator
+    addBox(group, metalMat, 8.8, 1.4, -4.2, 1.2, 2.3, 1.1);
+    addBox(group, darkMat, 8.15, 1.4, -4.2, 0.04, 0.8, 0.04); // Handle
+
+    // 7. Central Corridor Wall (z: -1.0 to -8.5)
     addBox(group, wallMat, 0.8, height / 2, -4.5, 0.2, height, 7.0);
 
-    // 7. Dakin Karatu (Private Study & Prayer Room) (x: -9 to -4, z: -1 to -4.5)
+    // 8. Dakin Karatu (Private Study & Prayer Room) (x: -9.5 to -4.0, z: -1.0 to -4.5)
     addBox(group, wallMat, -4.0, height / 2, -1.0, 10.0, height, 0.2);
     addBox(group, wallMat, -4.0, height / 2, -4.5, 10.0, height, 0.2);
-    // Prayer Carpets & Bookshelves
-    addBox(group, this.materials.carpetRed || this.materials.cloth, -6.5, 0.05, -2.8, 3.6, 0.02, 2.4, false);
-    addBox(group, woodMat, -9.6, 1.5, -2.8, 0.5, 2.6, 2.8); // Bookcase
+    // Authentic Kano Prayer Carpets
+    addBox(group, this.materials.carpetRed || this.materials.cloth, -6.5, 0.05, -2.0, 3.6, 0.02, 1.8, false);
+    // Polished Mahogany Study Desk & Chair
+    addBox(group, woodMat, -6.5, 0.75, -3.4, 2.0, 0.08, 0.9);
+    addBox(group, darkMat, -6.5, 0.88, -3.6, 0.2, 0.18, 0.15); // Stand
+    addBox(group, cyanMat, -6.5, 1.18, -3.6, 0.85, 0.5, 0.04); // Monitor glow
+    addBox(group, blackMat, -6.5, 0.8, -3.2, 0.5, 0.02, 0.2);  // Keyboard
+    addBox(group, darkMat, -6.5, 0.48, -2.7, 0.55, 0.55, 0.55); // Chair
+    // Floor-to-ceiling carved cedar bookshelves
+    addBox(group, woodMat, -9.6, 1.8, -2.8, 0.6, 3.2, 3.0);
 
-    // 8. Master Bedroom Suite & Ensuite Bath (x: -9.5 to 0.5, z: -4.5 to -8.5)
-    // King-Size Bed with Padded Headboard
+    // 9. Master Bedroom Suite & Ensuite Bath (x: -9.5 to 0.5, z: -4.5 to -8.5)
+    // King-Size Bed with Carved Hardwood Headboard
     addBox(group, woodMat, -5.5, 0.45, -6.5, 2.6, 0.52, 2.8);
-    addBox(group, this.materials.white, -5.5, 0.75, -6.5, 2.4, 0.25, 2.6); // Mattress
-    addBox(group, this.materials.cloth, -5.5, 0.82, -6.0, 2.4, 0.15, 1.6); // Quilt
+    addBox(group, whiteMat, -5.5, 0.75, -6.5, 2.4, 0.25, 2.6); // Mattress
+    addBox(group, this.materials.cloth, -5.5, 0.82, -6.0, 2.4, 0.15, 1.6); // Embroidered coverlet
     addBox(group, woodMat, -5.5, 1.4, -7.85, 2.8, 1.4, 0.15); // Headboard
-    // Ensuite Bath Partition (x: -1.5 to 0.5, z: -5.5 to -8.5)
-    addBox(group, wallMat, -1.5, height / 2, -6.5, 0.2, height, 4.0);
-    addBox(group, this.materials.tileFloor || this.materials.white, -0.5, 0.45, -7.5, 1.2, 0.6, 0.8); // Bathtub
+    // Twin Nightstands & Lamps
+    addBox(group, woodMat, -7.4, 0.4, -6.5, 0.6, 0.65, 0.5);
+    addBox(group, woodMat, -3.6, 0.4, -6.5, 0.6, 0.65, 0.5);
+    addBox(group, goldMat, -7.4, 0.85, -6.5, 0.25, 0.35, 0.25);
+    addBox(group, goldMat, -3.6, 0.85, -6.5, 0.25, 0.35, 0.25);
+    // 3-Door Wardrobe with Full-Length Mirror
+    addBox(group, woodMat, -8.8, 1.5, -6.5, 0.65, 2.8, 2.2);
+    addBox(group, glassMat, -8.45, 1.5, -6.5, 0.04, 2.6, 1.0);
+    // Ensuite Bath Partition (x: -2.0 to 0.5, z: -5.5 to -8.5)
+    addBox(group, wallMat, -2.0, height / 2, -6.5, 0.2, height, 4.0);
+    // Bathtub & Shower
+    addBox(group, whiteMat, -0.8, 0.45, -7.2, 1.4, 0.6, 1.8);
+    addBox(group, metalMat, -0.8, 1.25, -7.8, 0.1, 0.4, 0.2); // Faucet & Shower
+    // Ceramic Toilet & Cistern
+    addBox(group, whiteMat, -0.8, 0.42, -5.8, 0.5, 0.42, 0.65);
+    addBox(group, whiteMat, -0.8, 0.85, -5.55, 0.55, 0.5, 0.25);
+    // Vanity Basin & Mirror
+    addBox(group, whiteMat, -1.8, 0.85, -6.5, 0.5, 0.85, 1.0);
+    addBox(group, glassMat, -1.95, 1.65, -6.5, 0.04, 0.8, 0.8);
 
-    // 9. Rear Compound Utility Yard & 25kVA Generator House (z: -8.8 to -12.0)
-    // Soundproof Diesel Generator
-    addBox(group, this.materials.metal, 5.5, 0.9, -8.5, 2.4, 1.5, 1.6);
-    addBox(group, this.materials.darkTrim, 5.5, 1.7, -8.5, 2.5, 0.12, 1.7); // Generator cover
-    addCyl(group, this.materials.black, 4.5, 1.9, -8.5, 0.08, 0.7); // Exhaust pipe
-    // Borehole Pressure Tank
-    addCyl(group, this.materials.bankBlue || this.materials.metal, 7.8, 1.2, -8.5, 0.5, 2.2);
+    // 10. Children / Guest Bedroom (x: 1.0 to 5.0, z: -4.5 to -8.5)
+    addBox(group, wallMat, 5.0, height / 2, -6.5, 0.2, height, 4.0);
+    addBox(group, woodMat, 3.0, 0.42, -6.5, 1.8, 0.45, 2.2); // Twin bed
+    addBox(group, whiteMat, 3.0, 0.68, -6.5, 1.7, 0.22, 2.1);
+    addBox(group, woodMat, 4.5, 1.2, -6.5, 0.5, 2.2, 1.4);  // Wardrobe
+
+    // 11. Rear Compound Utility Yard & 25kVA Generator House (z: -8.8 to -12.0)
+    // Soundproof 25kVA Lister-Petter Diesel Generator
+    addBox(group, metalMat, 5.5, 0.9, -8.5, 2.4, 1.5, 1.6);
+    addBox(group, darkMat, 5.5, 1.7, -8.5, 2.5, 0.12, 1.7); // Generator cover
+    addCyl(group, blackMat, 4.5, 1.9, -8.5, 0.08, 0.7);      // Exhaust pipe
+    // Control dials on generator
+    addBox(group, whiteMat, 4.25, 1.1, -8.5, 0.04, 0.4, 0.6);
+    // Automatic Borehole Pressure Tank
+    addCyl(group, this.materials.bankBlue || metalMat, 7.8, 1.2, -8.5, 0.5, 2.2);
 
     // Interactive Doors
     this.addInteractiveDoor(group, "house", "villa_master_door", "Master Bedroom Door", -4.0, 0, -4.5, 1.1, 2.4, 0.08, woodMat, cx, cz, false, colliders);
     this.addInteractiveDoor(group, "house", "villa_study_door", "Dakin Karatu Door", -4.0, 0, -1.0, 1.1, 2.4, 0.08, woodMat, cx, cz, false, colliders);
     this.addInteractiveDoor(group, "house", "villa_rear_yard_door", "Rear Compound Yard Door", 0.8, 0, -8.8, 1.2, 2.4, 0.1, woodMat, cx, cz, true, colliders);
 
-    // Indoor Lighting
-    const parlourLight = new THREE.PointLight("#fff0d4", 2.4, 18, 1.2);
-    parlourLight.position.set(-4.0, height - 0.6, 2.2);
-    parlourLight.userData.baseIntensity = 2.4;
+    // Multi-Room Atmospheric Point Lights
+    const parlourLight = new THREE.PointLight("#fff0d4", 2.6, 20, 1.2);
+    parlourLight.position.set(-4.2, height - 0.6, 2.2);
+    parlourLight.userData.baseIntensity = 2.6;
     group.add(parlourLight);
     lights.push(parlourLight);
 
@@ -379,10 +453,22 @@ export class BuildingInteriorManager {
     lights.push(masterLight);
 
     const diningLight = new THREE.PointLight("#fff5e6", 1.8, 12, 1.3);
-    diningLight.position.set(5.0, height - 0.6, 2.8);
+    diningLight.position.set(5.2, height - 0.6, 2.8);
     diningLight.userData.baseIntensity = 1.8;
     group.add(diningLight);
     lights.push(diningLight);
+
+    const studyLight = new THREE.PointLight("#ffeedd", 1.8, 10, 1.3);
+    studyLight.position.set(-6.5, height - 0.6, -2.8);
+    studyLight.userData.baseIntensity = 1.8;
+    group.add(studyLight);
+    lights.push(studyLight);
+
+    const kitchenLight = new THREE.PointLight("#fffbe8", 1.8, 12, 1.2);
+    kitchenLight.position.set(6.8, height - 0.6, -2.5);
+    kitchenLight.userData.baseIntensity = 1.8;
+    group.add(kitchenLight);
+    lights.push(kitchenLight);
 
     // Colliders (shifted to world coordinates cx, cz)
     colliders.push(
@@ -392,20 +478,26 @@ export class BuildingInteriorManager {
       { x: cx - width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height },
       { x: cx + width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height },
       // Parlour Sectional Sofa
-      { x: cx - 4.0, z: cz + 4.2, halfX: 2.9, halfZ: 0.6, height: 1.2 },
-      { x: cx - 7.0, z: cz + 2.2, halfX: 0.6, halfZ: 2.4, height: 1.2 },
-      { x: cx - 1.0, z: cz + 2.2, halfX: 0.6, halfZ: 1.6, height: 1.2 },
+      { x: cx - 4.2, z: cz + 4.4, halfX: 3.1, halfZ: 0.6, height: 1.2 },
+      { x: cx - 7.5, z: cz + 2.2, halfX: 0.6, halfZ: 2.5, height: 1.2 },
+      { x: cx - 0.9, z: cz + 2.2, halfX: 0.6, halfZ: 1.7, height: 1.2 },
       // Dining Table
-      { x: cx + 5.0, z: cz + 2.8, halfX: 1.8, halfZ: 1.0, height: 1.2 },
-      // Kitchen Counter
-      { x: cx + 6.5, z: cz - 2.5, halfX: 0.6, halfZ: 2.1, height: 1.2 },
-      // Central Partition Walls
+      { x: cx + 5.2, z: cz + 2.8, halfX: 1.9, halfZ: 1.0, height: 1.2 },
+      // Kitchen Counter & Refrigerator
+      { x: cx + 6.8, z: cz - 2.5, halfX: 0.7, halfZ: 2.2, height: 1.2 },
+      { x: cx + 8.8, z: cz - 4.2, halfX: 0.7, halfZ: 0.6, height: 2.3 },
+      // Central & Room Partition Walls
       { x: cx + 0.8, z: cz + 2.5, halfX: 0.2, halfZ: 3.0, height },
       { x: cx + 0.8, z: cz - 4.5, halfX: 0.2, halfZ: 3.5, height },
       { x: cx - 4.0, z: cz - 1.0, halfX: 5.0, halfZ: 0.2, height },
       { x: cx - 4.0, z: cz - 4.5, halfX: 5.0, halfZ: 0.2, height },
-      // Master Bed
+      // Study Desk
+      { x: cx - 6.5, z: cz - 3.4, halfX: 1.1, halfZ: 0.5, height: 1.2 },
+      // Master Bed & Wardrobe
       { x: cx - 5.5, z: cz - 6.5, halfX: 1.4, halfZ: 1.5, height: 1.4 },
+      { x: cx - 8.8, z: cz - 6.5, halfX: 0.4, halfZ: 1.2, height: 2.8 },
+      // Guest Bed
+      { x: cx + 3.0, z: cz - 6.5, halfX: 1.0, halfZ: 1.2, height: 1.2 },
       // 25kVA Generator House & Water Tank
       { x: cx + 5.5, z: cz - 8.5, halfX: 1.3, halfZ: 0.9, height: 1.8 },
       { x: cx + 7.8, z: cz - 8.5, halfX: 0.6, halfZ: 0.6, height: 2.4 },
@@ -424,75 +516,47 @@ export class BuildingInteriorManager {
       outdoorDoorPosition: new THREE.Vector3(44, 0, 45),
       outdoorDoorYaw: 0,
       checkInteraction: (pos, state) => {
-        // 1. Generator Inspection in Utility Yard at (cx + 5.5, cz - 8.5)
-        const distGen = pos.distanceTo(new THREE.Vector3(cx + 5.5, cy + 0.1, cz - 8.5));
-        if (distGen <= 2.4) {
+        // 1. Veranda Dakali Seating (cx - 3.2 or cx + 3.2, cz + 7.2)
+        const distDakaliL = pos.distanceTo(new THREE.Vector3(cx - 3.2, cy + 0.1, cz + 7.2));
+        const distDakaliR = pos.distanceTo(new THREE.Vector3(cx + 3.2, cy + 0.1, cz + 7.2));
+        if (distDakaliL <= 2.2 || distDakaliR <= 2.2) {
           return {
-            prompt: "Inspect 25kVA Soundproof Diesel Generator & Borehole",
+            prompt: "Sit on Shaded Dakali Bench with Elders",
             action: () => ({
-              statusMessage: "Al-Baraka Generator House: 25kVA Lister-Petter soundproof generator operational. Diesel tank: 92% full. Borehole pressure: Nominal (4.2 Bar).",
+              statusMessage: "Seated on the cool earthen Dakali bench on Al-Baraka's zaure veranda. Enjoying community fellowship.",
+              sitDown: { label: "Al-Baraka Zaure Dakali Bench", energyRestored: 20 },
+              timeDeltaMinutes: 15,
             }),
           };
         }
 
-        // 2. Safe / Deed Desk & Freelance Workstation in Study at (cx - 6.5, cz - 2.8)
-        const distStudy = pos.distanceTo(new THREE.Vector3(cx - 6.5, cy + 0.1, cz - 2.8));
-        if (distStudy <= 2.2) {
-          if (state.ownedProperties?.includes("albaraka-villa")) {
-            return {
-              prompt: "Workstation: Check Remote Freelance Contracts & Title Safe",
-              action: () => ({
-                statusMessage: "Al-Baraka Executive Desk: Accessing remote client contracts.",
-                freelanceContractAction: true,
-              }),
-            };
-          }
+        // 2. Family Parlour Sectional Sofa (cx - 4.2, cz + 3.5)
+        const distParlourSofa = pos.distanceTo(new THREE.Vector3(cx - 4.2, cy + 0.1, cz + 3.5));
+        if (distParlourSofa <= 2.4) {
+          return {
+            prompt: "Sit on Family Parlour Sectional Sofa",
+            action: () => ({
+              statusMessage: "Relaxing on the 8-seater northern sectional sofa in the family parlour. Comfortably resting.",
+              sitDown: { label: "Al-Baraka Family Parlour Sofa", energyRestored: 20 },
+              timeDeltaMinutes: 15,
+            }),
+          };
         }
 
-        // 3. Master Suite Bed at (cx - 4.5, cz - 6.5)
-        const distBed = pos.distanceTo(new THREE.Vector3(cx - 4.5, cy + 0.1, cz - 6.5));
-        if (distBed <= 2.4) {
-          if (state.ownedProperties?.includes("albaraka-villa")) {
-            return {
-              prompt: "Sleep & Rest in Master Suite Bed (Advance 6 Hours)",
-              action: () => ({
-                statusMessage: "Resting peacefully in the Master Suite of Al-Baraka Villa. Energy fully restored!",
-                sleepInBed: { hours: 6 },
-                timeDeltaMinutes: 360,
-              }),
-            };
-          }
+        // 3. Parlour 75" QLED Media Wall (cx - 8.0, cz + 2.2)
+        const distTv = pos.distanceTo(new THREE.Vector3(cx - 8.0, cy + 0.1, cz + 2.2));
+        if (distTv <= 2.4) {
+          return {
+            prompt: "Watch 75\" QLED Media Wall (Arewa24 / NTA Kano)",
+            action: () => ({
+              statusMessage: "75\" QLED Media Wall: Broadcasting Arewa24 evening dramas and Kano state documentary. Sound resonates warmly.",
+              watchTv: { label: "Al-Baraka 75\" QLED Media Wall", energyRestored: 20 },
+              timeDeltaMinutes: 30,
+            }),
+          };
         }
 
-        // 4. Ensuite Bathtub & Shower at (cx - 0.5, cz - 7.5)
-        const distBath = pos.distanceTo(new THREE.Vector3(cx - 0.5, cy + 0.1, cz - 7.5));
-        if (distBath <= 2.2) {
-          if (state.ownedProperties?.includes("albaraka-villa")) {
-            return {
-              prompt: "Take Warm Bath & Shower in Ensuite",
-              action: () => ({
-                statusMessage: "Refreshing bath taken in the ensuite! Hygiene restored to 100%.",
-                takeShower: { label: "Al-Baraka Ensuite Bathroom" },
-              }),
-            };
-          }
-        }
-
-        // 5. Family Kitchen & Pantry at (cx + 4.5, cz - 2.5)
-        const distKitchen = pos.distanceTo(new THREE.Vector3(cx + 4.5, cy + 0.1, cz - 2.5));
-        if (distKitchen <= 2.2) {
-          if (state.ownedProperties?.includes("albaraka-villa")) {
-            return {
-              prompt: "Prepare Home Meal in Kitchen",
-              action: () => ({
-                statusMessage: "Prepared and enjoyed a fresh hot northern meal in the kitchen. Hunger satisfied!",
-                eatFood: { amount: 50, label: "Home Cooked Family Meal" },
-              }),
-            };
-          }
-        }
-
-        // 6. Parlour Chandelier / Light Switch at (cx - 0.5, cz + 4.5)
+        // 4. Parlour Chandelier / Light Switch (cx - 0.5, cz + 4.5)
         const distSwitch = pos.distanceTo(new THREE.Vector3(cx - 0.5, cy + 0.1, cz + 4.5));
         if (distSwitch <= 1.8) {
           return {
@@ -501,6 +565,146 @@ export class BuildingInteriorManager {
               const on = this.toggleInteriorLights("house");
               return { statusMessage: on ? "Al-Baraka Villa: Warm interior illumination active." : "Al-Baraka Villa: Interior lights switched off." };
             },
+          };
+        }
+
+        // 5. Formal Dining Room (cx + 5.2, cz + 2.8)
+        const distDining = pos.distanceTo(new THREE.Vector3(cx + 5.2, cy + 0.1, cz + 2.8));
+        if (distDining <= 2.2) {
+          return {
+            prompt: "Sit at Formal Dining Table for Family Meal",
+            action: () => ({
+              statusMessage: "Enjoyed a hearty family dinner of fragrant Tuwo Shinkafa, Miyan Kuka, and tender spiced beef!",
+              eatFood: { amount: 50, label: "Family Mahogany Dining Feast" },
+              sitDown: { label: "Formal Dining Suite", energyRestored: 15 },
+              timeDeltaMinutes: 30,
+            }),
+          };
+        }
+
+        // 6. Family Kitchen cooking (cx + 6.8, cz - 2.5)
+        const distKitchen = pos.distanceTo(new THREE.Vector3(cx + 6.8, cy + 0.1, cz - 2.5));
+        if (distKitchen <= 2.2) {
+          if (state.ownedProperties?.includes("albaraka-villa")) {
+            return {
+              prompt: "Prepare Home Meal in Kitchen",
+              action: () => ({
+                statusMessage: "Prepared and enjoyed a fresh hot northern meal in the spacious family kitchen. Hunger satisfied!",
+                eatFood: { amount: 50, label: "Home Cooked Family Meal" },
+                timeDeltaMinutes: 30,
+              }),
+            };
+          }
+        }
+
+        // 7. Refrigerator refreshment (cx + 8.8, cz - 4.2)
+        const distFridge = pos.distanceTo(new THREE.Vector3(cx + 8.8, cy + 0.1, cz - 4.2));
+        if (distFridge <= 2.2) {
+          if (state.ownedProperties?.includes("albaraka-villa")) {
+            return {
+              prompt: "Grab Chilled Kunu or Zobo from Refrigerator",
+              action: () => ({
+                statusMessage: "Poured a tall chilled glass of traditional Kunu Aya from the stainless refrigerator. Cool and replenishing!",
+                drinkBeverage: { label: "Chilled Kunu Aya", hungerGain: 25, energyGain: 10 },
+                timeDeltaMinutes: 5,
+              }),
+            };
+          }
+        }
+
+        // 8. Dakin Karatu Study Desk (cx - 6.5, cz - 3.4)
+        const distStudy = pos.distanceTo(new THREE.Vector3(cx - 6.5, cy + 0.1, cz - 3.4));
+        if (distStudy <= 2.2) {
+          if (state.ownedProperties?.includes("albaraka-villa")) {
+            return {
+              prompt: "Sit at Dakin Karatu Desk: Remote Freelance & Archive Research",
+              action: () => ({
+                statusMessage: "Al-Baraka Executive Desk: Accessing remote client contracts and consulting family estate archives.",
+                freelanceContractAction: true,
+              }),
+            };
+          }
+        }
+
+        // 9. Dakin Karatu Traditional Prayer Carpet (cx - 6.5, cz - 2.0)
+        const distCarpet = pos.distanceTo(new THREE.Vector3(cx - 6.5, cy + 0.1, cz - 2.0));
+        if (distCarpet <= 2.0) {
+          return {
+            prompt: "Rest on Traditional Prayer Carpet in Dakin Karatu",
+            action: () => ({
+              statusMessage: "Meditating and resting in the peaceful stillness of Dakin Karatu. Soul and mind refreshed.",
+              sitDown: { label: "Dakin Karatu Prayer Carpet", energyRestored: 20 },
+              timeDeltaMinutes: 20,
+            }),
+          };
+        }
+
+        // 10. Master Suite Bed (cx - 5.5, cz - 6.5)
+        const distBed = pos.distanceTo(new THREE.Vector3(cx - 5.5, cy + 0.1, cz - 6.5));
+        if (distBed <= 2.4) {
+          if (state.ownedProperties?.includes("albaraka-villa")) {
+            return {
+              prompt: "Sleep & Rest in Master Suite Bed (Advance 6 Hours)",
+              action: () => ({
+                statusMessage: "Resting peacefully in the Master Suite of Al-Baraka Villa. Energy fully restored to 100%!",
+                sleepInBed: { hours: 6 },
+                timeDeltaMinutes: 360,
+              }),
+            };
+          }
+        }
+
+        // 11. Guest / Children Bed (cx + 3.0, cz - 6.5)
+        const distGuestBed = pos.distanceTo(new THREE.Vector3(cx + 3.0, cy + 0.1, cz - 6.5));
+        if (distGuestBed <= 2.2) {
+          if (state.ownedProperties?.includes("albaraka-villa")) {
+            return {
+              prompt: "Rest in Guest Bed (Advance 6 Hours)",
+              action: () => ({
+                statusMessage: "Rested in the peaceful guest bedroom. Energy fully replenished to 100%!",
+                sleepInBed: { hours: 6 },
+                timeDeltaMinutes: 360,
+              }),
+            };
+          }
+        }
+
+        // 12. Ensuite Bathtub & Shower (cx - 0.8, cz - 7.2)
+        const distBath = pos.distanceTo(new THREE.Vector3(cx - 0.8, cy + 0.1, cz - 7.2));
+        if (distBath <= 2.2) {
+          if (state.ownedProperties?.includes("albaraka-villa")) {
+            return {
+              prompt: "Take Warm Bath & Shower in Ensuite",
+              action: () => ({
+                statusMessage: "Refreshing bath and shower taken in the ensuite! Hygiene restored to 100%.",
+                takeShower: { label: "Al-Baraka Ensuite Bathroom" },
+              }),
+            };
+          }
+        }
+
+        // 13. Ensuite Vanity Basin Sink (cx - 1.8, cz - 6.5)
+        const distSink = pos.distanceTo(new THREE.Vector3(cx - 1.8, cy + 0.1, cz - 6.5));
+        if (distSink <= 2.0) {
+          if (state.ownedProperties?.includes("albaraka-villa")) {
+            return {
+              prompt: "Wash Hands at Vanity Basin",
+              action: () => ({
+                statusMessage: "Washed hands at the marble vanity basin. Fresh and clean!",
+                washHands: { label: "Al-Baraka Ensuite Vanity Basin" },
+              }),
+            };
+          }
+        }
+
+        // 14. Generator House in Utility Yard (cx + 5.5, cz - 8.5)
+        const distGen = pos.distanceTo(new THREE.Vector3(cx + 5.5, cy + 0.1, cz - 8.5));
+        if (distGen <= 2.4) {
+          return {
+            prompt: "Inspect 25kVA Soundproof Diesel Generator & Borehole",
+            action: () => ({
+              statusMessage: "Al-Baraka Generator House: 25kVA Lister-Petter soundproof generator operational. Diesel tank: 92% full. Voltage: 230V stable. Borehole pressure: Nominal (4.2 Bar).",
+            }),
           };
         }
 
@@ -532,6 +736,10 @@ export class BuildingInteriorManager {
     const woodMat = this.materials.wood;
     const glassMat = this.materials.glassLit || this.materials.glass;
     const darkMat = this.materials.darkTrim;
+    const metalMat = this.materials.metal;
+    const whiteMat = this.materials.white;
+    const blackMat = this.materials.black;
+    const cyanMat = this.materials.neonCyan || this.materials.glassLit;
 
     // 1. Lower Floor (Floor 1, y = 0) & Double-Height Ceiling Slab (y = 6.8)
     addBox(group, marbleMat, 0, 0, 0, width, 0.1, depth, false);
@@ -547,34 +755,67 @@ export class BuildingInteriorManager {
     // Double Entry Doors
     addBox(group, woodMat, -0.65, 1.2, depth / 2 - 0.08, 1.2, 2.4, 0.12);
     addBox(group, woodMat, 0.65, 1.2, depth / 2 - 0.08, 1.2, 2.4, 0.12);
+    // Illuminated Exit Sign above doors
+    const exitSignMat = makeSignMaterial("EXIT TO BOMPAI AVENUE", "#065f46");
+    addBox(group, exitSignMat, 0, 2.55, depth / 2 - 0.08, 1.8, 0.38, 0.06);
+    // Console Credenza in Foyer
+    addBox(group, darkMat, 0, 0.5, 6.8, 1.8, 0.85, 0.45);
+    addBox(group, this.materials.goldTrim || metalMat, 0, 1.1, 6.8, 0.35, 0.35, 0.25); // Sculpture
+    // Wall Switch in Foyer
+    addBox(group, whiteMat, -1.0, 1.4, depth / 2 - 0.2, 0.1, 0.14, 0.04);
 
-    // 4. Lower Level: Panoramic Living Salon (x: -8 to 1, z: -7 to 3)
+    // 4. Lower Level: Panoramic Living Salon (x: -8.5 to 1.0, z: -7.0 to 3.0)
     // Floor-to-Ceiling Panoramic Glass Window Wall on North side
-    addBox(group, glassMat, -3.5, totalHeight / 2, -depth / 2 + 0.12, 9.0, totalHeight - 0.5, 0.1);
+    addBox(group, glassMat, -3.5, totalHeight / 2, -depth / 2 + 0.12, 9.5, totalHeight - 0.5, 0.1);
     // Luxury Cream Leather Sectional Suite
-    addBox(group, this.materials.white, -3.5, 0.48, -4.5, 5.4, 0.52, 1.1);
-    addBox(group, this.materials.white, -6.0, 0.48, -2.5, 1.1, 0.52, 3.8);
+    addBox(group, whiteMat, -3.5, 0.48, -4.5, 5.4, 0.52, 1.1);
+    addBox(group, whiteMat, -6.0, 0.48, -2.5, 1.1, 0.52, 3.8);
+    // Accent pillows
+    addBox(group, this.materials.goldTrim || darkMat, -4.5, 0.65, -4.2, 0.4, 0.35, 0.15);
+    addBox(group, this.materials.goldTrim || darkMat, -2.5, 0.65, -4.2, 0.4, 0.35, 0.15);
     // Polished Black Marble Coffee Table
-    addBox(group, this.materials.black, -3.5, 0.35, -2.5, 2.2, 0.38, 1.2);
-    // 85-inch Entertainment Wall
-    addBox(group, darkMat, -8.7, 0.5, -2.5, 0.5, 0.65, 4.4);
-    addBox(group, this.materials.black, -8.8, 2.0, -2.5, 0.1, 1.8, 3.2);
+    addBox(group, blackMat, -3.5, 0.35, -2.5, 2.2, 0.38, 1.2);
+    addBox(group, glassMat, -3.5, 0.4, -2.5, 0.4, 0.12, 0.4); // Centerpiece
+    // 85-inch Entertainment Wall with wood slats and OLED screen
+    addBox(group, darkMat, -8.7, 1.4, -2.5, 0.25, 2.6, 4.4);
+    addBox(group, blackMat, -8.6, 1.8, -2.5, 0.08, 1.6, 3.2);
+    addBox(group, cyanMat, -8.55, 1.8, -2.5, 0.02, 1.45, 3.0); // OLED Screen glow
+    addBox(group, metalMat, -8.55, 0.85, -2.5, 0.12, 0.08, 2.2); // Soundbar
 
-    // 5. Lower Level: Gourmet Island Kitchen & Dining Suite (x: 2 to 8, z: -7 to 0)
+    // 5. Lower Level: Gourmet Island Kitchen (x: 2.0 to 8.5, z: -7.0 to 0.5)
     // Central Granite Chef Island
-    addBox(group, darkMat, 5.0, 0.95, -3.5, 2.2, 1.0, 3.8);
-    addBox(group, marbleMat, 5.0, 1.02, -3.5, 2.4, 0.08, 4.0); // Granite top
+    addBox(group, darkMat, 5.0, 0.95, -3.5, 2.4, 1.0, 4.0);
+    addBox(group, blackMat, 5.0, 1.02, -3.5, 2.6, 0.08, 4.2); // Black granite top
+    addBox(group, darkMat, 5.0, 1.04, -4.5, 0.8, 0.02, 0.9);  // Induction hob
     // 3 Leather Bar Stools
     for (const dz of [-1.2, 0, 1.2]) {
-      addCyl(group, this.materials.metal, 3.4, 0.65, -3.5 + dz, 0.22, 0.65);
+      addCyl(group, metalMat, 3.4, 0.65, -3.5 + dz, 0.22, 0.65);
+      addBox(group, darkMat, 3.4, 0.72, -3.5 + dz, 0.4, 0.08, 0.4);
     }
-    // Double-Door Stainless Refrigerator
-    addBox(group, this.materials.metal, 7.8, 1.35, -6.5, 1.4, 2.3, 1.2);
+    // Full-height cabinetry wall & double oven
+    addBox(group, woodMat, 8.2, 1.6, -3.5, 0.8, 3.0, 5.0);
+    addBox(group, metalMat, 7.8, 1.4, -2.0, 0.1, 1.1, 0.8); // Double built-in oven
+    // Double-Door Stainless Smart Refrigerator with Ice Dispenser
+    addBox(group, metalMat, 7.8, 1.45, -6.5, 1.4, 2.4, 1.3);
+    addBox(group, darkMat, 7.1, 1.4, -6.5, 0.04, 0.9, 0.04); // Handles
+    // Undermount double sink & faucet
+    addBox(group, metalMat, 5.0, 1.04, -2.4, 0.7, 0.02, 1.2);
+    addBox(group, metalMat, 5.0, 1.3, -2.4, 0.08, 0.35, 0.15); // Gooseneck tap
 
-    // 6. Lower Level: Guest Bedroom & Bathroom (x: 2 to 8, z: 1 to 7)
-    addBox(group, wallMat, 5.0, 3.4 / 2, 0.5, 6.0, 3.4, 0.2); // Partition wall
-    addBox(group, woodMat, 5.0, 0.45, 3.5, 2.2, 0.52, 2.4); // Guest bed
-    addBox(group, this.materials.white, 5.0, 0.72, 3.5, 2.1, 0.22, 2.3);
+    // 6. Lower Level: Guest Bedroom & Bathroom Suite (x: 2.0 to 8.5, z: 1.0 to 7.0)
+    addBox(group, wallMat, 5.0, 3.4 / 2, 0.5, 6.5, 3.4, 0.2); // Partition wall
+    // Guest Bed
+    addBox(group, woodMat, 5.0, 0.45, 3.8, 2.2, 0.52, 2.4);
+    addBox(group, whiteMat, 5.0, 0.72, 3.8, 2.1, 0.22, 2.3);
+    addBox(group, this.materials.cloth, 5.0, 0.78, 4.2, 2.1, 0.12, 1.4); // Duvet
+    // Guest Wardrobe
+    addBox(group, woodMat, 7.8, 1.2, 3.8, 0.6, 2.4, 1.6);
+    // Guest Bathroom partition & fixtures (z: 1.0 to 2.4, x: 5.5 to 8.5)
+    addBox(group, wallMat, 5.0, 3.4 / 2, 2.0, 0.2, 3.4, 3.0);
+    addBox(group, whiteMat, 6.8, 0.85, 1.2, 1.0, 0.85, 0.5); // Vanity sink
+    addBox(group, glassMat, 6.8, 1.65, 0.95, 0.8, 0.75, 0.04); // Mirror
+    addBox(group, whiteMat, 8.0, 0.42, 1.4, 0.5, 0.42, 0.65); // Toilet
+    addBox(group, glassMat, 3.5, 1.2, 1.4, 1.4, 2.4, 1.4);    // Shower stall
 
     // 7. Grand Stepped Wooden Staircase (x: 0 to 2.2, z: 1.0 to 5.5, y: 0 to 3.4)
     const stepCount = 10;
@@ -596,36 +837,59 @@ export class BuildingInteriorManager {
     // 8. Upper Mezzanine Level Floor Slab (y = 3.4, z: 0 to 8, x: -8 to 8)
     addBox(group, marbleMat, 0, floor2Elevation, 4.0, width, 0.15, 8.0, false);
 
-    // 9. Upper Mezzanine Gallery & Library (x: 1.5 to 8, z: 0.5 to 5.5)
+    // 9. Upper Mezzanine Gallery & Executive Study (x: 1.5 to 8.5, z: 0.5 to 5.5)
     // Safety Glass Balustrade Overlooking Living Salon Below
     addBox(group, glassMat, 4.5, floor2Elevation + 0.6, 0.2, 6.5, 1.1, 0.08);
-    addBox(group, this.materials.metal, 4.5, floor2Elevation + 1.15, 0.2, 6.5, 0.06, 0.08);
-    // Executive Desk & Laptop
+    addBox(group, metalMat, 4.5, floor2Elevation + 1.15, 0.2, 6.5, 0.06, 0.08);
+    // Executive Mahogany Desk & Dual-Monitor Workstation
     addBox(group, woodMat, 5.0, floor2Elevation + 0.75, 2.8, 2.4, 0.08, 1.2);
-    addBox(group, this.materials.metal, 5.0, floor2Elevation + 0.82, 2.8, 0.45, 0.04, 0.35); // Laptop
+    addBox(group, darkMat, 4.5, floor2Elevation + 0.9, 2.6, 0.15, 0.2, 0.15); // Stand L
+    addBox(group, cyanMat, 4.5, floor2Elevation + 1.2, 2.6, 0.85, 0.5, 0.04);  // Monitor 1
+    addBox(group, darkMat, 5.5, floor2Elevation + 0.9, 2.6, 0.15, 0.2, 0.15); // Stand R
+    addBox(group, cyanMat, 5.5, floor2Elevation + 1.2, 2.6, 0.85, 0.5, 0.04);  // Monitor 2
+    addBox(group, blackMat, 5.0, floor2Elevation + 0.8, 3.1, 0.55, 0.02, 0.22); // Keyboard
+    addBox(group, darkMat, 5.0, floor2Elevation + 0.5, 3.6, 0.65, 0.65, 0.65);  // Executive chair
+    // Floating Library Bookshelves
+    addBox(group, woodMat, 8.2, floor2Elevation + 1.6, 2.8, 0.5, 2.6, 3.2);
 
-    // 10. Upper Level: Master Penthouse Suite (x: -8 to -1, z: 0 to 5.5)
+    // 10. Upper Level: Master Penthouse Suite (x: -8.5 to -1.0, z: 0 to 5.5)
     addBox(group, wallMat, -1.0, floor2Elevation + (totalHeight - floor2Elevation) / 2, 2.8, 0.2, totalHeight - floor2Elevation, 5.5);
-    // King-Size Master Bed
+    // King-Size Master Bed with velvet tufted headboard
     addBox(group, woodMat, -5.0, floor2Elevation + 0.45, 2.8, 2.6, 0.55, 2.8);
-    addBox(group, this.materials.white, -5.0, floor2Elevation + 0.75, 2.8, 2.4, 0.25, 2.6);
+    addBox(group, whiteMat, -5.0, floor2Elevation + 0.75, 2.8, 2.4, 0.25, 2.6);
+    addBox(group, this.materials.cloth, -5.0, floor2Elevation + 0.82, 3.2, 2.4, 0.14, 1.6); // Silk Duvet
     addBox(group, darkMat, -5.0, floor2Elevation + 1.4, 1.35, 2.8, 1.4, 0.15); // Headboard
-    // Executive Wall Safe
-    addBox(group, this.materials.metal, -8.7, floor2Elevation + 1.2, 2.8, 0.4, 0.6, 0.6);
+    // Nightstands with lamps
+    addBox(group, woodMat, -6.8, floor2Elevation + 0.4, 1.5, 0.6, 0.65, 0.5);
+    addBox(group, woodMat, -3.2, floor2Elevation + 0.4, 1.5, 0.6, 0.65, 0.5);
+    addBox(group, this.materials.lampGlow || whiteMat, -6.8, floor2Elevation + 0.85, 1.5, 0.25, 0.35, 0.25);
+    addBox(group, this.materials.lampGlow || whiteMat, -3.2, floor2Elevation + 0.85, 1.5, 0.25, 0.35, 0.25);
+    // Mirrored Walk-in Dressing Wardrobe
+    addBox(group, woodMat, -8.2, floor2Elevation + 1.4, 2.8, 0.65, 2.5, 2.4);
+    addBox(group, glassMat, -7.85, floor2Elevation + 1.4, 2.8, 0.04, 2.3, 2.2);
+    // Executive Electronic Wall Safe
+    addBox(group, metalMat, -8.7, floor2Elevation + 1.2, 4.5, 0.4, 0.6, 0.6);
+    addBox(group, cyanMat, -8.45, floor2Elevation + 1.2, 4.5, 0.02, 0.15, 0.15); // Keypad glow
+    // Master Ensuite Luxury Bathroom (x: -1.0 to -3.5, z: 0.5 to 2.5, upper level)
+    addBox(group, wallMat, -3.5, floor2Elevation + 1.4, 1.5, 0.2, 2.8, 2.2);
+    addBox(group, whiteMat, -2.2, floor2Elevation + 0.4, 1.2, 1.6, 0.55, 0.8); // Soaking tub
+    addBox(group, glassMat, -2.2, floor2Elevation + 1.2, 2.2, 1.4, 2.2, 1.0);  // Rain shower
 
-    // 11. Upper Level: Private Skyline Rooftop Terrace (z: 5.5 to 8.0, x: -8 to 8)
-    // Terrace Partition Wall & Glass Sliding Doors
+    // 11. Upper Level: Private Skyline Rooftop Terrace (z: 5.5 to 8.0, x: -8.5 to 8.5)
     addBox(group, wallMat, 0, floor2Elevation + (totalHeight - floor2Elevation) / 2, 5.5, width, totalHeight - floor2Elevation, 0.2);
-    // Teak Outdoor Lounge Chairs & Table
+    // Teak Outdoor Lounge Chairs & Beverage Table
     addBox(group, woodMat, -4.0, floor2Elevation + 0.35, 6.8, 1.8, 0.35, 1.0);
     addBox(group, this.materials.cloth, -4.0, floor2Elevation + 0.55, 6.8, 1.6, 0.15, 0.9);
+    addBox(group, woodMat, -2.2, floor2Elevation + 0.3, 6.8, 0.7, 0.3, 0.7); // Table
+    // Perimeter glass balustrade
+    addBox(group, glassMat, 0, floor2Elevation + 0.55, 7.9, width - 0.4, 1.1, 0.08);
 
     // Interactive Doors
     this.addInteractiveDoor(group, "penthouse", "penthouse_master_door", "Master Penthouse Suite Door", -1.0, floor2Elevation, 4.5, 1.1, 2.4, 0.08, woodMat, cx, cz, false, colliders);
     this.addInteractiveDoor(group, "penthouse", "penthouse_guest_door", "Guest Bedroom Door", 5.0, 0, 0.5, 1.1, 2.4, 0.08, woodMat, cx, cz, false, colliders);
     this.addInteractiveDoor(group, "penthouse", "penthouse_terrace_door", "Rooftop Skyline Terrace Door", 0, floor2Elevation, 5.5, 1.4, 2.4, 0.08, glassMat, cx, cz, true, colliders);
 
-    // Luxury Chandelier & Lighting
+    // Multi-Room Atmospheric Point Lights
     const salonChandelier = new THREE.PointLight("#fff5d0", 2.8, 22, 1.1);
     salonChandelier.position.set(-3.5, totalHeight - 1.2, -1.0);
     salonChandelier.userData.baseIntensity = 2.8;
@@ -644,6 +908,18 @@ export class BuildingInteriorManager {
     group.add(kitchenLight);
     lights.push(kitchenLight);
 
+    const guestLight = new THREE.PointLight("#fff5e6", 1.6, 10, 1.3);
+    guestLight.position.set(5.0, 3.4 - 0.5, 3.5);
+    guestLight.userData.baseIntensity = 1.6;
+    group.add(guestLight);
+    lights.push(guestLight);
+
+    const galleryLight = new THREE.PointLight("#f8fafc", 1.8, 12, 1.2);
+    galleryLight.position.set(5.0, totalHeight - 1.2, 2.8);
+    galleryLight.userData.baseIntensity = 1.8;
+    group.add(galleryLight);
+    lights.push(galleryLight);
+
     // Colliders (shifted to world coordinates cx, cz)
     colliders.push(
       // Perimeter Boundary Walls
@@ -655,14 +931,17 @@ export class BuildingInteriorManager {
       { x: cx - 3.5, z: cz - 4.5, halfX: 2.8, halfZ: 0.6, height: 1.2 },
       { x: cx - 6.0, z: cz - 2.5, halfX: 0.6, halfZ: 2.0, height: 1.2 },
       { x: cx - 8.7, z: cz - 2.5, halfX: 0.3, halfZ: 2.3, height: 2.2 },
-      // Kitchen Island
-      { x: cx + 5.0, z: cz - 3.5, halfX: 1.3, halfZ: 2.1, height: 1.2 },
+      // Kitchen Island & Refrigerator
+      { x: cx + 5.0, z: cz - 3.5, halfX: 1.4, halfZ: 2.1, height: 1.2 },
+      { x: cx + 7.8, z: cz - 6.5, halfX: 0.8, halfZ: 0.8, height: 2.4 },
       // Guest Bedroom Partition & Bed
-      { x: cx + 5.0, z: cz + 0.5, halfX: 3.0, halfZ: 0.2, height: 3.4 },
-      { x: cx + 5.0, z: cz + 3.5, halfX: 1.2, halfZ: 1.3, height: 1.2 },
+      { x: cx + 5.0, z: cz + 0.5, halfX: 3.2, halfZ: 0.2, height: 3.4 },
+      { x: cx + 5.0, z: cz + 3.8, halfX: 1.2, halfZ: 1.3, height: 1.2 },
       // Upper Floor Partition Wall & Master Bed
       { x: cx - 1.0, z: cz + 2.8, halfX: 0.2, halfZ: 2.8, height: totalHeight },
       { x: cx - 5.0, z: cz + 2.8, halfX: 1.4, halfZ: 1.5, height: totalHeight },
+      // Upper Gallery Desk
+      { x: cx + 5.0, z: cz + 2.8, halfX: 1.3, halfZ: 0.7, height: totalHeight },
       // Terrace Wall
       { x: cx, z: cz + 5.5, halfX: width / 2, halfZ: 0.2, height: totalHeight },
     );
@@ -680,41 +959,93 @@ export class BuildingInteriorManager {
       outdoorDoorPosition: new THREE.Vector3(18, 0, 39.5),
       outdoorDoorYaw: Math.PI,
       checkInteraction: (pos, state) => {
-        // 1. Executive Wall Safe & Study Workstation in Master Suite (cx - 8.7, cz + 2.8, y = -56.5)
-        const distSafe = pos.distanceTo(new THREE.Vector3(cx - 8.7, cy + floor2Elevation + 0.1, cz + 2.8));
-        if (distSafe <= 2.4) {
+        // 1. Penthouse Lighting Chandelier Switch (cx - 1.0, cz - 1.0, lower level)
+        const distSwitch = pos.distanceTo(new THREE.Vector3(cx - 1.0, cy + 0.1, cz - 1.0));
+        if (distSwitch <= 2.0) {
+          return {
+            prompt: this.lightsOn ? "Switch Off Penthouse Chandelier" : "Switch On Penthouse Chandelier",
+            action: () => {
+              const on = this.toggleInteriorLights("penthouse");
+              return { statusMessage: on ? "Bompai Penthouse: Luxury crystal chandelier illuminated." : "Bompai Penthouse: Lights dimmed to ambient mode." };
+            },
+          };
+        }
+
+        // 2. Salon Italian Leather Sectional (cx - 3.5, cz - 4.5, lower level)
+        const distSalonSofa = pos.distanceTo(new THREE.Vector3(cx - 3.5, cy + 0.1, cz - 4.5));
+        if (distSalonSofa <= 2.4) {
+          return {
+            prompt: "Sit & Lounge on Italian Leather Sectional",
+            action: () => ({
+              statusMessage: "Reclined on the Italian leather sectional. The city lights of Kano stretch outside the double-height glass.",
+              sitDown: { label: "Bompai Penthouse Leather Sectional", energyRestored: 20 },
+              timeDeltaMinutes: 15,
+            }),
+          };
+        }
+
+        // 3. Salon 85" Curved OLED Cinema TV (cx - 3.5, cz - 2.5, lower level)
+        const distTv = pos.distanceTo(new THREE.Vector3(cx - 3.5, cy + 0.1, cz - 2.5));
+        if (distTv <= 2.4) {
+          return {
+            prompt: "Watch 85\" Curved OLED Cinema TV",
+            action: () => ({
+              statusMessage: "85\" Curved OLED Theater: Immersive surround sound broadcast of international news and sports highlights!",
+              watchTv: { label: "Bompai 85\" Curved OLED", energyRestored: 20 },
+              timeDeltaMinutes: 30,
+            }),
+          };
+        }
+
+        // 4. Granite Island Barstools (cx + 3.5, cz - 3.5, lower level)
+        const distBarstool = pos.distanceTo(new THREE.Vector3(cx + 3.5, cy + 0.1, cz - 3.5));
+        if (distBarstool <= 2.0) {
+          return {
+            prompt: "Sit at Granite Kitchen Island Bar",
+            action: () => ({
+              statusMessage: "Perched on the leather barstool at the granite chef island. Enjoying the open gourmet kitchen.",
+              sitDown: { label: "Granite Island Barstool", energyRestored: 15 },
+              timeDeltaMinutes: 10,
+            }),
+          };
+        }
+
+        // 5. Gourmet Island Kitchen cooking (cx + 5.0, cz - 3.5, lower level)
+        const distKitchen = pos.distanceTo(new THREE.Vector3(cx + 5.0, cy + 0.1, cz - 3.5));
+        if (distKitchen <= 2.2) {
           if (state.ownedProperties?.includes("bompai-penthouse")) {
             return {
-              prompt: "Bompai Heights Penthouse: Executive Deed Safe & Workstation",
+              prompt: "Prepare Meal at Gourmet Island Cooker",
               action: () => ({
-                statusMessage: "Executive Safe: Freehold Title Deed #BH-PENT-08 verified. 12-Panel Solar Inverter Battery Bank: 100% capacity.",
-                freelanceContractAction: true,
+                statusMessage: "Prepared and savoured a gourmet 5-star meal at the granite island! Hunger fully satisfied.",
+                eatFood: { amount: 55, label: "Gourmet Island Meal" },
+                timeDeltaMinutes: 30,
               }),
             };
           }
         }
 
-        // 2. Master Penthouse Suite Bed (Upper floor, cx - 5.5, cz + 2.5)
-        const distMasterBed = pos.distanceTo(new THREE.Vector3(cx - 5.5, cy + floor2Elevation + 0.1, cz + 2.5));
-        if (distMasterBed <= 2.4) {
+        // 6. French-Door Smart Refrigerator (cx + 7.5, cz - 6.5, lower level)
+        const distFridge = pos.distanceTo(new THREE.Vector3(cx + 7.5, cy + 0.1, cz - 6.5));
+        if (distFridge <= 2.2) {
           if (state.ownedProperties?.includes("bompai-penthouse")) {
             return {
-              prompt: "Sleep & Rest in Master Penthouse Bed (Advance 6 Hours)",
+              prompt: "Grab Iced Beverage from Smart Refrigerator",
               action: () => ({
-                statusMessage: "Overnight rest in the Master Penthouse suite with Kano city lights below. Energy 100%!",
-                sleepInBed: { hours: 6 },
-                timeDeltaMinutes: 360,
+                statusMessage: "Poured an iced sparkling fruit beverage from the smart refrigerator dispenser. Cool and energizing!",
+                drinkBeverage: { label: "Iced Sparkling Fruit Beverage", hungerGain: 30, energyGain: 10 },
+                timeDeltaMinutes: 5,
               }),
             };
           }
         }
 
-        // 3. Guest Bedroom Bed (Lower floor, cx + 5.0, cz + 3.5)
-        const distGuestBed = pos.distanceTo(new THREE.Vector3(cx + 5.0, cy + 0.1, cz + 3.5));
+        // 7. Guest Bedroom Bed (cx + 5.0, cz + 3.8, lower level)
+        const distGuestBed = pos.distanceTo(new THREE.Vector3(cx + 5.0, cy + 0.1, cz + 3.8));
         if (distGuestBed <= 2.2) {
           if (state.ownedProperties?.includes("bompai-penthouse")) {
             return {
-              prompt: "Rest in Guest Bedroom Bed (Advance 6 Hours)",
+              prompt: "Rest in Guest Suite Bed (Advance 6 Hours)",
               action: () => ({
                 statusMessage: "Rested comfortably in the guest suite. Energy restored to 100%!",
                 sleepInBed: { hours: 6 },
@@ -724,54 +1055,103 @@ export class BuildingInteriorManager {
           }
         }
 
-        // 4. Luxury Bathroom Shower (Lower floor, cx + 5.0, cz + 1.2)
-        const distBath = pos.distanceTo(new THREE.Vector3(cx + 5.0, cy + 0.1, cz + 1.2));
-        if (distBath <= 2.2) {
+        // 8. Guest Bathroom Shower (cx + 3.5, cz + 1.4, lower level)
+        const distGuestShower = pos.distanceTo(new THREE.Vector3(cx + 3.5, cy + 0.1, cz + 1.4));
+        if (distGuestShower <= 2.2) {
           if (state.ownedProperties?.includes("bompai-penthouse")) {
             return {
-              prompt: "Take Hot Rain Shower in Luxury Bathroom",
+              prompt: "Take Rain Shower in Guest Bathroom",
               action: () => ({
                 statusMessage: "Hot rain shower taken! Sahel dust washed away and hygiene restored to 100%.",
-                takeShower: { label: "Bompai Luxury Rain Shower" },
+                takeShower: { label: "Bompai Guest Rain Shower" },
               }),
             };
           }
         }
 
-        // 5. Gourmet Island Kitchen & Double-Door Fridge (cx + 5.0, cz - 3.5)
-        const distKitchen = pos.distanceTo(new THREE.Vector3(cx + 5.0, cy + 0.1, cz - 3.5));
-        if (distKitchen <= 2.2) {
+        // 9. Guest Bathroom Vanity Sink (cx + 6.8, cz + 1.2, lower level)
+        const distGuestSink = pos.distanceTo(new THREE.Vector3(cx + 6.8, cy + 0.1, cz + 1.2));
+        if (distGuestSink <= 2.0) {
           if (state.ownedProperties?.includes("bompai-penthouse")) {
             return {
-              prompt: "Prepare Meal at Gourmet Island Kitchen",
+              prompt: "Wash Hands at Guest Vanity Basin",
               action: () => ({
-                statusMessage: "Gourmet meal prepared and enjoyed at the granite island bar. Hunger satisfied!",
-                eatFood: { amount: 55, label: "Gourmet Island Meal" },
+                statusMessage: "Freshened up at the marble guest vanity basin. Clean and revitalized!",
+                washHands: { label: "Guest Marble Vanity Sink" },
               }),
             };
           }
         }
 
-        // 6. Rooftop Skyline Terrace Vista (cx, cz + 6.8, y = -56.5)
-        const distTerrace = pos.distanceTo(new THREE.Vector3(cx, cy + floor2Elevation + 0.1, cz + 6.8));
-        if (distTerrace <= 2.4) {
-          return {
-            prompt: "Look Out Across Kano City Skyline",
-            action: () => ({
-              statusMessage: "Bompai Skyline Terrace: 360° panoramic view spanning from Dala Hill to Airport Road. The ancient and modern city stretches below.",
-            }),
-          };
+        // 10. Upper Mezzanine Executive Workstation (cx + 5.0, cz + 2.8, y = -56.5)
+        const distWorkstation = pos.distanceTo(new THREE.Vector3(cx + 5.0, cy + floor2Elevation + 0.1, cz + 2.8));
+        if (distWorkstation <= 2.4) {
+          if (state.ownedProperties?.includes("bompai-penthouse")) {
+            return {
+              prompt: "Use Executive Workstation: High-Value Remote Contracts & Ledger Audit",
+              action: () => ({
+                statusMessage: "Bompai Executive Study: Dual-monitor workstation running financial logistics models and client contracts.",
+                freelanceContractAction: true,
+              }),
+            };
+          }
         }
 
-        // 3. Penthouse Lighting Chandelier Switch (cx - 1.0, cz - 1.0)
-        const distSwitch = pos.distanceTo(new THREE.Vector3(cx - 1.0, cy + 0.1, cz - 1.0));
-        if (distSwitch <= 2.0) {
+        // 11. Master Penthouse Suite Bed (cx - 5.0, cz + 2.8, y = -56.5)
+        const distMasterBed = pos.distanceTo(new THREE.Vector3(cx - 5.0, cy + floor2Elevation + 0.1, cz + 2.8));
+        if (distMasterBed <= 2.4) {
+          if (state.ownedProperties?.includes("bompai-penthouse")) {
+            return {
+              prompt: "Sleep & Rest in Master Penthouse Suite (Advance 6 Hours)",
+              action: () => ({
+                statusMessage: "Overnight rest in the Master Penthouse suite with panoramic Kano city lights below. Energy 100%!",
+                sleepInBed: { hours: 6 },
+                timeDeltaMinutes: 360,
+              }),
+            };
+          }
+        }
+
+        // 12. Executive Wall Safe (cx - 8.7, cz + 3.5, y = -56.5)
+        const distSafe = pos.distanceTo(new THREE.Vector3(cx - 8.7, cy + floor2Elevation + 0.1, cz + 3.5));
+        if (distSafe <= 2.4) {
+          if (state.ownedProperties?.includes("bompai-penthouse")) {
+            return {
+              prompt: "Access Executive Deed Safe (Title Deed & 12-Panel Solar Status)",
+              action: () => ({
+                statusMessage: "Executive Safe: Freehold Title Deed #BH-PENT-08 verified. 12-Panel Solar Inverter Battery Bank: 100% capacity (Nominal 48V, 200Ah).",
+              }),
+            };
+          }
+        }
+
+        // 13. Master Ensuite Luxury Bath & Shower (cx - 2.2, cz + 1.8, y = -56.5)
+        const distMasterBath = pos.distanceTo(new THREE.Vector3(cx - 2.2, cy + floor2Elevation + 0.1, cz + 1.8));
+        if (distMasterBath <= 2.2) {
+          if (state.ownedProperties?.includes("bompai-penthouse")) {
+            return {
+              prompt: "Take Luxury Soaking Bath & Shower in Master Ensuite",
+              action: () => ({
+                statusMessage: "Soaked peacefully in the master ensuite freestanding tub with scented bath oils. Hygiene 100%!",
+                takeShower: { label: "Master Penthouse Luxury Ensuite" },
+              }),
+            };
+          }
+        }
+
+        // 14. Skyline Rooftop Terrace Vista & Seating (y = -56.5)
+        const isNearTerrace =
+          Math.abs(pos.x - (cx - 2.0)) <= 4.5 &&
+          Math.abs(pos.z - (cz + 6.8)) <= 2.5 &&
+          Math.abs(pos.y - (cy + floor2Elevation + 0.1)) <= 1.5;
+        if (isNearTerrace) {
           return {
-            prompt: this.lightsOn ? "Switch Off Penthouse Chandelier" : "Switch On Penthouse Chandelier",
-            action: () => {
-              const on = this.toggleInteriorLights("penthouse");
-              return { statusMessage: on ? "Bompai Penthouse: Luxury crystal chandelier illuminated." : "Bompai Penthouse: Lights dimmed to ambient mode." };
-            },
+            prompt: "Sit on Terrace & Admire Kano City Skyline",
+            action: () => ({
+              statusMessage: "Bompai Skyline Terrace: Reclined on teak lounge chairs. 360° panoramic view spanning from Dala Hill to Airport Road.",
+              sitDown: { label: "Skyline Rooftop Terrace", energyRestored: 25 },
+              timeDeltaMinutes: 20,
+            }),
           };
         }
 
@@ -802,6 +1182,10 @@ export class BuildingInteriorManager {
     const woodMat = this.materials.wood;
     const glassMat = this.materials.glassLit || this.materials.glass;
     const darkMat = this.materials.darkTrim;
+    const metalMat = this.materials.metal;
+    const whiteMat = this.materials.white;
+    const blackMat = this.materials.black;
+    const cyanMat = this.materials.neonCyan || this.materials.glassLit;
 
     // Floor & Ceiling Slabs
     addBox(group, floorMat, 0, 0, 0, width, 0.1, depth, false);
@@ -813,74 +1197,152 @@ export class BuildingInteriorManager {
     addBox(group, wallMat, -width / 2, height / 2, 0, 0.25, height, depth); // West Wall
     addBox(group, wallMat, width / 2, height / 2, 0, 0.25, height, depth);  // East Wall
 
-    // 1. Entrance Vestibule & Hallway (z: 3.5 to 5.5, x: -1.5 to 1.5)
+    // 1. Entrance Vestibule & Hallway (z: 3.6 to 5.8, x: -1.2 to 1.2)
     addBox(group, woodMat, 0, 1.1, depth / 2 - 0.08, 1.2, 2.2, 0.1); // Front Door
+    // Illuminated Exit Sign above door
+    const exitSignMat = makeSignMaterial("EXIT TO AIRPORT ROAD", "#065f46");
+    addBox(group, exitSignMat, 0, 2.45, depth / 2 - 0.08, 1.6, 0.38, 0.06);
+    // Welcome mat
+    addBox(group, darkMat, 0, 0.04, 4.8, 1.2, 0.02, 0.8, false);
+    // Wooden shoe cabinet
+    addBox(group, woodMat, 1.0, 0.45, 4.8, 0.35, 0.8, 1.2);
+    // Wall coat pegs with hooks
+    addBox(group, woodMat, -1.0, 1.6, 4.8, 0.08, 0.15, 1.0);
+    // Wall light switch
+    addBox(group, whiteMat, -0.6, 1.4, 3.8, 0.1, 0.14, 0.04);
 
-    // 2. Open-Concept Living Room (x: -6.0 to 0, z: -3.5 to 2.0)
-    addBox(group, this.materials.cloth, -3.2, 0.48, -0.8, 3.4, 0.52, 1.1); // Sofa
-    addBox(group, this.materials.cloth, -5.4, 0.48, 0.6, 1.0, 0.52, 2.2);  // Sofa L-extension
-    addBox(group, woodMat, -3.2, 0.35, 0.6, 1.6, 0.36, 0.9);              // Coffee Table
-    addBox(group, this.materials.clothRed, -3.2, 0.05, 0.2, 4.0, 0.02, 3.4, false); // Area Rug
-    // Entertainment Wall
-    addBox(group, darkMat, -3.2, 0.45, -3.8, 3.4, 0.6, 0.5);
-    addBox(group, this.materials.black, -3.2, 1.6, -3.85, 2.4, 1.3, 0.08);
+    // 2. Open-Concept Living Room (x: -6.8 to -0.6, z: -3.8 to 2.2)
+    // 3-Seater L-Sectional Sofa & Armchair
+    addBox(group, this.materials.cloth, -3.4, 0.48, -0.6, 3.4, 0.52, 1.1); // Sofa main
+    addBox(group, this.materials.cloth, -5.6, 0.48, 0.8, 1.0, 0.52, 2.2);  // Chaise
+    addBox(group, this.materials.cloth, -1.6, 0.48, 1.2, 0.9, 0.52, 0.85); // Single Armchair
+    // Scatter cushions
+    addBox(group, this.materials.clothRed, -4.2, 0.65, -0.4, 0.4, 0.35, 0.15);
+    addBox(group, this.materials.goldTrim || woodMat, -2.6, 0.65, -0.4, 0.4, 0.35, 0.15);
+    // Coffee Table with glass surface
+    addBox(group, woodMat, -3.4, 0.35, 0.8, 1.6, 0.36, 0.9);
+    addBox(group, glassMat, -3.4, 0.39, 0.8, 1.5, 0.02, 0.8);
+    // Arewa geometric pattern rug
+    addBox(group, this.materials.carpetRed || this.materials.clothRed, -3.4, 0.05, 0.3, 4.2, 0.02, 3.6, false);
+    // Floating Entertainment Media Console
+    addBox(group, darkMat, -3.4, 0.45, -3.8, 3.6, 0.6, 0.5);
+    // 55" Smart TV with glowing screen
+    addBox(group, blackMat, -3.4, 1.6, -3.85, 2.4, 1.3, 0.08);
+    addBox(group, cyanMat, -3.4, 1.6, -3.81, 2.2, 1.15, 0.02); // Screen glow
+    // Soundbar
+    addBox(group, metalMat, -3.4, 0.78, -3.8, 1.4, 0.08, 0.12);
+    // Standing floor arc lamp
+    addCyl(group, this.materials.goldTrim || metalMat, -5.8, 0.9, -3.5, 0.16, 1.8);
+    addBox(group, this.materials.lampGlow || whiteMat, -5.8, 1.85, -3.3, 0.45, 0.35, 0.45);
 
-    // 3. Private Executive Balcony (x: -6.0 to 0, z: -5.8 to -4.0)
-    addBox(group, this.materials.concrete, -3.2, 0.05, -4.8, 5.6, 0.08, 1.6, false);
-    // Balcony Metal Railing
-    addBox(group, this.materials.metal, -3.2, 0.55, -5.7, 5.6, 1.1, 0.08);
-    // Sliding Glass Door
-    addBox(group, glassMat, -3.2, 1.4, -4.0, 3.2, 2.4, 0.08);
+    // 3. Private Executive Balcony (x: -6.8 to -1.0, z: -5.8 to -4.0)
+    addBox(group, this.materials.concrete, -3.4, 0.05, -4.8, 5.6, 0.08, 1.6, false);
+    addBox(group, metalMat, -3.4, 0.55, -5.7, 5.6, 1.1, 0.08); // Railing
+    addBox(group, glassMat, -3.4, 1.4, -4.0, 3.2, 2.4, 0.08);  // Sliding glass door
+    // Teak Bistro Set
+    addBox(group, woodMat, -3.4, 0.45, -4.8, 0.8, 0.06, 0.8);
+    addBox(group, darkMat, -4.2, 0.42, -4.8, 0.42, 0.42, 0.42);
+    addBox(group, darkMat, -2.6, 0.42, -4.8, 0.42, 0.42, 0.42);
 
-    // 4. Open-Plan Kitchen & Dining Area (x: 1.0 to 6.2, z: -3.5 to 2.0)
-    // L-Shaped Kitchen Counter & Cabinets
-    addBox(group, this.materials.concrete, 5.2, 0.95, -1.8, 1.2, 1.0, 3.6);
-    addBox(group, this.materials.metal, 5.2, 1.02, -1.8, 1.3, 0.08, 3.8); // Steel top
+    // 4. Open-Plan Kitchen & Dining (x: 0.8 to 6.8, z: -3.8 to 2.2)
+    // L-Shaped Kitchen Base & Granite Countertop
+    addBox(group, this.materials.concrete, 5.8, 0.95, -1.4, 1.4, 1.0, 4.2);
+    addBox(group, darkMat, 5.8, 1.02, -1.4, 1.5, 0.08, 4.4); // Granite top
+    // Stainless steel undermount sink & faucet
+    addBox(group, metalMat, 5.8, 1.03, -0.6, 0.7, 0.02, 1.1);
+    addBox(group, metalMat, 6.2, 1.25, -0.6, 0.08, 0.25, 0.15); // Faucet
+    // 4-Burner gas stove & oven
+    addBox(group, darkMat, 5.8, 0.95, -2.4, 1.2, 0.95, 0.85);
+    addBox(group, blackMat, 5.8, 1.03, -2.4, 0.85, 0.04, 0.75); // Cooker top
+    addBox(group, glassMat, 5.2, 0.55, -2.4, 0.04, 0.45, 0.6);  // Oven door
+    // Wall-mounted upper cabinets
+    addBox(group, woodMat, 6.2, 2.4, -1.4, 0.7, 0.9, 4.2);
+    // Refrigerator
+    addBox(group, metalMat, 4.2, 1.4, -3.6, 0.9, 2.2, 0.8);
+    addBox(group, darkMat, 3.75, 1.4, -3.6, 0.04, 0.8, 0.04); // Fridge handle
+    // Countertop microwave & espresso maker
+    addBox(group, metalMat, 5.8, 1.25, -3.2, 0.6, 0.38, 0.42);
     // Dining Table & Chairs
-    addBox(group, woodMat, 2.6, 0.76, 0.2, 1.8, 0.08, 1.2);
+    addBox(group, woodMat, 2.6, 0.76, 0.5, 1.8, 0.08, 1.2);
     for (const sx of [-0.65, 0.65]) {
       for (const sz of [-0.45, 0.45]) {
-        addCyl(group, this.materials.metal, 2.6 + sx, 0.38, 0.2 + sz, 0.035, 0.72);
+        addCyl(group, metalMat, 2.6 + sx, 0.38, 0.5 + sz, 0.035, 0.72);
+        addBox(group, darkMat, 2.6 + sx * 1.3, 0.48, 0.5 + sz, 0.42, 0.48, 0.42);
       }
     }
 
-    // 5. Rental Desk & Deed Inspection Station (x: 4.0, z: -3.2)
-    addBox(group, woodMat, 2.8, 0.5, -3.2, 1.8, 0.85, 0.9);
-    const signMat = makeSignMaterial("UNIT 2B · LEASE & DEED DESK\n₦75,000 / MO · ₦18,000,000 FREEHOLD", "#1e3c28");
-    addBox(group, signMat, 2.8, 1.35, -3.2, 1.6, 0.65, 0.08);
+    // 5. Study & Workstation (x: 0.8 to 3.8, z: -3.8 to -1.8)
+    addBox(group, woodMat, 2.4, 0.75, -3.4, 1.6, 0.08, 0.85); // Desk
+    addBox(group, darkMat, 2.4, 0.88, -3.6, 0.2, 0.18, 0.15); // Monitor stand
+    addBox(group, cyanMat, 2.4, 1.15, -3.6, 0.8, 0.48, 0.04); // Glowing screen
+    addBox(group, blackMat, 2.4, 0.8, -3.25, 0.5, 0.02, 0.2); // Keyboard
+    addBox(group, darkMat, 2.4, 0.5, -2.7, 0.55, 0.55, 0.55); // Swivel chair
+    addBox(group, woodMat, 2.4, 2.1, -3.8, 1.5, 0.7, 0.28);  // Bookshelf
+    const deskSignMat = makeSignMaterial("UNIT 2B · LEASE & DEED WORKSTATION\n₦75,000 / MO · ₦18,000,000 FREEHOLD", "#1e3c28");
+    addBox(group, deskSignMat, 2.4, 1.72, -3.8, 1.6, 0.45, 0.06);
 
-    // 6. Master Bedroom (x: -6.0 to -1.0, z: 2.2 to 5.5)
-    addBox(group, wallMat, -1.0, height / 2, 3.8, 0.2, height, 3.6); // Partition Wall
+    // 6. Master Bedroom (x: -6.8 to -1.2, z: 2.0 to 5.8)
+    addBox(group, wallMat, -1.2, height / 2, 3.9, 0.2, height, 3.8); // Partition Wall
     // Queen Bed
-    addBox(group, woodMat, -3.8, 0.42, 3.8, 2.2, 0.48, 2.4);
-    addBox(group, this.materials.white, -3.8, 0.68, 3.8, 2.1, 0.22, 2.3);
-    addBox(group, darkMat, -3.8, 1.2, 5.1, 2.4, 1.2, 0.12); // Headboard
+    addBox(group, woodMat, -4.2, 0.42, 3.8, 2.2, 0.45, 2.4);
+    addBox(group, whiteMat, -4.2, 0.68, 3.8, 2.1, 0.22, 2.3);
+    addBox(group, this.materials.cloth, -4.2, 0.75, 4.2, 2.1, 0.12, 1.4); // Duvet
+    addBox(group, whiteMat, -4.8, 0.78, 2.9, 0.7, 0.14, 0.45); // Pillows
+    addBox(group, whiteMat, -3.6, 0.78, 2.9, 0.7, 0.14, 0.45);
+    addBox(group, darkMat, -4.2, 1.3, 5.0, 2.4, 1.2, 0.12); // Headboard
+    // Twin Nightstands & Bedside Lamps
+    addBox(group, woodMat, -5.8, 0.4, 4.8, 0.6, 0.65, 0.5);
+    addBox(group, woodMat, -2.6, 0.4, 4.8, 0.6, 0.65, 0.5);
+    addBox(group, this.materials.lampGlow || whiteMat, -5.8, 0.85, 4.8, 0.25, 0.35, 0.25);
+    addBox(group, this.materials.lampGlow || whiteMat, -2.6, 0.85, 4.8, 0.25, 0.35, 0.25);
+    // Mirrored 2-Door Wardrobe
+    addBox(group, woodMat, -6.4, 1.4, 3.0, 0.65, 2.4, 1.8);
+    addBox(group, glassMat, -6.05, 1.4, 3.0, 0.04, 2.2, 1.6); // Mirror door
 
-    // 7. Bathroom & Toilet (x: 1.5 to 6.2, z: 2.2 to 5.5)
-    addBox(group, wallMat, 1.2, height / 2, 3.8, 0.2, height, 3.6); // Partition Wall
-    // Vanity Sink & Mirror
-    addBox(group, this.materials.tileFloor || this.materials.white, 3.0, 0.85, 4.8, 1.2, 0.85, 0.6);
-    addBox(group, glassMat, 3.0, 1.65, 5.15, 0.9, 0.8, 0.04); // Mirror
-    // Shower Stall
-    addBox(group, glassMat, 5.0, 1.2, 3.8, 1.4, 2.4, 1.4);
+    // 7. Ensuite Bathroom (x: 1.2 to 6.8, z: 2.0 to 5.8)
+    addBox(group, wallMat, 1.2, height / 2, 3.9, 0.2, height, 3.8); // Partition Wall
+    // Ceramic Vanity Washbasin & Lighted Mirror
+    addBox(group, this.materials.tileFloor || whiteMat, 3.2, 0.85, 5.2, 1.2, 0.85, 0.6);
+    addBox(group, metalMat, 3.2, 1.15, 5.1, 0.08, 0.25, 0.15); // Chrome tap
+    addBox(group, glassMat, 3.2, 1.85, 5.45, 0.9, 0.85, 0.04);  // Lighted mirror
+    // Ceramic Toilet & Cistern
+    addBox(group, whiteMat, 5.0, 0.42, 5.2, 0.5, 0.42, 0.65);
+    addBox(group, whiteMat, 5.0, 0.85, 5.45, 0.55, 0.5, 0.25);
+    // Walk-in Glass Shower Stall
+    addBox(group, glassMat, 5.4, 1.3, 3.0, 1.6, 2.4, 1.6);
+    addBox(group, metalMat, 5.4, 2.2, 3.0, 0.25, 0.08, 0.25); // Rain head
+    // Towel rack with towels
+    addBox(group, whiteMat, 2.0, 1.3, 5.45, 0.6, 0.5, 0.08);
 
     // Interactive Doors
-    this.addInteractiveDoor(group, "apartment", "apt_bedroom_door", "Master Bedroom Door", -1.0, 0, 2.2, 1.1, 2.4, 0.08, woodMat, cx, cz, false, colliders);
+    this.addInteractiveDoor(group, "apartment", "apt_bedroom_door", "Master Bedroom Door", -1.2, 0, 2.2, 1.1, 2.4, 0.08, woodMat, cx, cz, false, colliders);
     this.addInteractiveDoor(group, "apartment", "apt_bathroom_door", "Bathroom Door", 1.2, 0, 2.2, 1.1, 2.4, 0.08, woodMat, cx, cz, false, colliders);
-    this.addInteractiveDoor(group, "apartment", "apt_balcony_door", "Balcony Sliding Door", -3.2, 0, -4.0, 1.4, 2.4, 0.08, glassMat, cx, cz, true, colliders);
+    this.addInteractiveDoor(group, "apartment", "apt_balcony_door", "Balcony Sliding Door", -3.4, 0, -4.0, 1.4, 2.4, 0.08, glassMat, cx, cz, true, colliders);
 
-    // Warm Lighting
+    // Multi-Room Atmospheric Point Lights
     const aptLivingLight = new THREE.PointLight("#fff5e6", 2.2, 14, 1.2);
-    aptLivingLight.position.set(-3.2, height - 0.6, -0.8);
+    aptLivingLight.position.set(-3.4, height - 0.6, -0.6);
     aptLivingLight.userData.baseIntensity = 2.2;
     group.add(aptLivingLight);
     lights.push(aptLivingLight);
 
-    const aptBedLight = new THREE.PointLight("#ffe0b2", 1.6, 10, 1.3);
-    aptBedLight.position.set(-3.8, height - 0.7, 3.8);
-    aptBedLight.userData.baseIntensity = 1.6;
+    const aptBedLight = new THREE.PointLight("#ffe0b2", 1.8, 10, 1.3);
+    aptBedLight.position.set(-4.2, height - 0.7, 3.8);
+    aptBedLight.userData.baseIntensity = 1.8;
     group.add(aptBedLight);
     lights.push(aptBedLight);
+
+    const aptKitchenLight = new THREE.PointLight("#fff0d4", 1.8, 10, 1.3);
+    aptKitchenLight.position.set(3.6, height - 0.7, -0.6);
+    aptKitchenLight.userData.baseIntensity = 1.8;
+    group.add(aptKitchenLight);
+    lights.push(aptKitchenLight);
+
+    const aptBathLight = new THREE.PointLight("#ffffff", 1.6, 8, 1.4);
+    aptBathLight.position.set(3.8, height - 0.7, 4.0);
+    aptBathLight.userData.baseIntensity = 1.6;
+    group.add(aptBathLight);
+    lights.push(aptBathLight);
 
     // Colliders (shifted to world coordinates cx, cz)
     colliders.push(
@@ -889,24 +1351,30 @@ export class BuildingInteriorManager {
       { x: cx, z: cz + depth / 2, halfX: width / 2, halfZ: 0.3, height },
       { x: cx - width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height },
       { x: cx + width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height },
-      // Living Room Sofa & Media Credenza
-      { x: cx - 3.2, z: cz - 0.8, halfX: 1.8, halfZ: 0.6, height: 1.2 },
-      { x: cx - 5.4, z: cz + 0.6, halfX: 0.6, halfZ: 1.2, height: 1.2 },
-      { x: cx - 3.2, z: cz - 3.8, halfX: 1.8, halfZ: 0.3, height: 1.8 },
+      // Bedroom & Bathroom Partition Walls
+      { x: cx - 1.2, z: cz + 3.9, halfX: 0.15, halfZ: 1.9, height },
+      { x: cx + 1.2, z: cz + 3.9, halfX: 0.15, halfZ: 1.9, height },
+      // Living Room Sofa & Chaise
+      { x: cx - 3.4, z: cz - 0.6, halfX: 1.8, halfZ: 0.6, height: 1.2 },
+      { x: cx - 5.6, z: cz + 0.8, halfX: 0.6, halfZ: 1.2, height: 1.2 },
+      { x: cx - 3.4, z: cz + 0.8, halfX: 0.85, halfZ: 0.5, height: 0.6 },
+      // Media Credenza & TV
+      { x: cx - 3.4, z: cz - 3.8, halfX: 1.9, halfZ: 0.3, height: 2.0 },
       // Balcony Railing
-      { x: cx - 3.2, z: cz - 5.7, halfX: 2.8, halfZ: 0.1, height: 1.2 },
-      // Kitchen Counter
-      { x: cx + 5.2, z: cz - 1.8, halfX: 0.7, halfZ: 1.9, height: 1.2 },
+      { x: cx - 3.4, z: cz - 5.7, halfX: 2.9, halfZ: 0.1, height: 1.2 },
+      // Kitchen Counter & Refrigerator
+      { x: cx + 5.8, z: cz - 1.4, halfX: 0.8, halfZ: 2.2, height: 1.2 },
+      { x: cx + 4.2, z: cz - 3.6, halfX: 0.5, halfZ: 0.5, height: 2.2 },
       // Dining Table
-      { x: cx + 2.6, z: cz + 0.2, halfX: 1.0, halfZ: 0.7, height: 1.1 },
-      // Rental Desk
-      { x: cx + 4.0, z: cz - 3.2, halfX: 1.0, halfZ: 0.6, height: 1.8 },
-      // Bedroom Partition & Bed
-      { x: cx - 1.0, z: cz + 3.8, halfX: 0.2, halfZ: 1.8, height },
-      { x: cx - 3.8, z: cz + 3.8, halfX: 1.2, halfZ: 1.3, height: 1.2 },
-      // Bathroom Partition
-      { x: cx + 1.2, z: cz + 3.8, halfX: 0.2, halfZ: 1.8, height },
-      { x: cx + 5.0, z: cz + 3.8, halfX: 0.8, halfZ: 0.8, height: 2.2 },
+      { x: cx + 2.6, z: cz + 0.5, halfX: 1.0, halfZ: 0.7, height: 1.1 },
+      // Study Desk
+      { x: cx + 2.4, z: cz - 3.4, halfX: 0.9, halfZ: 0.5, height: 1.2 },
+      // Master Bed & Wardrobe
+      { x: cx - 4.2, z: cz + 3.8, halfX: 1.2, halfZ: 1.3, height: 1.4 },
+      { x: cx - 6.4, z: cz + 3.0, halfX: 0.4, halfZ: 1.0, height: 2.4 },
+      // Shower Stall & Vanity
+      { x: cx + 5.4, z: cz + 3.0, halfX: 0.9, halfZ: 0.9, height: 2.4 },
+      { x: cx + 4.2, z: cz + 5.2, halfX: 1.8, halfZ: 0.4, height: 1.2 },
     );
 
     this.interiors.set("apartment", {
@@ -922,9 +1390,86 @@ export class BuildingInteriorManager {
       outdoorDoorPosition: new THREE.Vector3(48, 0, -43.5),
       outdoorDoorYaw: 0,
       checkInteraction: (pos, state) => {
-        // Distance to rental & deed desk / study workstation (cx + 2.8, cz - 3.2)
-        const d = pos.distanceTo(new THREE.Vector3(cx + 2.8, cy + 0.1, cz - 3.2));
-        if (d <= 2.2) {
+        // 1. Light switch near entrance vestibule (cx - 0.6, cz + 3.8)
+        const distSwitch = pos.distanceTo(new THREE.Vector3(cx - 0.6, cy + 0.1, cz + 3.8));
+        if (distSwitch <= 1.8) {
+          return {
+            prompt: this.lightsOn ? "Switch Off Apartment Lighting" : "Switch On Apartment Lighting",
+            action: () => {
+              const on = this.toggleInteriorLights("apartment");
+              return { statusMessage: on ? "Unit 2B: Warm interior illumination active." : "Unit 2B: Interior lights dimmed." };
+            },
+          };
+        }
+
+        // 2. Living room sofa seating (cx - 3.4, cz - 0.6)
+        const distSofa = pos.distanceTo(new THREE.Vector3(cx - 3.4, cy + 0.1, cz - 0.6));
+        if (distSofa <= 2.2) {
+          return {
+            prompt: "Sit & Rest on Living Room Sofa",
+            action: () => ({
+              statusMessage: "Relaxed comfortably on the living room sofa. Energy refreshed!",
+              sitDown: { label: "Unit 2B Living Room Sofa", energyRestored: 20 },
+              timeDeltaMinutes: 15,
+            }),
+          };
+        }
+
+        // 3. Living room TV media wall (cx - 3.4, cz - 3.2)
+        const distTv = pos.distanceTo(new THREE.Vector3(cx - 3.4, cy + 0.1, cz - 3.2));
+        if (distTv <= 2.4) {
+          return {
+            prompt: "Watch Kano State TV & News on 55\" Smart TV",
+            action: () => ({
+              statusMessage: "Watching Kano State TV on the 55\" Smart TV. News and NPFL match highlights broadcasting!",
+              watchTv: { label: "Unit 2B Smart TV", energyRestored: 15 },
+              timeDeltaMinutes: 30,
+            }),
+          };
+        }
+
+        // 4. Balcony bistro seating (cx - 3.4, cz - 4.8)
+        const distBalcony = pos.distanceTo(new THREE.Vector3(cx - 3.4, cy + 0.1, cz - 4.8));
+        if (distBalcony <= 2.2) {
+          return {
+            prompt: "Sit on Balcony Bistro Chair & Enjoy Sunset Breeze",
+            action: () => ({
+              statusMessage: "Stepped onto the private balcony looking over Airport Road. The evening Harmattan breeze is cool.",
+              sitDown: { label: "Unit 2B Sunset Balcony", energyRestored: 15 },
+              timeDeltaMinutes: 15,
+            }),
+          };
+        }
+
+        // 5. Kitchen meal preparation (cx + 5.2, cz - 1.4)
+        const distKitchen = pos.distanceTo(new THREE.Vector3(cx + 5.2, cy + 0.1, cz - 1.4));
+        if (distKitchen <= 1.6) {
+          return {
+            prompt: "Prepare & Eat Fresh Meal in Kitchen",
+            action: () => ({
+              statusMessage: "Cooked a delicious hot meal of rice, spicy dodo, and grilled chicken in the kitchen!",
+              eatFood: { amount: 45, label: "Apartment Home Meal" },
+              timeDeltaMinutes: 25,
+            }),
+          };
+        }
+
+        // 6. Kitchen refrigerator refreshment (cx + 4.2, cz - 3.6)
+        const distFridge = pos.distanceTo(new THREE.Vector3(cx + 4.2, cy + 0.1, cz - 3.6));
+        if (distFridge <= 1.4) {
+          return {
+            prompt: "Take Chilled Zobo from Refrigerator",
+            action: () => ({
+              statusMessage: "Grabbed a chilled bottle of spiced Zobo from the refrigerator! Refreshing and revitalizing.",
+              drinkBeverage: { label: "Chilled Zobo Drink", hungerGain: 25, energyGain: 10 },
+              timeDeltaMinutes: 5,
+            }),
+          };
+        }
+
+        // 7. Study / Workstation desk & PC (cx + 2.0, cz - 3.4)
+        const distWorkstation = pos.distanceTo(new THREE.Vector3(cx + 2.0, cy + 0.1, cz - 3.4));
+        if (distWorkstation <= 1.8) {
           if (state.ownedProperties?.includes("unit-2b")) {
             return {
               prompt: "Workstation: Check Remote Freelance Contracts & Title Deed",
@@ -967,8 +1512,8 @@ export class BuildingInteriorManager {
           };
         }
 
-        // Bedroom Bed at (cx - 3.8, cz + 3.8)
-        const distBed = pos.distanceTo(new THREE.Vector3(cx - 3.8, cy + 0.1, cz + 3.8));
+        // 8. Bedroom Master Bed (cx - 4.2, cz + 3.8)
+        const distBed = pos.distanceTo(new THREE.Vector3(cx - 4.2, cy + 0.1, cz + 3.8));
         if (distBed <= 2.4) {
           if (state.hasApartmentRental || state.ownedProperties?.includes("unit-2b")) {
             return {
@@ -982,33 +1527,34 @@ export class BuildingInteriorManager {
           }
         }
 
-        // Ensuite Bathroom Shower at (cx + 3.8, cz + 3.8)
-        const distShower = pos.distanceTo(new THREE.Vector3(cx + 3.8, cy + 0.1, cz + 3.8));
+        // 9. Ensuite Bathroom Shower (cx + 5.2, cz + 3.0)
+        const distShower = pos.distanceTo(new THREE.Vector3(cx + 5.2, cy + 0.1, cz + 3.0));
         if (distShower <= 2.2) {
           if (state.hasApartmentRental || state.ownedProperties?.includes("unit-2b")) {
             return {
-              prompt: "Take Shower in Unit 2B Bathroom",
+              prompt: "Take Hot Shower in Ensuite Bathroom",
               action: () => ({
-                statusMessage: "Took a refreshing shower! Hygiene restored to 100%.",
-                takeShower: { label: "Unit 2B Bathroom Shower" },
+                statusMessage: "Took a refreshing hot shower! Sahel dust washed away and hygiene restored to 100%.",
+                takeShower: { label: "Unit 2B Ensuite Shower" },
               }),
             };
           }
         }
 
-        // Kitchen at (cx + 2.8, cz - 1.5)
-        const distKitchen = pos.distanceTo(new THREE.Vector3(cx + 2.8, cy + 0.1, cz - 1.5));
-        if (distKitchen <= 2.2) {
+        // 10. Ensuite Bathroom Vanity Sink (cx + 3.2, cz + 5.0)
+        const distSink = pos.distanceTo(new THREE.Vector3(cx + 3.2, cy + 0.1, cz + 5.0));
+        if (distSink <= 2.0) {
           if (state.hasApartmentRental || state.ownedProperties?.includes("unit-2b")) {
             return {
-              prompt: "Grab Refreshment & Meal in Kitchen",
+              prompt: "Wash Hands at Vanity Basin Sink",
               action: () => ({
-                statusMessage: "Had a chilled Zobo and fresh snack in the kitchen. Hunger satisfied!",
-                eatFood: { amount: 45, label: "Apartment Kitchen Snack" },
+                statusMessage: "Washed hands with scented soap at the ceramic vanity sink. Feeling clean and fresh!",
+                washHands: { label: "Unit 2B Ceramic Vanity Sink" },
               }),
             };
           }
         }
+
         return null;
       },
     });

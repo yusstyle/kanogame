@@ -66,6 +66,48 @@ export class LifeSimulationSystem {
     };
   }
 
+  public sitAndRest(furnitureLabel = "Sofa", energyGain = 20): { success: boolean; energyGained: number; message: string } {
+    const prev = this.energy;
+    this.energy = Math.min(100, this.energy + energyGain);
+    const gained = Math.round(this.energy - prev);
+    return {
+      success: true,
+      energyGained: gained,
+      message: `Relaxed on ${furnitureLabel}. Energy refreshed (+${gained}%). Currently: ${Math.round(this.energy)}%.`,
+    };
+  }
+
+  public watchTelevision(tvLabel = "Smart TV", energyGain = 15): { success: boolean; energyGained: number; message: string } {
+    const prev = this.energy;
+    this.energy = Math.min(100, this.energy + energyGain);
+    const gained = Math.round(this.energy - prev);
+    return {
+      success: true,
+      energyGained: gained,
+      message: `Watched ${tvLabel}. Entertainment enjoyed (+${gained}% energy). Currently: ${Math.round(this.energy)}%.`,
+    };
+  }
+
+  public washHands(sinkLabel = "Vanity Sink", hygieneGain = 35): { success: boolean; hygieneGained: number; message: string } {
+    const prev = this.hygiene;
+    this.hygiene = Math.min(100, this.hygiene + hygieneGain);
+    const gained = Math.round(this.hygiene - prev);
+    return {
+      success: true,
+      hygieneGained: gained,
+      message: `Freshened up at ${sinkLabel}. Hygiene restored (+${gained}%). Currently: ${Math.round(this.hygiene)}%.`,
+    };
+  }
+
+  public drinkBeverage(beverageLabel = "Chilled Zobo", hungerGain = 25, energyGain = 10): { success: boolean; message: string } {
+    this.hunger = Math.min(100, this.hunger + hungerGain);
+    this.energy = Math.min(100, this.energy + energyGain);
+    return {
+      success: true,
+      message: `Enjoyed ${beverageLabel} from the refrigerator! Hunger and energy refreshed.`,
+    };
+  }
+
   public getSpeedMultiplier(): number {
     if (this.energy < 20 || this.hunger < 20) {
       // Gentle non-punitive penalty: 15% reduction
