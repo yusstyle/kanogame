@@ -232,6 +232,14 @@ export class GameEngine {
       this.colliderIndex,
       (x, z) => this.surfaceHeight(x, z),
     );
+    this.trafficSystem.onCitation = (fine, reason) => {
+      if (this.trafficFine === 0) {
+        this.trafficFine = fine;
+        this.statusMessage = reason;
+        this.pushSnapshot(true);
+        this.saveGame();
+      }
+    };
     this.pedestrianSystem = new PedestrianSystem(
       this.scene,
       this.materials,
@@ -1148,6 +1156,14 @@ export class GameEngine {
       return;
     }
 
+    // Check KAROTA Mobile Patrol officer interaction
+    const trafficInter = this.trafficSystem.checkTrafficInteraction(this.playerPosition);
+    if (trafficInter) {
+      this.statusMessage = trafficInter.action();
+      this.pushSnapshot(true);
+      return;
+    }
+
     // Check vehicles
     this.toggleVehicle();
   }
@@ -1281,7 +1297,7 @@ export class GameEngine {
         isInterior: Boolean(this.interiorManager.activeInterior),
       });
 
-      this.trafficSystem.update(dt, this.playerPosition, activeVehPos);
+      this.trafficSystem.update(dt, this.playerPosition, activeVehPos, activeSpeed);
       this.pedestrianSystem.update(dt, this.playerPosition, activeVehPos);
     }
     this.updateLighting();
@@ -2276,11 +2292,16 @@ export class GameEngine {
             : `Sani Auto: Engine Tune Stage ${this.economy.vehicleUpgrade.engineStage + 1} (₦${this.economy.vehicleUpgrade.engineStage === 0 ? "50,000" : "95,000"})`;
         }
       }
-      // Check street pedestrians
+      // Check street pedestrians and mobile patrols
       if (!interactionPrompt) {
         const pedInter = this.pedestrianSystem.checkPedestrianInteraction(this.playerPosition);
         if (pedInter) {
           interactionPrompt = pedInter.prompt;
+        } else {
+          const trafficInter = this.trafficSystem.checkTrafficInteraction(this.playerPosition);
+          if (trafficInter) {
+            interactionPrompt = trafficInter.prompt;
+          }
         }
       }
       // Check vehicles

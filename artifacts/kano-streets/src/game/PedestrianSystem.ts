@@ -32,6 +32,8 @@ export interface Pedestrian {
   walkPhase: number;
   personalSpeed: number;
   lookSeed: number;
+  blockedRetries: number;
+  schedulePhase: "commute" | "work" | "leisure" | "rest";
 }
 
 const NPC_PALETTES: PedestrianOptions[] = [
@@ -380,7 +382,7 @@ export class PedestrianSystem {
       const y = this.surfaceHeight(elder.x, elder.z) + 0.35;
 
       model.root.position.set(elder.x, y, elder.z);
-      model.root.rotation.y = elder.yaw;
+      model.root.rotation.set(0, elder.yaw, 0);
       this.root.add(model.root);
 
       this.pedestrians.push({
@@ -402,6 +404,8 @@ export class PedestrianSystem {
         walkPhase: 0,
         personalSpeed: 0,
         lookSeed: index * 3.7 + 1.2,
+        blockedRetries: 0,
+        schedulePhase: "leisure",
       });
     });
   }
@@ -486,7 +490,7 @@ export class PedestrianSystem {
       const y = this.surfaceHeight(npc.x, npc.z);
 
       model.root.position.set(npc.x, y, npc.z);
-      model.root.rotation.y = npc.yaw;
+      model.root.rotation.set(0, npc.yaw, 0);
       this.root.add(model.root);
 
       this.pedestrians.push({
@@ -508,6 +512,8 @@ export class PedestrianSystem {
         walkPhase: index * 1.5,
         personalSpeed: 0,
         lookSeed: index * 2.7,
+        blockedRetries: 0,
+        schedulePhase: "work",
       });
     });
   }
@@ -592,7 +598,7 @@ export class PedestrianSystem {
       const y = this.surfaceHeight(worker.x, worker.z);
 
       model.root.position.set(worker.x, y, worker.z);
-      model.root.rotation.y = worker.yaw;
+      model.root.rotation.set(0, worker.yaw, 0);
       this.root.add(model.root);
 
       this.pedestrians.push({
@@ -614,6 +620,8 @@ export class PedestrianSystem {
         walkPhase: index * 1.7,
         personalSpeed: 0,
         lookSeed: index * 3.1,
+        blockedRetries: 0,
+        schedulePhase: "work",
       });
     });
   }
@@ -634,7 +642,7 @@ export class PedestrianSystem {
       const y = this.surfaceHeight(loc.x, loc.z);
 
       model.root.position.set(loc.x, y, loc.z);
-      model.root.rotation.y = loc.yaw;
+      model.root.rotation.set(0, loc.yaw, 0);
       this.root.add(model.root);
 
       this.pedestrians.push({
@@ -656,6 +664,8 @@ export class PedestrianSystem {
         walkPhase: index * 1.5,
         personalSpeed: 0,
         lookSeed: index * 2.3,
+        blockedRetries: 0,
+        schedulePhase: "work",
       });
     });
   }
@@ -687,7 +697,7 @@ export class PedestrianSystem {
       const initialYaw = Math.atan2(dx, dz);
 
       model.root.position.set(startWp.x, y, startWp.z);
-      model.root.rotation.y = initialYaw;
+      model.root.rotation.set(0, initialYaw, 0);
       this.root.add(model.root);
 
       this.pedestrians.push({
@@ -708,6 +718,8 @@ export class PedestrianSystem {
         walkPhase: Math.random() * Math.PI * 2,
         personalSpeed: 1.1 + Math.random() * 0.35,
         lookSeed: Math.random() * 10,
+        blockedRetries: 0,
+        schedulePhase: "work",
       });
     }
   }
@@ -812,9 +824,25 @@ export class PedestrianSystem {
         }
       }
     } else if (p.state === "walking") {
-      // Pace varies with time of day (faster during rush, relaxed in evening)
-      const timeSpeedMultiplier = (this.timeOfDayHours >= 7 && this.timeOfDayHours <= 9) ? 1.25 : 1.0;
-      p.speed = THREE.MathUtils.damp(p.speed, p.personalSpeed * timeSpeedMultiplier, 6, dt);
+      // Schedule phase & pace adjustment based on time of day
+      let schedulePhase: "commute" | "work" | "leisure" | "rest" = "work";
+      let scheduleSpeedMult = 1.0;
+      if (this.timeOfDayHours >= 6.5 && this.timeOfDayHours < 9.5) {
+        schedulePhase = "commute";
+        scheduleSpeedMult = 1.25; // Morning rush to commercial hubs and market stalls
+      } else if (this.timeOfDayHours >= 9.5 && this.timeOfDayHours < 17.0) {
+        schedulePhase = "work";
+        scheduleSpeedMult = 1.0; // Daytime trading and industrial logistics
+      } else if (this.timeOfDayHours >= 17.0 && this.timeOfDayHours < 21.0) {
+        schedulePhase = "leisure";
+        scheduleSpeedMult = 0.95; // Evening strolls, Suya lounge, and Dandali square
+      } else {
+        schedulePhase = "rest";
+        scheduleSpeedMult = 0.75; // Quiet night hours
+      }
+      p.schedulePhase = schedulePhase;
+
+      p.speed = THREE.MathUtils.damp(p.speed, p.personalSpeed * scheduleSpeedMult, 6, dt);
 
       if (p.destinationPoint && p.position.distanceTo(p.destinationPoint) <= 6.0 && Math.random() < 0.05) {
         p.state = "visiting";
@@ -847,6 +875,12 @@ export class PedestrianSystem {
               const nextId = p.targetWaypoint.nextIds[Math.floor(Math.random() * p.targetWaypoint.nextIds.length)];
               p.targetWaypoint = this.network.pedestrianWaypoints.get(nextId) ?? null;
             }
+          } else {
+            // Safe fallback to any nearby sidewalk waypoint if chain ends
+            const fallbackWp = this.network.pedestrianWaypointList.find(
+              (wp) => Math.hypot(wp.x - p.position.x, wp.z - p.position.z) < 18 && wp.id !== p.currentWaypoint?.id,
+            );
+            if (fallbackWp) p.targetWaypoint = fallbackWp;
           }
         }
 
@@ -865,7 +899,7 @@ export class PedestrianSystem {
       }
     }
 
-    // Move and avoid obstacles
+    // Move and avoid obstacles with bounded retries
     if (p.speed > 0.05) {
       const moveX = Math.sin(p.yaw) * p.speed * dt;
       const moveZ = Math.cos(p.yaw) * p.speed * dt;
@@ -877,10 +911,34 @@ export class PedestrianSystem {
       if (obstacles.length === 0) {
         p.position.x = nextX;
         p.position.z = nextZ;
+        p.blockedRetries = 0;
       } else {
+        p.blockedRetries = (p.blockedRetries || 0) + 1;
         p.state = "idle";
-        p.stateTimer = 1.5;
-        p.yaw += Math.PI * 0.75;
+        p.stateTimer = 1.0;
+
+        if (p.blockedRetries < 3) {
+          // Attempt angle detour around obstacle
+          const detourAngle = (p.lookSeed > 5 ? 1 : -1) * (Math.PI * 0.4);
+          p.yaw += detourAngle;
+        } else {
+          // Bounded retries exhausted: choose alternate sidewalk waypoint to prevent infinite loops
+          p.blockedRetries = 0;
+          const candidateWaypoints = this.network.pedestrianWaypointList.filter((wp) => {
+            const dist = Math.hypot(wp.x - p.position.x, wp.z - p.position.z);
+            return dist > 4 && dist < 28;
+          });
+          if (candidateWaypoints.length > 0) {
+            p.targetWaypoint = candidateWaypoints[Math.floor(Math.random() * candidateWaypoints.length)];
+          } else if (p.currentWaypoint) {
+            p.targetWaypoint = p.currentWaypoint;
+          }
+          if (p.targetWaypoint) {
+            p.yaw = Math.atan2(p.targetWaypoint.x - p.position.x, p.targetWaypoint.z - p.position.z);
+          }
+          p.state = "walking";
+          p.stateTimer = 4.0;
+        }
       }
 
       p.position.y = this.surfaceHeight(p.position.x, p.position.z);
@@ -895,7 +953,7 @@ export class PedestrianSystem {
       }
       p.model.updateAnimation(dt);
       p.model.root.position.set(p.position.x, p.position.y, p.position.z);
-      p.model.root.rotation.y = p.yaw;
+      p.model.root.rotation.set(0, p.yaw, 0);
       return;
     }
 
@@ -911,7 +969,7 @@ export class PedestrianSystem {
 
     const bounce = isMoving ? Math.abs(Math.sin(p.walkPhase * 2)) * 0.03 : 0;
     p.model.root.position.set(p.position.x, p.position.y + bounce, p.position.z);
-    p.model.root.rotation.y = p.yaw;
+    p.model.root.rotation.set(0, p.yaw, 0);
 
     if (p.model.head) {
       const headYaw = Math.sin(this.time * 0.7 + p.lookSeed) * 0.22;
@@ -920,11 +978,12 @@ export class PedestrianSystem {
   }
 
   private animateVendor(p: Pedestrian, dt: number) {
+    p.position.y = this.surfaceHeight(p.position.x, p.position.z);
     if (p.model.riggedCharacter) {
       p.model.playAction("idle", 0.25);
       p.model.updateAnimation(dt);
       p.model.root.position.copy(p.position);
-      p.model.root.rotation.y = p.yaw;
+      p.model.root.rotation.set(0, p.yaw, 0);
       return;
     }
 
@@ -938,7 +997,7 @@ export class PedestrianSystem {
     }
 
     p.model.root.position.copy(p.position);
-    p.model.root.rotation.y = p.yaw;
+    p.model.root.rotation.set(0, p.yaw, 0);
   }
 
   private animateSitting(p: Pedestrian, dt: number) {
@@ -946,7 +1005,7 @@ export class PedestrianSystem {
       p.model.playAction("idle", 0.3);
       p.model.updateAnimation(dt);
       p.model.root.position.copy(p.position);
-      p.model.root.rotation.y = p.yaw;
+      p.model.root.rotation.set(0, p.yaw, 0);
       return;
     }
 
@@ -966,7 +1025,7 @@ export class PedestrianSystem {
     }
 
     p.model.root.position.copy(p.position);
-    p.model.root.rotation.y = p.yaw;
+    p.model.root.rotation.set(0, p.yaw, 0);
   }
 
   public dispose() {

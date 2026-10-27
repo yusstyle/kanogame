@@ -221,19 +221,24 @@ export function createPedestrianModel(
     proceduralBody,
     currentActionName: "idle",
     playAction: (name: "idle" | "walk" | "run" | "drive", crossFadeDuration = 0.2) => {
-      if (!mixer || currentActionName === name) return;
-      const nextAction = actions[name];
-      if (!nextAction) return;
-
-      nextAction.reset();
-      nextAction.enabled = true;
-      if (currentAction && currentAction !== nextAction) {
-        nextAction.crossFadeFrom(currentAction, crossFadeDuration, true);
+      if (!mixer) return;
+      const targetAction = actions[name] || actions["idle"];
+      if (!targetAction) {
+        proceduralBody.visible = true;
+        return;
       }
-      nextAction.play();
-      currentAction = nextAction;
-      currentActionName = name;
-      model.currentActionName = name;
+      const targetName = actions[name] ? name : "idle";
+      if (currentActionName === targetName && currentAction?.isRunning()) return;
+
+      targetAction.reset();
+      targetAction.enabled = true;
+      if (currentAction && currentAction !== targetAction) {
+        targetAction.crossFadeFrom(currentAction, crossFadeDuration, true);
+      }
+      targetAction.play();
+      currentAction = targetAction;
+      currentActionName = targetName;
+      model.currentActionName = targetName;
     },
     updateAnimation: (dt: number) => {
       if (mixer) {

@@ -105,6 +105,21 @@ export class WeatherSystem {
   private boundsHeight = 14;
   private center = new THREE.Vector3();
 
+  // Cached color objects to avoid runtime GC allocations
+  private readonly colSky = new THREE.Color();
+  private readonly colFog = new THREE.Color();
+  private readonly colSun = new THREE.Color();
+  private readonly colHemiSky = new THREE.Color();
+  private readonly colHemiGround = new THREE.Color();
+  private readonly tmpNightSky = new THREE.Color("#0b1424");
+  private readonly tmpNightSun = new THREE.Color("#4a6890");
+  private readonly tmpDawnSky = new THREE.Color("#df9c72");
+  private readonly tmpDawnFog = new THREE.Color("#d28d63");
+  private readonly tmpDawnSun = new THREE.Color("#ffd49c");
+  private readonly tmpSunsetSky = new THREE.Color("#df8855");
+  private readonly tmpSunsetFog = new THREE.Color("#d97843");
+  private readonly tmpSunsetSun = new THREE.Color("#ff9033");
+
   constructor(initialPreset: WeatherPreset = "clear") {
     this.currentPreset = initialPreset;
     this.particleGroup = new THREE.Group();
@@ -221,49 +236,81 @@ export class WeatherSystem {
     const isDay = hourOfDay >= 6 && hourOfDay <= 18;
     const diurnalFactor = isDay ? Math.sin(((hourOfDay - 6) / 12) * Math.PI) : 0.08;
 
-    // Harmonize weather preset with natural time of day
-    let effectiveSky = config.skyColor;
-    let effectiveFog = config.fogColor;
-    let effectiveSun = config.sunColor;
     let effectiveSunIntensity = config.sunIntensity * (0.35 + 0.65 * diurnalFactor);
     let effectiveHemiIntensity = config.hemiIntensity * (0.45 + 0.55 * diurnalFactor);
 
+    // Initialize with base config colors
+    this.colSky.set(config.skyColor);
+    this.colFog.set(config.fogColor);
+    this.colSun.set(config.sunColor);
+    this.colHemiSky.set(config.hemiSkyColor);
+    this.colHemiGround.set(config.hemiGroundColor);
+
     if (this.currentPreset === "clear" || this.currentPreset === "harmattan") {
-      if (hourOfDay >= 17.5 && hourOfDay <= 19.2) {
-        // Evening transition towards sunset glow
-        const sunsetRatio = Math.min(1, Math.max(0, (hourOfDay - 17.5) / 1.7));
-        effectiveSky = sunsetRatio > 0.5 ? "#df8855" : config.skyColor;
-        effectiveFog = sunsetRatio > 0.5 ? "#d97843" : config.fogColor;
-      } else if (hourOfDay < 5.8 || hourOfDay > 19.5) {
-        // Night transition
-        effectiveSky = "#0b1424";
-        effectiveFog = "#0b1424";
-        effectiveSun = "#4a6890";
+      if (hourOfDay >= 5.0 && hourOfDay < 6.8) {
+        // 1. Dawn transition: Night -> Sahelian Dawn Peach -> Daylight
+        const dawnRatio = (hourOfDay - 5.0) / 1.8;
+        if (dawnRatio < 0.5) {
+          const t = dawnRatio * 2.0;
+          this.colSky.copy(this.tmpNightSky).lerp(this.tmpDawnSky, t);
+          this.colFog.copy(this.tmpNightSky).lerp(this.tmpDawnFog, t);
+          this.colSun.copy(this.tmpNightSun).lerp(this.tmpDawnSun, t);
+        } else {
+          const t = (dawnRatio - 0.5) * 2.0;
+          const targetSky = new THREE.Color(config.skyColor);
+          const targetFog = new THREE.Color(config.fogColor);
+          const targetSun = new THREE.Color(config.sunColor);
+          this.colSky.copy(this.tmpDawnSky).lerp(targetSky, t);
+          this.colFog.copy(this.tmpDawnFog).lerp(targetFog, t);
+          this.colSun.copy(this.tmpDawnSun).lerp(targetSun, t);
+        }
+        effectiveSunIntensity = 0.35 + 1.8 * dawnRatio;
+        effectiveHemiIntensity = 0.6 + 0.8 * dawnRatio;
+      } else if (hourOfDay >= 17.2 && hourOfDay < 19.2) {
+        // 2. Sunset glow transition: Daylight -> Amber Golden Glow
+        const sunsetRatio = (hourOfDay - 17.2) / 2.0;
+        this.colSky.lerp(this.tmpSunsetSky, sunsetRatio);
+        this.colFog.lerp(this.tmpSunsetFog, sunsetRatio);
+        this.colSun.lerp(this.tmpSunsetSun, sunsetRatio);
+        effectiveSunIntensity = config.sunIntensity * (0.85 - 0.3 * sunsetRatio);
+      } else if (hourOfDay >= 19.2 && hourOfDay < 20.6) {
+        // 3. Dusk into Night: Sunset Glow -> Starlit Night
+        const duskRatio = (hourOfDay - 19.2) / 1.4;
+        this.colSky.copy(this.tmpSunsetSky).lerp(this.tmpNightSky, duskRatio);
+        this.colFog.copy(this.tmpSunsetFog).lerp(this.tmpNightSky, duskRatio);
+        this.colSun.copy(this.tmpSunsetSun).lerp(this.tmpNightSun, duskRatio);
+        effectiveSunIntensity = 1.4 - 1.05 * duskRatio;
+        effectiveHemiIntensity = 1.1 - 0.5 * duskRatio;
+      } else if (hourOfDay >= 20.6 || hourOfDay < 5.0) {
+        // 4. Starlit Sahelian Night
+        this.colSky.copy(this.tmpNightSky);
+        this.colFog.copy(this.tmpNightSky);
+        this.colSun.copy(this.tmpNightSun);
         effectiveSunIntensity = 0.35;
-        effectiveHemiIntensity = 0.6;
+        effectiveHemiIntensity = 0.65;
       }
     }
 
     if (scene.background instanceof THREE.Color) {
-      scene.background.set(effectiveSky);
+      scene.background.copy(this.colSky);
     } else {
-      scene.background = new THREE.Color(effectiveSky);
+      scene.background = this.colSky.clone();
     }
 
     if (scene.fog && scene.fog instanceof THREE.Fog) {
-      scene.fog.color.set(effectiveFog);
+      scene.fog.color.copy(this.colFog);
       scene.fog.near = config.fogNear;
       scene.fog.far = config.fogFar;
     }
 
     if (sunLight) {
-      sunLight.color.set(effectiveSun);
+      sunLight.color.copy(this.colSun);
       sunLight.intensity = effectiveSunIntensity;
     }
 
     if (hemiLight) {
-      hemiLight.color.set(config.hemiSkyColor);
-      hemiLight.groundColor.set(config.hemiGroundColor);
+      hemiLight.color.copy(this.colHemiSky);
+      hemiLight.groundColor.copy(this.colHemiGround);
       hemiLight.intensity = effectiveHemiIntensity;
     }
   }
