@@ -313,4 +313,9 @@ export type GameMaterials = {
   headlightBeam?: import("three").MeshStandardMaterial;
   weatheredBrick?: import("three").MeshStandardMaterial;
   rustedZinc?: import("three").MeshStandardMaterial;
+  curbStriped?: import("three").MeshStandardMaterial;
+  curbYellowStriped?: import("three").MeshStandardMaterial;
+  solarPanel?: import("three").MeshStandardMaterial;
+  terracotta?: import("three").MeshStandardMaterial;
+  burglarBars?: import("three").MeshStandardMaterial;
 };

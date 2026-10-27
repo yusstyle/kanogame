@@ -193,11 +193,30 @@ function makeStreetlight(
   pole.rotation.y = yaw;
   root.add(pole);
 
-  addCylinder(pole, materials.metal, 0, 3.0, 0, 0.12, 0.1, 6.0);
-  addBox(pole, materials.metal, 0, 5.9, 0.48, 0.12, 0.13, 1.05);
-  addBox(pole, materials.metal, 0, 5.83, 0.98, 0.42, 0.2, 0.55);
-  addBox(pole, materials.glassLit, 0, 5.78, 0.98, 0.28, 0.08, 0.4);
-  return { x, z, halfX: 0.34, halfZ: 0.34, height: 6.1 };
+  // Tapered structural steel pole with flanged ground mounting base
+  addCylinder(pole, materials.metal, 0, 0.22, 0, 0.22, 0.24, 0.44);
+  addCylinder(pole, materials.metal, 0, 3.2, 0, 0.11, 0.14, 6.4);
+
+  // Lower battery / solar charge controller housing box
+  addBox(pole, materials.metal, 0, 1.75, 0.2, 0.35, 0.52, 0.24);
+
+  // Cantilever curved luminaire mast arm projecting over the road
+  addBox(pole, materials.metal, 0, 6.12, 0.65, 0.1, 0.1, 1.35);
+
+  // Modern LED luminaire housing
+  addBox(pole, materials.metal, 0, 6.06, 1.3, 0.38, 0.12, 0.58);
+  // Emissive luminaire lens that illuminates at dusk and night
+  addBox(pole, materials.lampGlow || materials.glassLit, 0, 5.98, 1.3, 0.28, 0.04, 0.46, false);
+
+  // Rooftop photovoltaic monocrystalline solar panel tilted 24 degrees toward the sun
+  const solarGroup = new THREE.Group();
+  solarGroup.position.set(0, 6.55, 0);
+  solarGroup.rotation.x = 0.42;
+  pole.add(solarGroup);
+  addBox(solarGroup, materials.metal, 0, 0, 0, 1.15, 0.04, 0.82);
+  addBox(solarGroup, materials.solarPanel || materials.metal, 0, 0.025, 0, 1.1, 0.02, 0.76);
+
+  return { x, z, halfX: 0.34, halfZ: 0.34, height: 6.6 };
 }
 
 function addStreetSign(root: THREE.Group, colliders: Collider[], x: number, z: number, label: string, yaw: number) {
@@ -290,11 +309,12 @@ function addRoad(
     for (const [start, end] of segments) {
       const segmentLength = end - start;
       const midpoint = (start + end) / 2;
+      const curbMat = road.arterial && materials.curbStriped ? materials.curbStriped : materials.curb;
       if (horizontal) {
         const sidewalkZ = center + side * (roadHalf + sidewalkWidth / 2);
         const curbZ = center + side * (roadHalf + 0.08);
         addBox(root, materials.sidewalk, midpoint, 0.015, sidewalkZ, segmentLength, 0.14, sidewalkWidth);
-        addBox(root, materials.curb, midpoint, curbHeight / 2, curbZ, segmentLength, curbHeight, 0.24, false);
+        addBox(root, curbMat, midpoint, curbHeight / 2, curbZ, segmentLength, curbHeight, 0.24, false);
         const drainZ = center + side * (roadHalf + 0.35);
         addBox(root, materials.drain, midpoint, 0.025, drainZ, segmentLength, 0.035, 0.24, false);
         for (let mark = start + 2; mark < end; mark += 3.3) {
@@ -304,7 +324,7 @@ function addRoad(
         const sidewalkX = center + side * (roadHalf + sidewalkWidth / 2);
         const curbX = center + side * (roadHalf + 0.08);
         addBox(root, materials.sidewalk, sidewalkX, 0.015, midpoint, sidewalkWidth, 0.14, segmentLength);
-        addBox(root, materials.curb, curbX, curbHeight / 2, midpoint, curbHeight, curbHeight, segmentLength, false);
+        addBox(root, curbMat, curbX, curbHeight / 2, midpoint, curbHeight, curbHeight, segmentLength, false);
         const drainX = center + side * (roadHalf + 0.35);
         addBox(root, materials.drain, drainX, 0.025, midpoint, 0.24, 0.035, segmentLength, false);
         for (let mark = start + 2; mark < end; mark += 3.3) {
@@ -365,6 +385,12 @@ function addCrosswalks(root: THREE.Group, materials: GameMaterials) {
           addBox(root, material, crossingX + stripe * 0.88, 0.04, z, 0.34, 0.025, horizontal.width - 2.2, false);
           addBox(root, material, x, 0.04, crossingZ + stripe * 0.88, vertical.width - 2.2, 0.025, 0.34, false);
         }
+        // Transverse solid stop bar ahead of crosswalk for stopping vehicles
+        const stopLineDist = 3.2;
+        const stopX = crossingX + side * stopLineDist;
+        const stopZ = crossingZ + side * stopLineDist;
+        addBox(root, material, stopX, 0.042, z, 0.42, 0.022, horizontal.width - 2.4, false);
+        addBox(root, material, x, 0.042, stopZ, vertical.width - 2.4, 0.022, 0.42, false);
       }
     }
   }
@@ -544,6 +570,142 @@ function addKanoRoadsideProps(
     { x, z, halfX: 0.8, halfZ: 0.6, height: 1.8 },
     { x: x + tankX, z, halfX: 0.85, halfZ: 0.85, height: 5.2 },
   );
+}
+
+function addMaiShayiStand(
+  root: THREE.Group,
+  materials: GameMaterials,
+  colliders: Collider[],
+  x: number,
+  z: number,
+  yaw = 0,
+) {
+  const group = new THREE.Group();
+  group.position.set(x, 0, z);
+  group.rotation.y = yaw;
+  root.add(group);
+
+  // Wooden food preparation counter / table
+  addBox(group, materials.wood, 0, 0.52, 0, 2.2, 0.85, 0.95);
+
+  // Kerosene cooking stove
+  addCylinder(group, materials.metal, -0.65, 0.98, 0.1, 0.16, 0.16, 0.18);
+  // Large traditional aluminum tea kettle (Mai Shayi shayi kettle)
+  addCylinder(group, materials.metal, -0.65, 1.22, 0.1, 0.14, 0.22, 0.32);
+  addCylinder(group, materials.metal, -0.65, 1.42, 0.1, 0.06, 0.12, 0.08);
+
+  // Indomie noodle carton boxes stacked on counter
+  addBox(group, new THREE.MeshStandardMaterial({ color: "#c43927", roughness: 0.85 }), 0.45, 1.05, 0.12, 0.55, 0.32, 0.42);
+  addBox(group, new THREE.MeshStandardMaterial({ color: "#d9a425", roughness: 0.85 }), 0.45, 1.34, 0.12, 0.52, 0.28, 0.38);
+
+  // Bread crate / display shelf
+  addBox(group, materials.wood, 0, 1.08, -0.28, 0.95, 0.45, 0.32);
+
+  // Overhanging canvas sunshade canopy on timber posts
+  for (const px of [-1.15, 1.15]) {
+    for (const pz of [-0.65, 0.65]) {
+      addCylinder(group, materials.bark, px, 1.35, pz, 0.04, 0.04, 2.7);
+    }
+  }
+  const canopyMat = materials.clothRed || materials.cloth;
+  addBox(group, canopyMat, 0, 2.65, 0, 2.6, 0.08, 1.6, false);
+
+  // Long wooden customer seating bench
+  addBox(group, materials.wood, 0, 0.32, 1.15, 2.2, 0.08, 0.38);
+  addBox(group, materials.wood, -0.9, 0.16, 1.15, 0.08, 0.32, 0.32);
+  addBox(group, materials.wood, 0.9, 0.16, 1.15, 0.08, 0.32, 0.32);
+
+  colliders.push({ x, z, halfX: 1.35, halfZ: 1.0, height: 2.7 });
+}
+
+function addVulcanizerSpot(
+  root: THREE.Group,
+  materials: GameMaterials,
+  colliders: Collider[],
+  x: number,
+  z: number,
+  yaw = 0,
+) {
+  const group = new THREE.Group();
+  group.position.set(x, 0, z);
+  group.rotation.y = yaw;
+  root.add(group);
+
+  // Stack of 3 used vehicle tires
+  for (let t = 0; t < 3; t += 1) {
+    const tire = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.12, 8, 16), materials.black);
+    tire.rotation.x = Math.PI / 2;
+    tire.position.set(-0.4, 0.12 + t * 0.23, 0);
+    tire.castShadow = true;
+    group.add(tire);
+  }
+
+  // Large commercial truck tire leaning against stand
+  const truckTire = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.16, 8, 18), materials.black);
+  truckTire.position.set(0.48, 0.52, -0.15);
+  truckTire.rotation.y = 0.3;
+  truckTire.rotation.z = -0.18;
+  truckTire.castShadow = true;
+  group.add(truckTire);
+
+  // Portable red air compressor tank
+  const compressorMat = new THREE.MeshStandardMaterial({ color: "#b8261e", roughness: 0.5, metalness: 0.3 });
+  addCylinder(group, compressorMat, 0.25, 0.42, 0.55, 0.24, 0.24, 0.72);
+  addCylinder(group, materials.metal, 0.25, 0.82, 0.55, 0.04, 0.04, 0.18);
+  addBox(group, materials.black, 0.25, 0.94, 0.55, 0.14, 0.12, 0.14);
+
+  // Metal tool basin / water tub for tube leak detection
+  addCylinder(group, materials.metal, -0.55, 0.18, 0.65, 0.32, 0.28, 0.34);
+
+  colliders.push({ x, z, halfX: 0.95, halfZ: 0.95, height: 1.4 });
+}
+
+function addRechargeCardKiosk(
+  root: THREE.Group,
+  materials: GameMaterials,
+  colliders: Collider[],
+  x: number,
+  z: number,
+  yaw = 0,
+) {
+  const group = new THREE.Group();
+  group.position.set(x, 0, z);
+  group.rotation.y = yaw;
+  root.add(group);
+
+  // Large octagonal commercial telecommunications parasol umbrella
+  addCylinder(group, materials.metal, 0, 1.45, 0, 0.035, 0.035, 2.9);
+  const umbrellaCone = new THREE.Mesh(
+    new THREE.ConeGeometry(1.4, 0.65, 8),
+    materials.karotaYellow || materials.cloth,
+  );
+  umbrellaCone.position.set(0, 2.7, 0);
+  umbrellaCone.castShadow = true;
+  group.add(umbrellaCone);
+
+  // Folding plastic table
+  addBox(group, materials.white, 0, 0.48, 0.18, 0.92, 0.06, 0.62);
+  for (const lx of [-0.4, 0.4]) {
+    for (const lz of [-0.08, 0.42]) {
+      addCylinder(group, materials.metal, lx, 0.24, lz, 0.02, 0.02, 0.48);
+    }
+  }
+
+  // Point of Sale (POS) electronic terminal & scratch card display
+  addBox(group, materials.black, -0.15, 0.54, 0.18, 0.18, 0.06, 0.24);
+  addBox(group, materials.glassLit, -0.15, 0.58, 0.18, 0.12, 0.02, 0.14);
+  addBox(group, materials.karotaGreen || materials.metal, 0.18, 0.54, 0.18, 0.22, 0.04, 0.18);
+
+  // Plastic monobloc chair
+  addBox(group, materials.white, 0, 0.28, -0.45, 0.44, 0.05, 0.42);
+  addBox(group, materials.white, 0, 0.62, -0.64, 0.42, 0.64, 0.04);
+  for (const cx of [-0.18, 0.18]) {
+    for (const cz of [-0.62, -0.28]) {
+      addCylinder(group, materials.white, cx, 0.14, cz, 0.02, 0.02, 0.28);
+    }
+  }
+
+  colliders.push({ x, z, halfX: 0.85, halfZ: 0.85, height: 2.8 });
 }
 
 function addOverheadUtilityLines(root: THREE.Group, materials: GameMaterials, colliders: Collider[]) {
@@ -967,6 +1129,11 @@ export function createWorld(materials: GameMaterials): WorldResult {
   addKanoRoadsideProps(root, materials, colliders, 18, -22, 0);
   addAutoTuningWorkshop(root, materials, colliders);
   addNorthernExpansionGateway(root, materials, colliders);
+
+  // Milestone 14: Authentic Kano Commercial & Sidewalk Streetlife Details
+  addMaiShayiStand(root, materials, colliders, -36, 18.5, 0);
+  addVulcanizerSpot(root, materials, colliders, 36, -11.8, 0);
+  addRechargeCardKiosk(root, materials, colliders, -16, -11.8, 0);
 
   const industrial = createIndustrialDistrict(materials);
   root.add(industrial.root);

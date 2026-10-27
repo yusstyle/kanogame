@@ -153,6 +153,107 @@ function createCorrugatedZincTexture() {
   return texture;
 }
 
+function createSidewalkPaverTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 256;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return undefined;
+
+  // Concrete base with warm sandy dust tone
+  ctx.fillStyle = "#b7a88b";
+  ctx.fillRect(0, 0, 256, 256);
+
+  // Modular paver grid grooves (4x4 tiles of 64px each)
+  ctx.strokeStyle = "#82745d";
+  ctx.lineWidth = 2.5;
+  for (let i = 64; i < 256; i += 64) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i, 256);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(0, i);
+    ctx.lineTo(256, i);
+    ctx.stroke();
+  }
+
+  // Micro gravel specks & surface wear
+  const random = seededRandom(241);
+  for (let i = 0; i < 4000; i += 1) {
+    const size = 0.5 + random() * 1.5;
+    ctx.globalAlpha = 0.08 + random() * 0.18;
+    ctx.fillStyle = random() > 0.45 ? "#ded2bb" : "#695e4d";
+    ctx.fillRect(random() * 256, random() * 256, size, size);
+  }
+  ctx.globalAlpha = 1;
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(4, 4);
+  texture.anisotropy = 4;
+  return texture;
+}
+
+function createStripedCurbTexture(color1 = "#f0ece1", color2 = "#22211e", stripeWidth = 16) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 32;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return undefined;
+  ctx.fillStyle = color1;
+  ctx.fillRect(0, 0, 128, 32);
+  ctx.fillStyle = color2;
+  for (let x = 0; x < 128; x += stripeWidth * 2) {
+    ctx.fillRect(x, 0, stripeWidth, 32);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.repeat.set(8, 1);
+  return texture;
+}
+
+function createSolarPanelTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return undefined;
+  ctx.fillStyle = "#122030";
+  ctx.fillRect(0, 0, 128, 128);
+
+  ctx.strokeStyle = "#385b80";
+  ctx.lineWidth = 1.2;
+  for (let i = 16; i < 128; i += 16) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i, 128);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(0, i);
+    ctx.lineTo(128, i);
+    ctx.stroke();
+  }
+
+  // Silver busbars
+  ctx.strokeStyle = "#9bb4cc";
+  ctx.lineWidth = 1.0;
+  ctx.beginPath();
+  ctx.moveTo(32, 0); ctx.lineTo(32, 128);
+  ctx.moveTo(96, 0); ctx.lineTo(96, 128);
+  ctx.stroke();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(1, 1);
+  return texture;
+}
+
 export function createMaterials(): GameMaterials {
   const plasterMap = noiseTexture("#b49a72", "#f0d9a5", 4600, 42, [2, 2]);
   const clayMap = noiseTexture("#a77950", "#e2b27a", 3900, 87, [2, 2]);
@@ -162,6 +263,10 @@ export function createMaterials(): GameMaterials {
   const earthMap = noiseTexture("#9d8057", "#d1ad70", 9000, 73, [9, 9]);
   const stoneMap = noiseTexture("#847763", "#c6b996", 4200, 31, [2, 2]);
   const zincMap = createCorrugatedZincTexture();
+  const sidewalkMap = createSidewalkPaverTexture();
+  const stripedCurbBwMap = createStripedCurbTexture("#f4f0e6", "#1c1b18", 16);
+  const stripedCurbYelMap = createStripedCurbTexture("#d8af18", "#1c1b18", 16);
+  const solarMap = createSolarPanelTexture();
 
   // PBR Texture Maps (Poly Haven CC0 Worn Plaster Wall 1k)
   const plasterDiff = loadTexture("/assets/worn_plaster_wall/worn_plaster_wall_diff_1k.jpg", true, [2.4, 2.4]);
@@ -192,8 +297,13 @@ export function createMaterials(): GameMaterials {
     ground: standard("#c1a16e", 1, earthMap),
     asphalt: standard("#f4f0e8", 0.94, asphaltMap, relief(asphaltMap, 0.035)),
     asphaltPatch: standard("#ffffff", 0.99, asphaltPatchMap, relief(asphaltPatchMap, 0.05)),
-    sidewalk: standard("#b7a88b", 0.92, concreteMap, relief(concreteMap, 0.035)),
+    sidewalk: standard("#b7a88b", 0.92, sidewalkMap || concreteMap, relief(concreteMap, 0.035)),
     curb: standard("#c0b39a", 0.92, concreteMap),
+    curbStriped: standard("#e2ded4", 0.88, stripedCurbBwMap),
+    curbYellowStriped: standard("#d8af18", 0.88, stripedCurbYelMap),
+    solarPanel: standard("#18293d", 0.22, solarMap, { metalness: 0.65 }),
+    terracotta: standard("#a45934", 0.94, clayMap, relief(clayMap, 0.07)),
+    burglarBars: standard("#1f2324", 0.45, undefined, { metalness: 0.72, roughness: 0.45 }),
     roadMarking: standard("#d9c89e", 0.82),
     drain: standard("#373936", 0.94, stoneMap, relief(stoneMap, 0.04)),
     plaster,

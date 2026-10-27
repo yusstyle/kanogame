@@ -217,11 +217,23 @@ function addWindow(
   isFront = true,
 ) {
   const frameDepth = 0.13;
+  // Recessed dark frame
   box(root, materials.darkTrim, x, y, z, width + 0.24, height + 0.22, frameDepth);
-  box(root, materials.glass, x, y, z + (isFront ? 0.08 : 0), width, height, 0.08);
-  box(root, materials.trim, x, y + height / 2 + 0.09, z + 0.1, width + 0.3, 0.08, 0.16);
-  box(root, materials.trim, x, y - height / 2 - 0.09, z + 0.12, width + 0.3, 0.08, 0.18);
+  // Window glazing
+  box(root, materials.glassLit || materials.glass, x, y, z + (isFront ? 0.08 : 0), width, height, 0.08);
+  // Projecting upper lintel / sunshade canopy hood
+  box(root, materials.trim, x, y + height / 2 + 0.09, z + 0.14, width + 0.32, 0.08, 0.24);
+  // Lower window sill with drip reveal
+  box(root, materials.trim, x, y - height / 2 - 0.09, z + 0.14, width + 0.32, 0.08, 0.22);
+  // Center wooden mullion
   box(root, materials.wood, x, y, z + 0.14, 0.045, height + 0.12, 0.045);
+  // Wrought iron burglar security bars
+  const barMat = materials.burglarBars || materials.metal;
+  const numBars = Math.max(2, Math.floor(width / 0.38));
+  const spacing = width / numBars;
+  for (let b = 1; b < numBars; b += 1) {
+    box(root, barMat, x - width / 2 + b * spacing, y, z + 0.15, 0.03, height, 0.03, false);
+  }
 }
 
 function addTraditionalHouse(
@@ -291,6 +303,15 @@ function addTraditionalHouse(
     crenel.rotation.z = variant % 2 ? 0 : Math.PI / 4;
   }
 
+  // Traditional Hausa wooden roof rainwater drainage spouts (Zannuwa)
+  for (const spoutX of [-2.4, 0, 2.4]) {
+    cylinder(root, materials.wood, spoutX, 3.65, front + 0.28, 0.045, 0.045, 0.55);
+  }
+
+  // Front exterior mud conversation bench (Dakali)
+  box(root, materials.clay, -2.3, 0.22, front + 0.32, 1.7, 0.42, 0.4);
+  box(root, materials.clay, 2.3, 0.22, front + 0.32, 1.7, 0.42, 0.4);
+
   colliders.push({ x: 0, z, halfX: 3.66, halfZ: 3.25, height: 3.9 });
 }
 
@@ -346,6 +367,14 @@ function addModernHome(
       panel.rotation.x = -0.1;
     }
   }
+
+  // Modern residential external split-unit AC condenser unit
+  box(root, materials.white, 3.15, 3.85, front + 0.28, 0.72, 0.52, 0.34);
+  cylinder(root, materials.darkTrim, 3.15, 3.85, front + 0.46, 0.18, 0.04, Math.PI / 2);
+
+  // Rooftop black GeePee water storage tank on support plinth
+  box(root, materials.concrete, -2.4, 6.15, z - 1.2, 1.5, 0.3, 1.5);
+  cylinder(root, materials.black, -2.4, 7.05, z - 1.2, 0.62, 0.62, 1.45);
   colliders.push({ x: 0, z, halfX: 3.95, halfZ: 3.24, height: 6 });
 }
 

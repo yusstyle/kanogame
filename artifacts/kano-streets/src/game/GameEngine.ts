@@ -437,7 +437,27 @@ export class GameEngine {
       const targetPos = this.mode === "driving"
         ? this.getActiveVehiclePosition()
         : this.playerPosition;
-      this.sunLight.position.set(targetPos.x - 44, 62, targetPos.z - 34);
+
+      let sunOffsetX: number;
+      let sunOffsetY: number;
+      let sunOffsetZ: number;
+
+      if (hour >= 5.5 && hour <= 18.5) {
+        // Daytime solar arc from East (+X) to West (-X)
+        const dayFraction = (hour - 5.5) / 13.0;
+        const solarAngle = THREE.MathUtils.clamp(dayFraction, 0.05, 0.95) * Math.PI;
+        const elevation = Math.sin(solarAngle);
+        sunOffsetX = Math.cos(solarAngle) * 58; // Rises in East (+X), sets in West (-X)
+        sunOffsetY = Math.max(24, elevation * 68);
+        sunOffsetZ = Math.sin(solarAngle) * 16 + 24; // Subtle southern tilt (+Z)
+      } else {
+        // Night lunar illumination: soft overhead moonlight
+        sunOffsetX = -28;
+        sunOffsetY = 54;
+        sunOffsetZ = -24;
+      }
+
+      this.sunLight.position.set(targetPos.x + sunOffsetX, targetPos.y + sunOffsetY, targetPos.z + sunOffsetZ);
       this.sunLight.target.position.set(targetPos.x, targetPos.y, targetPos.z);
       this.sunLight.target.updateMatrixWorld();
     }
