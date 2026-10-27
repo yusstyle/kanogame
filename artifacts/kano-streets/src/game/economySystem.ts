@@ -27,6 +27,22 @@ export interface SaveData {
   savedAt: number;
 }
 
+export function normalizePropertyId(rawId: unknown): PropertyId | null {
+  if (typeof rawId !== "string" || !rawId.trim()) return null;
+  const s = rawId.toLowerCase().trim();
+  const clean = s.replace(/[-_\s]/g, "");
+  if (clean === "unit2b" || clean.includes("unit2b") || clean.includes("apartment") || clean.includes("airport")) {
+    return "unit-2b";
+  }
+  if (clean === "bompaipenthouse" || clean.includes("bompai") || clean.includes("penthouse")) {
+    return "bompai-penthouse";
+  }
+  if (clean === "albarakavilla" || clean.includes("baraka") || clean.includes("villa")) {
+    return "albaraka-villa";
+  }
+  return null;
+}
+
 export class EconomySystem {
   public properties: Map<PropertyId, PropertyInfo> = new Map();
   public businesses: Map<BusinessId, BusinessInfo> = new Map();
@@ -445,20 +461,81 @@ export class EconomySystem {
     try {
       const raw = window.localStorage.getItem("kano_streets_save_v1");
       if (!raw) return null;
+
+      // Safe non-destructive backup before parsing or migration
+      try {
+        if (!window.localStorage.getItem("kano_streets_save_v1_backup")) {
+          window.localStorage.setItem("kano_streets_save_v1_backup", raw);
+        }
+      } catch {
+        // Ignore backup storage limits if quota exceeded
+      }
+
       const data = JSON.parse(raw) as SaveData;
       if (!data || (data.version !== undefined && data.version !== 1)) return null;
 
-      // Restore owned properties & businesses
+      // Restore owned properties with ID normalization
       if (Array.isArray(data.ownedProperties)) {
-        data.ownedProperties.forEach((id) => {
-          const p = this.properties.get(id);
-          if (p) p.isOwned = true;
+        const normOwned: PropertyId[] = [];
+        data.ownedProperties.forEach((rawId) => {
+          const normId = normalizePropertyId(rawId);
+          if (normId) {
+            const p = this.properties.get(normId);
+            if (p) p.isOwned = true;
+            if (!normOwned.includes(normId)) normOwned.push(normId);
+          }
         });
+        data.ownedProperties = normOwned;
       }
-      if (data.hasApartmentRental) {
+
+      // Restore furniture inventory early so placed furniture can inform property occupancy
+      if (Array.isArray(data.furnitureInventory)) {
+        this.furnitureInventory = data.furnitureInventory
+          .filter((f) => f && f.instanceId && f.catalogId)
+          .map((f) => {
+            const assignedNorm = normalizePropertyId(f.assignedPropertyId) ?? f.assignedPropertyId;
+            return {
+              instanceId: f.instanceId,
+              catalogId: f.catalogId,
+              purchasedAt: f.purchasedAt || Date.now(),
+              purchasePrice: f.purchasePrice || 0,
+              assignedPropertyId: assignedNorm,
+              room: f.room,
+              floor: f.floor || 1,
+              position: f.position ? { ...f.position } : { x: 0, y: 0, z: 0 },
+              rotationY: f.rotationY || 0,
+              isPlaced: Boolean(f.isPlaced),
+            };
+          });
+      } else {
+        this.furnitureInventory = [];
+      }
+
+      // Detect placed furniture in Unit 2B (strong signal of prior lease/furnishing)
+      const hasPlacedInU2b = this.furnitureInventory.some(
+        (f) => f.isPlaced && f.assignedPropertyId === "unit-2b",
+      );
+
+      // Check all possible rental flags from current and legacy saves
+      const rawData = data as unknown as Record<string, unknown>;
+      const hasRental = Boolean(
+        data.hasApartmentRental ||
+        rawData.apartmentRental ||
+        rawData.isRented ||
+        rawData.apartmentRented ||
+        hasPlacedInU2b ||
+        (Array.isArray(rawData.rentedProperties) &&
+          rawData.rentedProperties.some((id) => normalizePropertyId(id) === "unit-2b")) ||
+        (Array.isArray(data.ownedProperties) &&
+          data.ownedProperties.some((id) => normalizePropertyId(id) === "unit-2b" && !this.properties.get("unit-2b")?.isOwned)),
+      );
+
+      if (hasRental) {
         const u2b = this.properties.get("unit-2b");
         if (u2b) u2b.isRented = true;
+        data.hasApartmentRental = true;
       }
+
       if (Array.isArray(data.ownedBusinesses)) {
         data.ownedBusinesses.forEach((id) => {
           const b = this.businesses.get(id);
@@ -473,25 +550,8 @@ export class EconomySystem {
         this.lastProcessedDay = data.dayCount;
       }
       if (data.selectedHomePropertyId !== undefined) {
+        data.selectedHomePropertyId = normalizePropertyId(data.selectedHomePropertyId);
         this.selectedHomePropertyId = data.selectedHomePropertyId;
-      }
-      if (Array.isArray(data.furnitureInventory)) {
-        this.furnitureInventory = data.furnitureInventory
-          .filter((f) => f && f.instanceId && f.catalogId)
-          .map((f) => ({
-            instanceId: f.instanceId,
-            catalogId: f.catalogId,
-            purchasedAt: f.purchasedAt || Date.now(),
-            purchasePrice: f.purchasePrice || 0,
-            assignedPropertyId: f.assignedPropertyId,
-            room: f.room,
-            floor: f.floor || 1,
-            position: f.position ? { ...f.position } : { x: 0, y: 0, z: 0 },
-            rotationY: f.rotationY || 0,
-            isPlaced: Boolean(f.isPlaced),
-          }));
-      } else {
-        this.furnitureInventory = [];
       }
       return data;
     } catch {

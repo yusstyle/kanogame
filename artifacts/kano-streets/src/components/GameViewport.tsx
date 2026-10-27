@@ -44,6 +44,8 @@ export type GameViewportHandle = {
   setSelectedHome: (propertyId: PropertyId) => { success: boolean; message: string };
   teleportHome: (destination?: "entrance" | "interior") => { success: boolean; message: string };
   findMyHome: () => { success: boolean; message: string };
+  leaseProperty: (propertyId?: PropertyId) => { success: boolean; message: string };
+  purchaseProperty: (propertyId: PropertyId) => { success: boolean; message: string };
   getPlayerHomes: () => PlayerHomeEntry[];
   executeFreelanceContract: (contractId?: string) => { success: boolean; message: string };
 };
@@ -101,6 +103,8 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
         setSelectedHome: (propId) => engineRef.current?.setSelectedHome(propId) ?? { success: false, message: "Engine not ready" },
         teleportHome: (dest) => engineRef.current?.teleportHome(dest) ?? { success: false, message: "Engine not ready" },
         findMyHome: () => engineRef.current?.findMyHome() ?? { success: false, message: "Engine not ready" },
+        leaseProperty: (propId) => engineRef.current?.leaseProperty(propId) ?? { success: false, message: "Engine not ready" },
+        purchaseProperty: (propId) => engineRef.current?.purchaseProperty(propId) ?? { success: false, message: "Engine not ready" },
         getPlayerHomes: () => engineRef.current?.getPlayerHomes() ?? [],
         executeFreelanceContract: (contractId) => engineRef.current?.executeFreelanceContract(contractId) ?? { success: false, message: "Engine not ready" },
       }),

@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { KANO_LANDMARKS, getGpsLandmark, computeGpsGuidance, type LandmarkCategory, type LandmarkLocation } from "../game/landmarks";
 import { INDENTURE_1968 } from "../game/storySystem";
 import { PROPERTY_REGISTRY } from "../game/propertyRegistry";
+import { normalizePropertyId } from "../game/economySystem";
 import type { CareerPathChoice, InvestigationChoice, StorySnapshotInfo, HomeNavInfo, PropertyId, PlayerHomeEntry } from "../game/types";
 
 export interface CityMapModalProps {
@@ -16,9 +17,12 @@ export interface CityMapModalProps {
   playerHomes?: PlayerHomeEntry[];
   ownedProperties?: string[];
   hasApartmentRental?: boolean;
+  cash?: number;
   onSetSelectedHome?: (propertyId: PropertyId) => unknown;
   onTeleportHome?: (destination?: "entrance" | "interior") => unknown;
   onFindMyHome?: () => unknown;
+  onLeaseProperty?: (propertyId?: PropertyId) => { success: boolean; message: string };
+  onPurchaseProperty?: (propertyId: PropertyId) => { success: boolean; message: string };
   onExamineIndenture?: () => boolean;
   onChooseInvestigation?: (choice: "elders" | "bank") => unknown;
   onChooseCareer?: (choice: CareerPathChoice) => unknown;
@@ -70,9 +74,12 @@ export default function CityMapModal({
   playerHomes,
   ownedProperties = [],
   hasApartmentRental = false,
+  cash = 100000,
   onSetSelectedHome,
   onTeleportHome,
   onFindMyHome,
+  onLeaseProperty,
+  onPurchaseProperty,
   onChooseInvestigation,
   onChooseCareer,
   onResolveChapter1,
@@ -109,13 +116,14 @@ export default function CityMapModal({
       }));
     }
 
-    // 2. Otherwise derive dynamically from property records
+    // 2. Otherwise derive dynamically from property records and normalized ownership
     const list: PlayerHomeEntry[] = [];
-    const effectiveSelectedId = currentSelectedHomeId ?? (hasApartmentRental ? "unit-2b" : (ownedProperties[0] as PropertyId | null));
+    const normalizedOwned = (ownedProperties ?? []).map(normalizePropertyId).filter(Boolean) as PropertyId[];
+    const effectiveSelectedId = currentSelectedHomeId ?? (hasApartmentRental ? "unit-2b" : (normalizedOwned[0] ?? null));
 
     // Unit 2B (Airport Road)
     const hasU2bLease = Boolean(hasApartmentRental);
-    const hasU2bOwnership = Boolean(ownedProperties && ownedProperties.includes("unit-2b"));
+    const hasU2bOwnership = normalizedOwned.includes("unit-2b");
     if (hasU2bLease || hasU2bOwnership) {
       const reg = PROPERTY_REGISTRY["unit-2b"];
       const dist = Math.round(Math.hypot(playerCoords.x - reg.entranceDoor.x, playerCoords.z - reg.entranceDoor.z));
@@ -133,7 +141,7 @@ export default function CityMapModal({
     }
 
     // Bompai Penthouse
-    if (ownedProperties && ownedProperties.includes("bompai-penthouse")) {
+    if (normalizedOwned.includes("bompai-penthouse")) {
       const reg = PROPERTY_REGISTRY["bompai-penthouse"];
       const dist = Math.round(Math.hypot(playerCoords.x - reg.entranceDoor.x, playerCoords.z - reg.entranceDoor.z));
       list.push({
@@ -150,7 +158,7 @@ export default function CityMapModal({
     }
 
     // Al-Baraka Villa
-    if (ownedProperties && ownedProperties.includes("albaraka-villa")) {
+    if (normalizedOwned.includes("albaraka-villa")) {
       const reg = PROPERTY_REGISTRY["albaraka-villa"];
       const dist = Math.round(Math.hypot(playerCoords.x - reg.entranceDoor.x, playerCoords.z - reg.entranceDoor.z));
       list.push({
@@ -990,41 +998,292 @@ export default function CityMapModal({
 
             <div className="ks-directory-list">
               {eligibleHomes.length === 0 ? (
-                <div
-                  className="ks-directory-card ks-home-list-empty"
-                  style={{
-                    background: "rgba(217, 119, 6, 0.12)",
-                    border: "1.5px dashed #f59e0b",
-                    padding: "24px 20px",
-                    textAlign: "center",
-                    gridColumn: "1 / -1",
-                  }}
-                >
-                  <div style={{ fontSize: "36px", marginBottom: "8px" }}>🏡</div>
-                  <h3 style={{ color: "#f59e0b", fontSize: "16px", margin: "0 0 6px 0" }}>
-                    You don't own or lease a home yet. Visit the property listings to buy or lease one.
-                  </h3>
-                  <p style={{ color: "#cbd5e1", fontSize: "13px", maxWidth: "600px", margin: "0 auto 16px" }}>
-                    Explore residential real estate options across the city: lease Unit 2B at Airport View Apartments for ₦75,000/month or acquire freehold deeds for Bompai Heights Luxury Penthouse (₦35M) or Al-Baraka Executive Villa (₦65M).
-                  </p>
-                  <div style={{ display: "flex", justifyContent: "center", gap: "10px", flexWrap: "wrap" }}>
-                    <button
-                      className="ks-gps-btn"
-                      style={{ background: "#d97706", borderColor: "#f59e0b", padding: "8px 16px", fontSize: "12px" }}
-                      onClick={() => {
-                        onSetGPSTarget?.("apartment");
-                        onClose();
-                      }}
-                    >
-                      Route to Unit 2B Leasing Office (Airport Road) ↗
-                    </button>
-                    <button
-                      className="ks-gps-btn"
-                      style={{ padding: "8px 16px", fontSize: "12px" }}
-                      onClick={() => setActiveTab("directory")}
-                    >
-                      Browse All City Landmarks &amp; Real Estate ↗
-                    </button>
+                <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <div
+                    className="ks-directory-card ks-home-list-empty"
+                    style={{
+                      background: "linear-gradient(135deg, rgba(217, 119, 6, 0.15) 0%, rgba(180, 83, 9, 0.22) 100%)",
+                      border: "1.5px solid #f59e0b",
+                      borderRadius: "10px",
+                      padding: "20px 24px",
+                      boxShadow: "0 4px 20px rgba(0, 0, 0, 0.4)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap", marginBottom: "10px" }}>
+                      <span style={{ fontSize: "32px" }}>🏡</span>
+                      <div>
+                        <h3 style={{ color: "#fef3c7", fontSize: "17px", margin: "0 0 4px 0", fontFamily: "'Fraunces', Georgia, serif" }}>
+                          No Active Residential Deed or Lease On File
+                        </h3>
+                        <p style={{ color: "#cbd5e1", fontSize: "13px", margin: 0 }}>
+                          You do not currently hold an active lease or freehold Certificate of Occupancy. Available Player Funds: <strong style={{ color: "#34d399", fontSize: "14px" }}>₦{cash.toLocaleString()}</strong>.
+                        </p>
+                      </div>
+                    </div>
+                    <p style={{ color: "#94a3b8", fontSize: "12px", margin: "0 0 12px 0" }}>
+                      Select any of the 3 Kano residential properties below to lease or purchase directly with your funds, or route to the building entrance door in the city:
+                    </p>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "14px" }}>
+                    {/* Unit 2B Card */}
+                    {(() => {
+                      const reg = PROPERTY_REGISTRY["unit-2b"];
+                      const dist = Math.round(Math.hypot(playerCoords.x - reg.entranceDoor.x, playerCoords.z - reg.entranceDoor.z));
+                      const canAffordLease = cash >= 75000;
+                      return (
+                        <div
+                          className="ks-directory-card"
+                          style={{
+                            background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)",
+                            border: "1.5px solid #0284c7",
+                            borderRadius: "10px",
+                            padding: "16px",
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                            display: "flex",
+                            flexDirection: "column",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                              <span style={{ background: "rgba(14, 165, 233, 0.2)", color: "#38bdf8", border: "1px solid #0284c7", padding: "2px 8px", borderRadius: "4px", fontSize: "10px", fontWeight: "bold" }}>
+                                AVAILABLE TO LEASE
+                              </span>
+                              <span className="ks-dist-tag">{dist}m away</span>
+                            </div>
+                            <h4 style={{ margin: "0 0 6px 0", color: "#f8fafc", fontSize: "16px" }}>{reg.name}</h4>
+                            <p style={{ color: "#cbd5e1", fontSize: "12px", margin: "0 0 10px 0", lineHeight: 1.4 }}>
+                              {reg.description}
+                            </p>
+                            <div style={{ background: "rgba(15, 23, 42, 0.6)", padding: "8px", borderRadius: "6px", fontSize: "11px", color: "#94a3b8", marginBottom: "12px" }}>
+                              <div>📍 <strong>Location:</strong> {getPropertyStreetDescription("unit-2b")}</div>
+                              <div>🚪 <strong>Entrance:</strong> Coordinates ({reg.entranceDoor.x}, {reg.entranceDoor.z})</div>
+                              <div style={{ marginTop: "4px", color: "#38bdf8", fontWeight: "bold" }}>
+                                💰 Rent: ₦75,000 / month · Freehold Buy: ₦18,000,000
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                            <button
+                              className="ks-gps-btn"
+                              style={{
+                                background: canAffordLease ? "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)" : "#475569",
+                                borderColor: canAffordLease ? "#38bdf8" : "#64748b",
+                                color: "#ffffff",
+                                fontWeight: "bold",
+                                fontSize: "12px",
+                                padding: "8px 12px",
+                                flex: "1 1 140px",
+                                cursor: canAffordLease ? "pointer" : "not-allowed",
+                              }}
+                              disabled={!canAffordLease}
+                              onClick={() => {
+                                if (onLeaseProperty) {
+                                  onLeaseProperty("unit-2b");
+                                }
+                              }}
+                              title={canAffordLease ? "Sign monthly lease for Unit 2B (₦75,000)" : "Insufficient cash (Requires ₦75,000)"}
+                            >
+                              {canAffordLease ? "🔑 LEASE UNIT 2B (₦75,000) ↗" : "Need ₦75k to Lease"}
+                            </button>
+                            <button
+                              className="ks-gps-btn"
+                              style={{ padding: "6px 10px", fontSize: "11px", background: "#059669", borderColor: "#10b981" }}
+                              onClick={() => {
+                                setMapZoomTarget({ x: reg.entranceDoor.x, z: reg.entranceDoor.z, name: reg.name });
+                                setIsMapZoomed(true);
+                                setActiveTab("map");
+                              }}
+                            >
+                              🗺️ View on Map ↗
+                            </button>
+                            <button
+                              className="ks-gps-btn"
+                              style={{ padding: "6px 10px", fontSize: "11px" }}
+                              onClick={() => {
+                                onSetGPSTarget?.("apartment");
+                                onClose();
+                              }}
+                            >
+                              🧭 Route ↗
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Bompai Penthouse Card */}
+                    {(() => {
+                      const reg = PROPERTY_REGISTRY["bompai-penthouse"];
+                      const dist = Math.round(Math.hypot(playerCoords.x - reg.entranceDoor.x, playerCoords.z - reg.entranceDoor.z));
+                      const canAffordBuy = cash >= reg.purchasePrice;
+                      return (
+                        <div
+                          className="ks-directory-card"
+                          style={{
+                            background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)",
+                            border: "1.5px solid #d97706",
+                            borderRadius: "10px",
+                            padding: "16px",
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                            display: "flex",
+                            flexDirection: "column",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                              <span style={{ background: "rgba(234, 179, 8, 0.2)", color: "#facc15", border: "1px solid #ca8a04", padding: "2px 8px", borderRadius: "4px", fontSize: "10px", fontWeight: "bold" }}>
+                                FOR SALE (FREEHOLD)
+                              </span>
+                              <span className="ks-dist-tag">{dist}m away</span>
+                            </div>
+                            <h4 style={{ margin: "0 0 6px 0", color: "#f8fafc", fontSize: "16px" }}>{reg.name}</h4>
+                            <p style={{ color: "#cbd5e1", fontSize: "12px", margin: "0 0 10px 0", lineHeight: 1.4 }}>
+                              {reg.description}
+                            </p>
+                            <div style={{ background: "rgba(15, 23, 42, 0.6)", padding: "8px", borderRadius: "6px", fontSize: "11px", color: "#94a3b8", marginBottom: "12px" }}>
+                              <div>📍 <strong>Location:</strong> {getPropertyStreetDescription("bompai-penthouse")}</div>
+                              <div>🚪 <strong>Entrance:</strong> Coordinates ({reg.entranceDoor.x}, {reg.entranceDoor.z})</div>
+                              <div style={{ marginTop: "4px", color: "#facc15", fontWeight: "bold" }}>
+                                💰 Deed Purchase: ₦35,000,000
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                            <button
+                              className="ks-gps-btn"
+                              style={{
+                                background: canAffordBuy ? "linear-gradient(135deg, #d97706 0%, #b45309 100%)" : "#475569",
+                                borderColor: canAffordBuy ? "#f59e0b" : "#64748b",
+                                color: "#ffffff",
+                                fontWeight: "bold",
+                                fontSize: "12px",
+                                padding: "8px 12px",
+                                flex: "1 1 140px",
+                                cursor: canAffordBuy ? "pointer" : "not-allowed",
+                              }}
+                              disabled={!canAffordBuy}
+                              onClick={() => {
+                                if (onPurchaseProperty) {
+                                  onPurchaseProperty("bompai-penthouse");
+                                }
+                              }}
+                            >
+                              {canAffordBuy ? "🏛️ PURCHASE (₦35M) ↗" : "Need ₦35M to Buy"}
+                            </button>
+                            <button
+                              className="ks-gps-btn"
+                              style={{ padding: "6px 10px", fontSize: "11px", background: "#059669", borderColor: "#10b981" }}
+                              onClick={() => {
+                                setMapZoomTarget({ x: reg.entranceDoor.x, z: reg.entranceDoor.z, name: reg.name });
+                                setIsMapZoomed(true);
+                                setActiveTab("map");
+                              }}
+                            >
+                              🗺️ View on Map ↗
+                            </button>
+                            <button
+                              className="ks-gps-btn"
+                              style={{ padding: "6px 10px", fontSize: "11px" }}
+                              onClick={() => {
+                                onSetGPSTarget?.("bompai-flats");
+                                onClose();
+                              }}
+                            >
+                              🧭 Route ↗
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Al-Baraka Villa Card */}
+                    {(() => {
+                      const reg = PROPERTY_REGISTRY["albaraka-villa"];
+                      const dist = Math.round(Math.hypot(playerCoords.x - reg.entranceDoor.x, playerCoords.z - reg.entranceDoor.z));
+                      const canAffordBuy = cash >= reg.purchasePrice;
+                      return (
+                        <div
+                          className="ks-directory-card"
+                          style={{
+                            background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)",
+                            border: "1.5px solid #10b981",
+                            borderRadius: "10px",
+                            padding: "16px",
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                            display: "flex",
+                            flexDirection: "column",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                              <span style={{ background: "rgba(16, 185, 129, 0.2)", color: "#34d399", border: "1px solid #10b981", padding: "2px 8px", borderRadius: "4px", fontSize: "10px", fontWeight: "bold" }}>
+                                FOR SALE (FREEHOLD)
+                              </span>
+                              <span className="ks-dist-tag">{dist}m away</span>
+                            </div>
+                            <h4 style={{ margin: "0 0 6px 0", color: "#f8fafc", fontSize: "16px" }}>{reg.name}</h4>
+                            <p style={{ color: "#cbd5e1", fontSize: "12px", margin: "0 0 10px 0", lineHeight: 1.4 }}>
+                              {reg.description}
+                            </p>
+                            <div style={{ background: "rgba(15, 23, 42, 0.6)", padding: "8px", borderRadius: "6px", fontSize: "11px", color: "#94a3b8", marginBottom: "12px" }}>
+                              <div>📍 <strong>Location:</strong> {getPropertyStreetDescription("albaraka-villa")}</div>
+                              <div>🚪 <strong>Entrance:</strong> Coordinates ({reg.entranceDoor.x}, {reg.entranceDoor.z})</div>
+                              <div style={{ marginTop: "4px", color: "#34d399", fontWeight: "bold" }}>
+                                💰 Deed Purchase: ₦65,000,000
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                            <button
+                              className="ks-gps-btn"
+                              style={{
+                                background: canAffordBuy ? "linear-gradient(135deg, #059669 0%, #047857 100%)" : "#475569",
+                                borderColor: canAffordBuy ? "#10b981" : "#64748b",
+                                color: "#ffffff",
+                                fontWeight: "bold",
+                                fontSize: "12px",
+                                padding: "8px 12px",
+                                flex: "1 1 140px",
+                                cursor: canAffordBuy ? "pointer" : "not-allowed",
+                              }}
+                              disabled={!canAffordBuy}
+                              onClick={() => {
+                                if (onPurchaseProperty) {
+                                  onPurchaseProperty("albaraka-villa");
+                                }
+                              }}
+                            >
+                              {canAffordBuy ? "🏡 PURCHASE (₦65M) ↗" : "Need ₦65M to Buy"}
+                            </button>
+                            <button
+                              className="ks-gps-btn"
+                              style={{ padding: "6px 10px", fontSize: "11px", background: "#059669", borderColor: "#10b981" }}
+                              onClick={() => {
+                                setMapZoomTarget({ x: reg.entranceDoor.x, z: reg.entranceDoor.z, name: reg.name });
+                                setIsMapZoomed(true);
+                                setActiveTab("map");
+                              }}
+                            >
+                              🗺️ View on Map ↗
+                            </button>
+                            <button
+                              className="ks-gps-btn"
+                              style={{ padding: "6px 10px", fontSize: "11px" }}
+                              onClick={() => {
+                                onSetGPSTarget?.("villa");
+                                onClose();
+                              }}
+                            >
+                              🧭 Route ↗
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               ) : (
@@ -1393,15 +1652,16 @@ export default function CityMapModal({
 
                 let propertyId: PropertyId | null = null;
                 let isPropertyAccessible = false;
+                const normalizedOwnedDir = (ownedProperties ?? []).map(normalizePropertyId).filter(Boolean) as PropertyId[];
                 if (lm.id === "apartment") {
                   propertyId = "unit-2b";
-                  isPropertyAccessible = Boolean(hasApartmentRental || ownedProperties.includes("unit-2b"));
+                  isPropertyAccessible = Boolean(hasApartmentRental || normalizedOwnedDir.includes("unit-2b"));
                 } else if (lm.id === "bompai-flats") {
                   propertyId = "bompai-penthouse";
-                  isPropertyAccessible = Boolean(ownedProperties.includes("bompai-penthouse"));
+                  isPropertyAccessible = Boolean(normalizedOwnedDir.includes("bompai-penthouse"));
                 } else if (lm.id === "villa") {
                   propertyId = "albaraka-villa";
-                  isPropertyAccessible = Boolean(ownedProperties.includes("albaraka-villa"));
+                  isPropertyAccessible = Boolean(normalizedOwnedDir.includes("albaraka-villa"));
                 }
                 const isSelectedHome = propertyId && (currentSelectedHomeId ? currentSelectedHomeId === propertyId : selectedHomePropertyId === propertyId);
 
@@ -1426,6 +1686,57 @@ export default function CityMapModal({
                       </small>
                     </div>
                     <div className="ks-card-actions">
+                      {!isPropertyAccessible && propertyId === "unit-2b" && (
+                        <button
+                          className="ks-gps-btn"
+                          style={{
+                            background: cash >= 75000 ? "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)" : "#475569",
+                            borderColor: cash >= 75000 ? "#38bdf8" : "#64748b",
+                            color: "#ffffff",
+                            fontWeight: "bold",
+                            fontSize: "11px",
+                            padding: "4px 8px",
+                          }}
+                          disabled={cash < 75000}
+                          onClick={() => onLeaseProperty?.("unit-2b")}
+                        >
+                          {cash >= 75000 ? "🔑 Lease (₦75k) ↗" : "Need ₦75k"}
+                        </button>
+                      )}
+                      {!isPropertyAccessible && propertyId === "bompai-penthouse" && (
+                        <button
+                          className="ks-gps-btn"
+                          style={{
+                            background: cash >= 35_000_000 ? "linear-gradient(135deg, #d97706 0%, #b45309 100%)" : "#475569",
+                            borderColor: cash >= 35_000_000 ? "#f59e0b" : "#64748b",
+                            color: "#ffffff",
+                            fontWeight: "bold",
+                            fontSize: "11px",
+                            padding: "4px 8px",
+                          }}
+                          disabled={cash < 35_000_000}
+                          onClick={() => onPurchaseProperty?.("bompai-penthouse")}
+                        >
+                          {cash >= 35_000_000 ? "🏛️ Buy (₦35M) ↗" : "Need ₦35M"}
+                        </button>
+                      )}
+                      {!isPropertyAccessible && propertyId === "albaraka-villa" && (
+                        <button
+                          className="ks-gps-btn"
+                          style={{
+                            background: cash >= 65_000_000 ? "linear-gradient(135deg, #059669 0%, #047857 100%)" : "#475569",
+                            borderColor: cash >= 65_000_000 ? "#10b981" : "#64748b",
+                            color: "#ffffff",
+                            fontWeight: "bold",
+                            fontSize: "11px",
+                            padding: "4px 8px",
+                          }}
+                          disabled={cash < 65_000_000}
+                          onClick={() => onPurchaseProperty?.("albaraka-villa")}
+                        >
+                          {cash >= 65_000_000 ? "🏡 Buy (₦65M) ↗" : "Need ₦65M"}
+                        </button>
+                      )}
                       {isPropertyAccessible && !isSelectedHome && propertyId && (
                         <button
                           className="ks-gps-btn"

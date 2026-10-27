@@ -60,6 +60,8 @@ export interface GameUIProps {
   onSetSelectedHome?: (propertyId: PropertyId) => unknown;
   onTeleportHome?: (destination?: "entrance" | "interior") => unknown;
   onFindMyHome?: () => unknown;
+  onLeaseProperty?: (propertyId?: PropertyId) => { success: boolean; message: string };
+  onPurchaseProperty?: (propertyId: PropertyId) => { success: boolean; message: string };
   onAcceptMission?: (id: string) => boolean;
   onCancelMission?: () => boolean;
   onExamineIndenture?: () => boolean;
@@ -153,6 +155,8 @@ export default function GameUI({
   onSetSelectedHome,
   onTeleportHome,
   onFindMyHome,
+  onLeaseProperty,
+  onPurchaseProperty,
   onAcceptMission,
   onCancelMission,
   onExamineIndenture,
@@ -580,9 +584,12 @@ export default function GameUI({
               playerHomes={playerHomes}
               ownedProperties={ownedProperties}
               hasApartmentRental={hasApartmentRental}
+              cash={cash}
               onSetSelectedHome={onSetSelectedHome}
               onTeleportHome={onTeleportHome}
               onFindMyHome={onFindMyHome}
+              onLeaseProperty={onLeaseProperty}
+              onPurchaseProperty={onPurchaseProperty}
               onExamineIndenture={onExamineIndenture}
               onChooseInvestigation={onChooseInvestigation}
               onChooseCareer={onChooseCareer}

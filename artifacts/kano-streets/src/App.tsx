@@ -145,6 +145,14 @@ function App() {
     return viewportRef.current?.findMyHome();
   }, []);
 
+  const leaseProperty = useCallback((propertyId?: PropertyId) => {
+    return viewportRef.current?.leaseProperty(propertyId) ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const purchaseProperty = useCallback((propertyId: PropertyId) => {
+    return viewportRef.current?.purchaseProperty(propertyId) ?? { success: false, message: "Engine not ready" };
+  }, []);
+
   const receiveSnapshot = useCallback((next: GameSnapshot) => {
     setSnapshot((current) => {
       if (
@@ -251,6 +259,8 @@ function App() {
         onSetSelectedHome={setSelectedHome}
         onTeleportHome={teleportHome}
         onFindMyHome={findMyHome}
+        onLeaseProperty={leaseProperty}
+        onPurchaseProperty={purchaseProperty}
         onAcceptMission={acceptMission}
         onCancelMission={cancelMission}
         onExamineIndenture={examineIndenture}

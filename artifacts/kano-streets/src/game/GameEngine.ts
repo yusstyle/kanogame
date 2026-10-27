@@ -23,7 +23,7 @@ import { TrafficSystem } from "./TrafficSystem";
 import { createWorld } from "./world";
 import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType, CareerPathChoice, PropertyId, InteriorId, FurnitureInstance, HomeNavInfo, PlayerHomeEntry } from "./types";
 import { SocialSystem } from "./socialSystem";
-import { EconomySystem } from "./economySystem";
+import { EconomySystem, normalizePropertyId } from "./economySystem";
 import { KANO_LANDMARKS, getNearestLandmark, getGpsLandmark } from "./landmarks";
 import { MissionSystem } from "./missionSystem";
 import { StorySystem } from "./storySystem";
@@ -194,7 +194,7 @@ export class GameEngine {
     if (saved) {
       this.cash = saved.cash;
       this.trafficFine = saved.trafficFine;
-      this.hasApartmentRental = saved.hasApartmentRental;
+      this.hasApartmentRental = Boolean(saved.hasApartmentRental || this.economy.properties.get("unit-2b")?.isRented);
       if (saved.completedMissions) {
         this.missionSystem.loadProgress(saved.completedMissions, saved.careerEarnings ?? 0);
       }
@@ -208,7 +208,7 @@ export class GameEngine {
         this.audioSystem.setMuted(saved.audioMuted);
       }
       if (saved.selectedHomePropertyId !== undefined) {
-        this.economy.selectedHomePropertyId = saved.selectedHomePropertyId;
+        this.economy.selectedHomePropertyId = normalizePropertyId(saved.selectedHomePropertyId);
       }
       if (saved.needs) {
         this.lifeSim.loadSnapshot(saved.needs);
@@ -2450,6 +2450,49 @@ export class GameEngine {
     this.saveGame();
     this.pushSnapshot(true);
     return res;
+  }
+
+  public leaseProperty(propertyId: PropertyId = "unit-2b"): { success: boolean; message: string } {
+    if (propertyId !== "unit-2b") {
+      return { success: false, message: "Only Unit 2B (Airport View Apartments) is available for monthly lease." };
+    }
+    const prop = this.economy.properties.get("unit-2b");
+    if (prop?.isOwned) {
+      return { success: false, message: "You already hold the Certificate of Occupancy deed for Unit 2B." };
+    }
+    if (this.hasApartmentRental && prop?.isRented) {
+      return { success: false, message: "You already hold an active monthly lease for Unit 2B." };
+    }
+    if (this.cash < 75000) {
+      return {
+        success: false,
+        message: `Insufficient funds: Monthly lease requires ₦75,000 (Available: ₦${this.cash.toLocaleString()}).`,
+      };
+    }
+
+    this.cash -= 75000;
+    this.hasApartmentRental = true;
+    if (prop) prop.isRented = true;
+    this.economy.resolveSelectedHome(true);
+    this.statusMessage = "Monthly lease signed for Unit 2B (₦75,000)! Welcome home.";
+    this.saveGame();
+    this.pushSnapshot(true);
+    return { success: true, message: this.statusMessage };
+  }
+
+  public purchaseProperty(propertyId: PropertyId): { success: boolean; message: string } {
+    const res = this.economy.purchaseProperty(propertyId, this.cash);
+    if (res.success) {
+      this.cash -= res.cost;
+      this.economy.resolveSelectedHome(this.hasApartmentRental);
+      this.statusMessage = res.message;
+      this.saveGame();
+      this.pushSnapshot(true);
+    } else {
+      this.statusMessage = res.message;
+      this.pushSnapshot(true);
+    }
+    return { success: res.success, message: res.message };
   }
 
   public findMyHome(): { success: boolean; message: string } {
