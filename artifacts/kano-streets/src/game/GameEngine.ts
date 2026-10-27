@@ -32,6 +32,7 @@ import { AudioSystem } from "./audioSystem";
 import { getPropertyByEntrance, getPropertyRegistryEntry } from "./propertyRegistry";
 import { LifeSimulationSystem } from "./lifeSimulation";
 import { FreelanceSystem, FREELANCE_CONTRACT_CATALOG } from "./freelanceSystem";
+import { findNearestValidSeat, isValidSeatNearby } from "./seats";
 
 const PLAYER_START = new THREE.Vector3(-4, 0, -4);
 const CAR_START = new THREE.Vector3(-2, 0, -8);
@@ -158,6 +159,7 @@ export class GameEngine {
   private gpsTargetLandmark: string | null = null;
   private isFurnishingMode = false;
   private isFurnitureShopOpen = false;
+  private cameraMode: "third-person" | "first-person" = "third-person";
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -366,6 +368,7 @@ export class GameEngine {
     this.canvas.addEventListener("pointercancel", this.onCanvasPointerUpBound);
     this.canvas.addEventListener("contextmenu", this.onContextMenuBound);
 
+    this.pushSnapshot(true);
     this.animationFrame = requestAnimationFrame(this.animate);
   }
 
@@ -565,6 +568,10 @@ export class GameEngine {
       this.toggleFurnishingMode();
       return;
     }
+    if (normalized === "v" && this.screen === "playing") {
+      this.toggleCameraMode();
+      return;
+    }
     if (normalized === "r" && this.screen !== "menu") {
       this.reset();
       return;
@@ -705,6 +712,10 @@ export class GameEngine {
       this.toggleFurnishingMode();
       return;
     }
+    if (key === "v" && !event.repeat && this.screen === "playing") {
+      this.toggleCameraMode();
+      return;
+    }
     this.keys.add(movementKey);
   }
 
@@ -715,10 +726,12 @@ export class GameEngine {
 
   private adjustCameraLook(deltaX: number, deltaY: number, sensitivityX: number, sensitivityY: number) {
     this.cameraYaw -= deltaX * sensitivityX;
+    const minPitch = this.cameraMode === "first-person" ? -0.7 : -0.12;
+    const maxPitch = this.cameraMode === "first-person" ? 1.25 : 0.95;
     this.cameraPitch = THREE.MathUtils.clamp(
       this.cameraPitch - deltaY * sensitivityY,
-      -0.12,
-      0.95,
+      minPitch,
+      maxPitch,
     );
   }
 
@@ -1232,6 +1245,22 @@ export class GameEngine {
       return;
     }
 
+    // Check valid outdoor seating (Dakali mud benches, commuter shelters, Mai Shayi benches, public benches)
+    const nearbySeat = findNearestValidSeat(this.playerPosition, 2.5);
+    if (nearbySeat) {
+      if (this.isSeated) {
+        this.isSeated = false;
+        this.statusMessage = `Stood up from ${nearbySeat.name}`;
+      } else {
+        this.isSeated = true;
+        this.playerYaw = nearbySeat.yaw;
+        const sitRes = this.lifeSim.sitAndRest(nearbySeat.name, 15);
+        this.statusMessage = `Seated on ${nearbySeat.name}. (${sitRes.message})`;
+      }
+      this.pushSnapshot(true);
+      return;
+    }
+
     // Check vehicles
     this.toggleVehicle();
   }
@@ -1424,14 +1453,19 @@ export class GameEngine {
       }
     }
 
+    const isRunning = this.keys.has("shift") && isWalking;
+    const baseWalkSpeed = 4.15;
+    const baseRunSpeed = 7.1;
+    const baseSpeed = isRunning ? baseRunSpeed : baseWalkSpeed;
+    const strideScale = isWalking ? THREE.MathUtils.clamp(speed / baseSpeed, 0.5, 2.0) : 1.0;
+
     if (isWalking) {
       this.isSeated = false;
       const targetYaw = Math.atan2(moveX, moveZ);
       this.playerYaw = this.lerpAngle(this.playerYaw, targetYaw, 1 - Math.exp(-12 * dt));
-      this.walkPhase += dt * (this.keys.has("shift") ? 12.4 : 8.3);
+      this.walkPhase += dt * (isRunning ? 12.4 : 8.3) * strideScale;
     }
 
-    const isRunning = this.keys.has("shift") && isWalking;
     const swingMagnitude = isRunning ? 0.68 : 0.46;
     const swing = isWalking && this.playerGrounded ? Math.sin(this.walkPhase) * swingMagnitude : 0;
     const idleBreath = !isWalking && this.playerGrounded ? Math.sin(now * 2.2) * 0.04 : 0;
@@ -1472,8 +1506,10 @@ export class GameEngine {
         } else {
           this.player.playAction("walk", 0.15);
         }
+        this.player.setTimeScale?.(strideScale);
       } else {
         this.player.playAction("idle", 0.25);
+        this.player.setTimeScale?.(1.0);
       }
       this.player.updateAnimation(dt);
     }
@@ -2121,6 +2157,92 @@ export class GameEngine {
     const vehiclePos = this.getActiveVehiclePosition();
     const vehicleYaw = this.getActiveVehicleYaw();
 
+    if (this.cameraMode === "first-person") {
+      if (isDriving) {
+        // First-person vehicle cockpit / interior view
+        this.player.root.visible = false;
+        let driverOffsetX = -0.38;
+        let driverOffsetY = 1.15;
+        let driverOffsetZ = 0.15;
+        switch (this.activeVehicle) {
+          case "truck":
+            driverOffsetX = -0.65;
+            driverOffsetY = 2.15;
+            driverOffsetZ = 1.1;
+            break;
+          case "minibus":
+            driverOffsetX = -0.55;
+            driverOffsetY = 1.6;
+            driverOffsetZ = 0.8;
+            break;
+          case "van":
+            driverOffsetX = -0.5;
+            driverOffsetY = 1.5;
+            driverOffsetZ = 0.6;
+            break;
+          case "pickup":
+            driverOffsetX = -0.45;
+            driverOffsetY = 1.45;
+            driverOffsetZ = 0.4;
+            break;
+          case "keke":
+            driverOffsetX = 0.0;
+            driverOffsetY = 1.18;
+            driverOffsetZ = 0.25;
+            break;
+          default:
+            driverOffsetX = -0.38;
+            driverOffsetY = 1.15;
+            driverOffsetZ = 0.15;
+            break;
+        }
+        const cosY = Math.cos(vehicleYaw);
+        const sinY = Math.sin(vehicleYaw);
+        const worldDriverX = vehiclePos.x + (driverOffsetX * cosY + driverOffsetZ * sinY);
+        const worldDriverY = vehiclePos.y + driverOffsetY;
+        const worldDriverZ = vehiclePos.z + (-driverOffsetX * sinY + driverOffsetZ * cosY);
+        const driverEye = new THREE.Vector3(worldDriverX, worldDriverY, worldDriverZ);
+
+        const lookYaw = vehicleYaw + this.cameraYaw;
+        const viewPitch = THREE.MathUtils.clamp(this.cameraPitch - 0.29, -1.0, 1.0);
+        const lookDir = new THREE.Vector3(
+          Math.sin(lookYaw) * Math.cos(viewPitch),
+          Math.sin(viewPitch),
+          Math.cos(lookYaw) * Math.cos(viewPitch),
+        );
+        const lookTarget = driverEye.clone().add(lookDir);
+
+        this.camera.position.lerp(driverEye, 1 - Math.exp(-22 * dt));
+        this.camera.lookAt(lookTarget);
+        return;
+      }
+
+      // First-person pedestrian view on-foot:
+      // Hide avatar mesh to prevent seeing inside head / clipping
+      this.player.root.visible = false;
+      const eyeHeight = this.isSeated ? 1.08 : 1.68;
+      const eyePos = new THREE.Vector3(
+        this.playerPosition.x,
+        this.playerPosition.y + eyeHeight,
+        this.playerPosition.z,
+      );
+
+      const viewPitch = THREE.MathUtils.clamp(this.cameraPitch - 0.29, -1.25, 1.25);
+      const lookDir = new THREE.Vector3(
+        Math.sin(this.cameraYaw) * Math.cos(viewPitch),
+        Math.sin(viewPitch),
+        Math.cos(this.cameraYaw) * Math.cos(viewPitch),
+      );
+      const lookTarget = eyePos.clone().add(lookDir);
+
+      this.camera.position.lerp(eyePos, 1 - Math.exp(-24 * dt));
+      this.camera.lookAt(lookTarget);
+      return;
+    }
+
+    // Third-person mode: restore player visibility when on-foot
+    this.player.root.visible = this.mode === "on-foot";
+
     let distance = 6.35;
     let targetY = this.playerPosition.y + (isIndoors ? 1.4 : 1.25);
     if (isDriving) {
@@ -2434,6 +2556,13 @@ export class GameEngine {
           interactionPrompt = enterable[0].prompt;
         }
       }
+      // Check valid outdoor seating benches
+      if (!interactionPrompt) {
+        const nearbySeat = findNearestValidSeat(this.playerPosition, 2.5);
+        if (nearbySeat) {
+          interactionPrompt = this.isSeated ? `Stand Up from ${nearbySeat.name}` : `Sit Down on ${nearbySeat.name}`;
+        }
+      }
     }
 
     const location = this.mode === "driving"
@@ -2508,7 +2637,26 @@ export class GameEngine {
       playerHomes: this.getPlayerHomes(),
       needs: this.lifeSim.getSnapshot(),
       freelanceInfo: this.freelanceSystem.getSnapshot(),
+      cameraMode: this.cameraMode,
     });
+  }
+
+  public getCameraMode(): "third-person" | "first-person" {
+    return this.cameraMode;
+  }
+
+  public setCameraMode(mode: "third-person" | "first-person") {
+    if (this.cameraMode !== mode) {
+      this.cameraMode = mode;
+      this.pushSnapshot(true);
+    }
+  }
+
+  public toggleCameraMode(): "third-person" | "first-person" {
+    this.cameraMode = this.cameraMode === "third-person" ? "first-person" : "third-person";
+    this.statusMessage = `Camera mode: ${this.cameraMode === "first-person" ? "First-Person (Immersive)" : "Third-Person (Follow)"}`;
+    this.pushSnapshot(true);
+    return this.cameraMode;
   }
 
   public getPlayerHomes(): PlayerHomeEntry[] {

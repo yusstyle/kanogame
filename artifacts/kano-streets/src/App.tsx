@@ -153,6 +153,10 @@ function App() {
     return viewportRef.current?.purchaseProperty(propertyId) ?? { success: false, message: "Engine not ready" };
   }, []);
 
+  const toggleCameraMode = useCallback(() => {
+    return viewportRef.current?.toggleCameraMode();
+  }, []);
+
   const receiveSnapshot = useCallback((next: GameSnapshot) => {
     setSnapshot((current) => {
       if (
@@ -194,7 +198,8 @@ function App() {
         current.ownedProperties?.length === next.ownedProperties?.length &&
         current.needs?.hunger === next.needs?.hunger &&
         current.needs?.energy === next.needs?.energy &&
-        current.needs?.hygiene === next.needs?.hygiene
+        current.needs?.hygiene === next.needs?.hygiene &&
+        current.cameraMode === next.cameraMode
       ) {
         return current;
       }
@@ -249,6 +254,8 @@ function App() {
         playerHomes={snapshot.playerHomes}
         needs={snapshot.needs}
         freelanceInfo={snapshot.freelanceInfo}
+        cameraMode={snapshot.cameraMode ?? "third-person"}
+        onToggleCameraMode={toggleCameraMode}
         graphicsQuality={graphicsQuality}
         onStart={start}
         onPause={pause}

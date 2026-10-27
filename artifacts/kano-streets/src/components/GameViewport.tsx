@@ -48,6 +48,8 @@ export type GameViewportHandle = {
   purchaseProperty: (propertyId: PropertyId) => { success: boolean; message: string };
   getPlayerHomes: () => PlayerHomeEntry[];
   executeFreelanceContract: (contractId?: string) => { success: boolean; message: string };
+  toggleCameraMode: () => "third-person" | "first-person" | undefined;
+  setCameraMode: (mode: "third-person" | "first-person") => void;
 };
 
 type GameViewportProps = {
@@ -107,6 +109,8 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
         purchaseProperty: (propId) => engineRef.current?.purchaseProperty(propId) ?? { success: false, message: "Engine not ready" },
         getPlayerHomes: () => engineRef.current?.getPlayerHomes() ?? [],
         executeFreelanceContract: (contractId) => engineRef.current?.executeFreelanceContract(contractId) ?? { success: false, message: "Engine not ready" },
+        toggleCameraMode: () => engineRef.current?.toggleCameraMode(),
+        setCameraMode: (mode) => engineRef.current?.setCameraMode(mode),
       }),
       [],
     );

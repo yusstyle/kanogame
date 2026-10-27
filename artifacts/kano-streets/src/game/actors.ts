@@ -80,6 +80,7 @@ export type PlayerModel = {
     animations: Record<string, THREE.AnimationClip>,
   ) => void;
   playAction: (name: "idle" | "walk" | "run" | "drive", crossFadeDuration?: number) => void;
+  setTimeScale?: (scale: number) => void;
   updateAnimation: (dt: number) => void;
 };
 
@@ -239,6 +240,11 @@ export function createPedestrianModel(
       currentAction = targetAction;
       currentActionName = targetName;
       model.currentActionName = targetName;
+    },
+    setTimeScale: (scale: number) => {
+      if (currentAction) {
+        currentAction.setEffectiveTimeScale(scale);
+      }
     },
     updateAnimation: (dt: number) => {
       if (mixer) {

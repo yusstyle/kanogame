@@ -9,6 +9,7 @@ import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import type { ColliderIndex } from "./ColliderIndex";
 import type { NavigationNetwork, PedestrianWaypoint } from "./navigation";
 import type { GameMaterials, GraphicsQuality } from "./types";
+import { isValidSeatNearby, findNearestValidSeat, type ValidSeat } from "./seats";
 
 export type PedestrianState = "walking" | "idle" | "vendor" | "talking" | "visiting" | "sitting";
 export type NPCRole = "resident" | "trader" | "worker" | "customer" | "worshipper" | "visitor";
@@ -729,12 +730,23 @@ export class PedestrianSystem {
     }
   }
 
+  public isAtValidSeat(p: Pedestrian): boolean {
+    return isValidSeatNearby(p.position, 2.8);
+  }
+
   public checkPedestrianInteraction(playerPos: THREE.Vector3): { prompt: string; action: () => string } | null {
     for (const p of this.pedestrians) {
       if (p.position.distanceTo(playerPos) <= 2.4) {
         return {
           prompt: `Talk to ${p.name} (${p.role.toUpperCase()})`,
           action: () => {
+            // NPC turns smoothly and immediately to face the player
+            p.yaw = Math.atan2(playerPos.x - p.position.x, playerPos.z - p.position.z);
+            p.model.root.rotation.set(0, p.yaw, 0);
+            p.state = "talking";
+            p.stateTimer = 5.0;
+            p.speed = 0;
+
             if (p.vendorCry) {
               return `${p.name} (${p.role.toUpperCase()}): '${p.vendorCry}'`;
             }
@@ -814,6 +826,14 @@ export class PedestrianSystem {
 
     if (p.state === "talking") {
       p.speed = THREE.MathUtils.damp(p.speed, 0, 8, dt);
+      const distToPlayer = p.position.distanceTo(playerPosition);
+      if (distToPlayer <= 3.5) {
+        const targetYaw = Math.atan2(playerPosition.x - p.position.x, playerPosition.z - p.position.z);
+        let yawDiff = targetYaw - p.yaw;
+        while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+        while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+        p.yaw += THREE.MathUtils.clamp(yawDiff, -4.5 * dt, 4.5 * dt);
+      }
       if (p.stateTimer <= 0) {
         p.state = "walking";
         p.stateTimer = 6 + Math.random() * 8;
@@ -967,8 +987,10 @@ export class PedestrianSystem {
     if (p.model.riggedCharacter) {
       if (isMoving) {
         p.model.playAction("walk", 0.2);
+        p.model.setTimeScale?.(Math.min(1.8, Math.max(0.6, p.speed / 1.35)));
       } else {
         p.model.playAction("idle", 0.25);
+        p.model.setTimeScale?.(1.0);
       }
       p.model.updateAnimation(dt);
       p.model.root.position.set(p.position.x, p.position.y, p.position.z);
@@ -981,8 +1003,9 @@ export class PedestrianSystem {
     }
 
     const swing = isMoving ? Math.sin(p.walkPhase) * 0.46 : 0;
-    p.model.leftArm.rotation.x = THREE.MathUtils.damp(p.model.leftArm.rotation.x, -swing, 8, dt);
-    p.model.rightArm.rotation.x = THREE.MathUtils.damp(p.model.rightArm.rotation.x, swing, 8, dt);
+    const idleBreath = !isMoving ? Math.sin(this.time * 2.1 + p.lookSeed) * 0.035 : 0;
+    p.model.leftArm.rotation.x = THREE.MathUtils.damp(p.model.leftArm.rotation.x, -swing + idleBreath, 8, dt);
+    p.model.rightArm.rotation.x = THREE.MathUtils.damp(p.model.rightArm.rotation.x, swing - idleBreath, 8, dt);
     p.model.leftLeg.rotation.x = THREE.MathUtils.damp(p.model.leftLeg.rotation.x, swing, 8, dt);
     p.model.rightLeg.rotation.x = THREE.MathUtils.damp(p.model.rightLeg.rotation.x, -swing, 8, dt);
 
@@ -991,8 +1014,18 @@ export class PedestrianSystem {
     p.model.root.rotation.set(0, p.yaw, 0);
 
     if (p.model.head) {
-      const headYaw = Math.sin(this.time * 0.7 + p.lookSeed) * 0.22;
-      p.model.head.rotation.y = THREE.MathUtils.damp(p.model.head.rotation.y, headYaw, 4, dt);
+      const distToPlayer = p.position.distanceTo(playerPosition);
+      let targetHeadYaw = Math.sin(this.time * 0.7 + p.lookSeed) * 0.22;
+      if (distToPlayer <= 2.8) {
+        const toPlayer = Math.atan2(playerPosition.x - p.position.x, playerPosition.z - p.position.z) - p.yaw;
+        let headDiff = toPlayer;
+        while (headDiff > Math.PI) headDiff -= Math.PI * 2;
+        while (headDiff < -Math.PI) headDiff += Math.PI * 2;
+        if (Math.abs(headDiff) < 1.2) {
+          targetHeadYaw = headDiff * 0.55;
+        }
+      }
+      p.model.head.rotation.y = THREE.MathUtils.damp(p.model.head.rotation.y, targetHeadYaw, 4, dt);
     }
   }
 

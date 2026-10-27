@@ -50,6 +50,7 @@ export interface GameUIProps {
   playerHomes?: PlayerHomeEntry[];
   needs?: NeedsState;
   freelanceInfo?: FreelanceSnapshotInfo;
+  cameraMode?: "third-person" | "first-person";
   graphicsQuality: GraphicsQuality;
   onStart: () => void;
   onPause: () => void;
@@ -70,6 +71,7 @@ export interface GameUIProps {
   onResolveChapter1?: () => unknown;
   onCycleWeather?: () => void;
   onToggleAudioMute?: () => void;
+  onToggleCameraMode?: () => void;
   onOpenFurnitureShop?: () => void;
   onCloseFurnitureShop?: () => void;
   onPurchaseFurniture?: (catalogId: string) => { success: boolean; message: string };
@@ -145,6 +147,7 @@ export default function GameUI({
   playerHomes,
   needs,
   freelanceInfo: _freelanceInfo,
+  cameraMode = "third-person",
   graphicsQuality,
   onStart,
   onPause,
@@ -165,6 +168,7 @@ export default function GameUI({
   onResolveChapter1,
   onCycleWeather,
   onToggleAudioMute,
+  onToggleCameraMode,
   onOpenFurnitureShop,
   onCloseFurnitureShop,
   onPurchaseFurniture,
@@ -234,6 +238,7 @@ export default function GameUI({
             <div className="ks-control-line"><span className="ks-control-label">INTERACT</span><span><Key>E</Key></span></div>
             <div className="ks-control-line"><span className="ks-control-label">RUN</span><span><Key>SHIFT</Key></span></div>
             <div className="ks-control-line"><span className="ks-control-label">JUMP</span><span><Key>SPACE</Key></span></div>
+            <div className="ks-control-line"><span className="ks-control-label">CAMERA</span><span><Key>V</Key> <small>1st / 3rd Person</small></span></div>
             <div className="ks-control-line"><span className="ks-control-label">RESET</span><span><Key>R</Key></span></div>
           </div>
           <p className="ks-touch-menu-hint">Use the on-screen pad to move; drag open space to look.</p>
@@ -315,6 +320,15 @@ export default function GameUI({
             >
               <Key>U</Key>
               <span>{audioMuted ? "🔇 MUTED" : "🔊 AUDIO"}</span>
+            </button>
+            <button
+              className="ks-hud-directory-btn ks-hud-camera-btn"
+              onClick={onToggleCameraMode}
+              title={`Toggle First/Third Person Camera [V] (Current: ${cameraMode === "first-person" ? "1st Person" : "3rd Person"})`}
+              aria-label="Toggle Camera Perspective"
+            >
+              <Key>V</Key>
+              <span>{cameraMode === "first-person" ? "👁️ 1ST PERS" : "🎥 3RD PERS"}</span>
             </button>
             {canFurnish && (
               <button
@@ -560,6 +574,7 @@ export default function GameUI({
               {mode === 'driving' && <span><Key>SPACE</Key> BRAKE</span>}
               {mode === 'on-foot' && <span><Key>E</Key> INTERACT</span>}
               {canFurnish && <span><Key>F</Key> FURNISH HOME</span>}
+              <span><Key>V</Key> CAMERA ({cameraMode === 'first-person' ? '1ST' : '3RD'})</span>
               <span><Key>R</Key> RESET POSITION</span>
             </div>
             {interactionPrompt && (

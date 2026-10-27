@@ -263,6 +263,7 @@ export type GameSnapshot = {
   playerHomes?: PlayerHomeEntry[];
   needs?: NeedsState;
   freelanceInfo?: FreelanceSnapshotInfo;
+  cameraMode?: "third-person" | "first-person";
 };
 
 export type GameMaterials = {
