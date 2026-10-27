@@ -36,7 +36,7 @@ export type GameScreen = "menu" | "playing" | "paused";
 export type InteriorId = "house" | "apartment" | "penthouse" | "church" | "police-post" | "restaurant" | "gaming-hub" | "furniture-showroom";
 
 export type PropertyId = "unit-2b" | "bompai-penthouse" | "albaraka-villa";
-export type BusinessId = "sabon-gari-shop" | "arewa-suya-franchise" | "cyber-hub-station";
+export type BusinessId = "sabon-gari-shop" | "arewa-suya-franchise" | "cyber-hub-station" | "dawanau-grain-depot";
 
 export interface FurnitureInstance {
   instanceId: string;
@@ -108,6 +108,12 @@ export interface PropertyInfo {
   isOwned: boolean;
   dailyUpkeep: number;
   description: string;
+  renovationLevel?: number;
+  maxRenovationLevel?: number;
+  renovationCostCash?: number;
+  renovationCostCoins?: number;
+  renovationTitle?: string;
+  currentValuation?: number;
 }
 
 export interface BusinessInfo {
@@ -119,6 +125,162 @@ export interface BusinessInfo {
   dailyCost: number;
   isOwned: boolean;
   description: string;
+  level?: number;
+  maxLevel?: number;
+  upgradeCost?: number;
+  levelTitle?: string;
+  perks?: string[];
+}
+
+export type CurrencyType = "cash" | "premium_coins" | "coins";
+
+export interface TransactionRecord {
+  id: string;
+  timestamp: number;
+  currency: CurrencyType;
+  amount: number;
+  type:
+    | "business_income"
+    | "property_upkeep"
+    | "purchase"
+    | "upgrade"
+    | "renovation"
+    | "mission_reward"
+    | "freelance"
+    | "seasonal_reward"
+    | "achievement_reward"
+    | "fine_payment";
+  description: string;
+  balanceAfter: number;
+}
+
+export interface AchievementDefinition {
+  id: string;
+  title: string;
+  description: string;
+  category: "empire" | "logistics" | "wealth" | "exploration" | "lifestyle";
+  rewardCash: number;
+  rewardCoins: number;
+  icon: string;
+  targetValue: number;
+  unit?: string;
+}
+
+export interface PlayerAchievementState {
+  progress: number;
+  isUnlocked: boolean;
+  unlockedAt?: number;
+  isClaimed: boolean;
+  claimedAt?: number;
+}
+
+export interface SeasonalChallenge {
+  id: string;
+  title: string;
+  description: string;
+  requirementText: string;
+  targetCount: number;
+  currentCount?: number;
+  isCompleted?: boolean;
+  isClaimed?: boolean;
+  rewardCash: number;
+  rewardCoins: number;
+  rewardCosmeticId?: string;
+  rewardCosmeticName?: string;
+}
+
+export interface SeasonDefinition {
+  id: string;
+  name: string;
+  theme: string;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+  challenges: SeasonalChallenge[];
+  seasonMilestoneReward?: {
+    name: string;
+    requiredChallengesCount: number;
+    rewardCoins: number;
+    rewardTitle: string;
+    isClaimed?: boolean;
+  };
+}
+
+export interface VehicleCatalogItem {
+  id: string;
+  name: string;
+  type: VehicleType;
+  description: string;
+  priceCash: number;
+  priceCoins?: number;
+  isPremiumExclusive?: boolean;
+  isOwned: boolean;
+  specs: {
+    topSpeedKmh: number;
+    acceleration: string;
+    durability: string;
+    cargoCapacity: string;
+  };
+  availableSkins?: {
+    id: string;
+    name: string;
+    paintColor: string;
+    priceCash?: number;
+    priceCoins?: number;
+    isUnlocked: boolean;
+  }[];
+}
+
+export interface EmpireOverviewSnapshot {
+  streetCash: number;
+  premiumCoins: number; // Clearly marked dev/test balance
+  dailyNetIncome: number;
+  dailyGrossRevenue: number;
+  dailyOperatingExpenses: number;
+  totalPropertyValuation: number;
+  totalBusinessValuation: number;
+  netWorth: number;
+  totalNetWorth: number;
+  totalDailyRevenue: number;
+  totalDailyOperatingCost: number;
+  totalDailyPropertyUpkeep: number;
+  netDailyProfit: number;
+  ownedBusinessesCount: number;
+  ownedPropertiesCount: number;
+  ownedVehiclesCount: number;
+  unlockedAchievementsCount: number;
+  totalAchievementsCount: number;
+  prestigeLevel: number;
+  prestigePoints: number;
+  activeSeasonId: string;
+  activeSeasonName: string;
+  businesses: BusinessInfo[];
+  properties: PropertyInfo[];
+  fleet: {
+    ownedVehicles: string[];
+    unlockedSkins: string[];
+    catalog: VehicleCatalogItem[];
+  };
+  season: {
+    activeSeason: SeasonDefinition;
+    upcomingPreview: SeasonDefinition;
+    points: number;
+    completedChallenges: string[];
+    claimedChallenges: string[];
+    milestoneClaimed: boolean;
+  };
+  achievements: {
+    catalog: AchievementDefinition[];
+    playerState: Record<string, PlayerAchievementState>;
+    unlockedCount: number;
+    totalCount: number;
+    prestige: {
+      points: number;
+      level: number;
+      title: string;
+    };
+  };
+  transactionHistory: TransactionRecord[];
 }
 
 export interface VehicleUpgrade {
@@ -264,6 +426,9 @@ export type GameSnapshot = {
   needs?: NeedsState;
   freelanceInfo?: FreelanceSnapshotInfo;
   cameraMode?: "third-person" | "first-person";
+  premiumCoins?: number;
+  isEmpireModalOpen?: boolean;
+  empireOverview?: EmpireOverviewSnapshot;
 };
 
 export type GameMaterials = {

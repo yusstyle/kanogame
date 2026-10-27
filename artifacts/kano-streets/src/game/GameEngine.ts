@@ -21,7 +21,7 @@ import { buildNavigationNetwork, type NavigationNetwork } from "./navigation";
 import { PedestrianSystem } from "./PedestrianSystem";
 import { TrafficSystem } from "./TrafficSystem";
 import { createWorld } from "./world";
-import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType, CareerPathChoice, PropertyId, InteriorId, FurnitureInstance, HomeNavInfo, PlayerHomeEntry } from "./types";
+import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType, CareerPathChoice, PropertyId, InteriorId, FurnitureInstance, HomeNavInfo, PlayerHomeEntry, BusinessId, CurrencyType } from "./types";
 import { SocialSystem } from "./socialSystem";
 import { EconomySystem, normalizePropertyId } from "./economySystem";
 import { KANO_LANDMARKS, getNearestLandmark, getGpsLandmark } from "./landmarks";
@@ -159,6 +159,7 @@ export class GameEngine {
   private gpsTargetLandmark: string | null = null;
   private isFurnishingMode = false;
   private isFurnitureShopOpen = false;
+  private isEmpireModalOpen = false;
   private cameraMode: "third-person" | "first-person" = "third-person";
 
   constructor(
@@ -572,11 +573,20 @@ export class GameEngine {
       this.toggleCameraMode();
       return;
     }
+    if (normalized === "k" && this.screen === "playing") {
+      this.toggleEmpireModal();
+      return;
+    }
     if (normalized === "r" && this.screen !== "menu") {
       this.reset();
       return;
     }
     if (normalized === "escape" && this.screen === "playing") {
+      if (this.isEmpireModalOpen) {
+        this.isEmpireModalOpen = false;
+        this.pushSnapshot(true);
+        return;
+      }
       if (this.isFurnishingMode) {
         this.isFurnishingMode = false;
         this.pushSnapshot(true);
@@ -687,6 +697,11 @@ export class GameEngine {
     }
 
     if (key === "escape" && !event.repeat && this.screen === "playing") {
+      if (this.isEmpireModalOpen) {
+        this.isEmpireModalOpen = false;
+        this.pushSnapshot(true);
+        return;
+      }
       if (this.isFurnishingMode) {
         this.isFurnishingMode = false;
         this.pushSnapshot(true);
@@ -714,6 +729,10 @@ export class GameEngine {
     }
     if (key === "v" && !event.repeat && this.screen === "playing") {
       this.toggleCameraMode();
+      return;
+    }
+    if (key === "k" && !event.repeat && this.screen === "playing") {
+      this.toggleEmpireModal();
       return;
     }
     this.keys.add(movementKey);
@@ -1362,6 +1381,24 @@ export class GameEngine {
         this.statusMessage = dayOutcome.message;
         this.saveGame();
       }
+      let maxBizLvl = 1;
+      this.economy.businessLevels.forEach((lvl) => {
+        if (lvl > maxBizLvl) maxBizLvl = lvl;
+      });
+      let hasSolar = false;
+      this.economy.propertyRenovations.forEach((ren) => {
+        if (ren >= 1) hasSolar = true;
+      });
+
+      this.economy.checkAndUnlockAchievements({
+        cash: this.cash,
+        dayCount: this.economy.dayCount,
+        ownedBusinesses: this.economy.getOwnedBusinessesList() as BusinessId[],
+        ownedProperties: this.economy.getOwnedPropertiesList() as PropertyId[],
+        completedMissions: this.missionSystem.getCompletedMissionsList().length,
+        maxBusinessLevel: maxBizLvl,
+        hasSolar,
+      });
 
       if (this.mode === "on-foot") this.updatePlayer(dt, now);
       else this.updateCar(dt);
@@ -2638,6 +2675,9 @@ export class GameEngine {
       needs: this.lifeSim.getSnapshot(),
       freelanceInfo: this.freelanceSystem.getSnapshot(),
       cameraMode: this.cameraMode,
+      premiumCoins: this.economy.premiumCoins,
+      isEmpireModalOpen: this.isEmpireModalOpen,
+      empireOverview: this.economy.getEmpireOverview(this.cash),
     });
   }
 
@@ -3177,6 +3217,92 @@ export class GameEngine {
     const propId = propertyId ?? this.getCurrentInteriorPropertyId();
     if (!propId) return [];
     return this.economy.getPlacedFurniture(propId);
+  }
+
+  // =========================================================================
+  // Milestone 15: Persistent Empire Economy & Live Content Foundation
+  // =========================================================================
+
+  public toggleEmpireModal(force?: boolean): boolean {
+    this.isEmpireModalOpen = typeof force === "boolean" ? force : !this.isEmpireModalOpen;
+    this.pushSnapshot(true);
+    return this.isEmpireModalOpen;
+  }
+
+  public upgradeBusiness(id: BusinessId) {
+    const res = this.economy.upgradeBusiness(id, this.cash);
+    if (res.success && res.cost) {
+      this.cash -= res.cost;
+      this.saveGame();
+      this.statusMessage = res.message;
+      this.pushSnapshot(true);
+    }
+    return res;
+  }
+
+  public renovateProperty(id: PropertyId, useCoins = false) {
+    const res = this.economy.renovateProperty(id, this.cash, this.economy.premiumCoins, useCoins);
+    if (res.success) {
+      if (res.costCash > 0) this.cash -= res.costCash;
+      this.saveGame();
+      this.statusMessage = res.message;
+      this.pushSnapshot(true);
+    }
+    return res;
+  }
+
+  public purchaseVehicle(vehicleId: string, currency: CurrencyType = "cash") {
+    const res = this.economy.purchaseVehicle(vehicleId, this.cash, this.economy.premiumCoins, currency);
+    if (res.success) {
+      if (currency === "cash" && res.cost > 0) this.cash -= res.cost;
+      this.saveGame();
+      this.statusMessage = res.message;
+      this.pushSnapshot(true);
+    }
+    return res;
+  }
+
+  public purchaseVehicleSkin(skinId: string, vehicleId: string, currency: CurrencyType = "coins") {
+    const res = this.economy.purchaseVehicleSkin(skinId, vehicleId, this.cash, this.economy.premiumCoins, currency);
+    if (res.success) {
+      if (currency === "cash" && res.cost > 0) this.cash -= res.cost;
+      this.saveGame();
+      this.statusMessage = res.message;
+      this.pushSnapshot(true);
+    }
+    return res;
+  }
+
+  public claimAchievement(achievementId: string) {
+    const res = this.economy.claimAchievement(achievementId);
+    if (res.success) {
+      if (res.rewardCash > 0) this.cash += res.rewardCash;
+      this.saveGame();
+      this.statusMessage = res.message;
+      this.pushSnapshot(true);
+    }
+    return res;
+  }
+
+  public claimSeasonalChallenge(challengeId: string) {
+    const res = this.economy.claimSeasonalChallenge(challengeId);
+    if (res.success) {
+      if (res.rewardCash > 0) this.cash += res.rewardCash;
+      this.saveGame();
+      this.statusMessage = res.message;
+      this.pushSnapshot(true);
+    }
+    return res;
+  }
+
+  public claimSeasonalMilestone() {
+    const res = this.economy.claimSeasonalMilestone();
+    if (res.success) {
+      this.saveGame();
+      this.statusMessage = res.message;
+      this.pushSnapshot(true);
+    }
+    return res;
   }
 
   private lerpAngle(from: number, to: number, alpha: number) {

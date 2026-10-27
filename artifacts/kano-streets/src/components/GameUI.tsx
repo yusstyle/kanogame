@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import './GameUI.css';
 import TouchControls from './TouchControls';
-import type { ActiveMissionInfo, CareerPathChoice, SocialContact, StorySnapshotInfo, VehicleType, FurnitureInstance, PropertyId, HomeNavInfo, NeedsState, FreelanceSnapshotInfo, PlayerHomeEntry } from '../game/types';
+import type { ActiveMissionInfo, CareerPathChoice, SocialContact, StorySnapshotInfo, VehicleType, FurnitureInstance, PropertyId, HomeNavInfo, NeedsState, FreelanceSnapshotInfo, PlayerHomeEntry, BusinessId, CurrencyType, EmpireOverviewSnapshot } from '../game/types';
 import { KANO_LANDMARKS, getGpsLandmark, computeGpsGuidance } from '../game/landmarks';
 import { CAREER_MISSIONS_CATALOG } from '../game/missionSystem';
 import CityMapModal from './CityMapModal';
 import FurnitureShopModal from './FurnitureShopModal';
 import FurnishingOverlay from './FurnishingOverlay';
+import EmpireModal from './EmpireModal';
 
 export type Screen = 'menu' | 'playing' | 'paused';
 export type Mode = 'on-foot' | 'driving';
@@ -51,6 +52,9 @@ export interface GameUIProps {
   needs?: NeedsState;
   freelanceInfo?: FreelanceSnapshotInfo;
   cameraMode?: "third-person" | "first-person";
+  premiumCoins?: number;
+  isEmpireModalOpen?: boolean;
+  empireOverview?: EmpireOverviewSnapshot;
   graphicsQuality: GraphicsQuality;
   onStart: () => void;
   onPause: () => void;
@@ -63,6 +67,14 @@ export interface GameUIProps {
   onFindMyHome?: () => unknown;
   onLeaseProperty?: (propertyId?: PropertyId) => { success: boolean; message: string };
   onPurchaseProperty?: (propertyId: PropertyId) => { success: boolean; message: string };
+  onToggleEmpireModal?: (force?: boolean) => unknown;
+  onUpgradeBusiness?: (id: BusinessId) => { success: boolean; cost?: number; newLevel?: number; message: string };
+  onRenovateProperty?: (id: PropertyId, useCoins?: boolean) => { success: boolean; costCash: number; costCoins: number; newLevel: number; message: string };
+  onPurchaseVehicle?: (vehicleId: string, currency?: CurrencyType) => { success: boolean; message: string; costCash?: number; costCoins?: number };
+  onPurchaseVehicleSkin?: (skinId: string, vehicleId: string, currency?: CurrencyType) => { success: boolean; message: string; costCash?: number; costCoins?: number };
+  onClaimAchievement?: (achievementId: string) => { success: boolean; rewardCash: number; rewardCoins: number; message: string };
+  onClaimSeasonalChallenge?: (challengeId: string) => { success: boolean; rewardCash: number; rewardCoins: number; message: string };
+  onClaimSeasonalMilestone?: () => { success: boolean; rewardCoins: number; rewardTitle?: string; message: string };
   onAcceptMission?: (id: string) => boolean;
   onCancelMission?: () => boolean;
   onExamineIndenture?: () => boolean;
@@ -148,6 +160,9 @@ export default function GameUI({
   needs,
   freelanceInfo: _freelanceInfo,
   cameraMode = "third-person",
+  premiumCoins = 250,
+  isEmpireModalOpen,
+  empireOverview,
   graphicsQuality,
   onStart,
   onPause,
@@ -160,6 +175,14 @@ export default function GameUI({
   onFindMyHome,
   onLeaseProperty,
   onPurchaseProperty,
+  onToggleEmpireModal,
+  onUpgradeBusiness,
+  onRenovateProperty,
+  onPurchaseVehicle,
+  onPurchaseVehicleSkin,
+  onClaimAchievement,
+  onClaimSeasonalChallenge,
+  onClaimSeasonalMilestone,
   onAcceptMission,
   onCancelMission,
   onExamineIndenture,
@@ -183,6 +206,7 @@ export default function GameUI({
 }: GameUIProps) {
   const [showDirectory, setShowDirectory] = useState(false);
   const [showMissions, setShowMissions] = useState(false);
+  const [showEmpire, setShowEmpire] = useState(false);
 
   const isInsideHome = activeInterior === 'apartment' || activeInterior === 'penthouse' || activeInterior === 'house';
   const currentPropertyId: PropertyId = activeInterior === 'apartment' ? 'unit-2b' : activeInterior === 'penthouse' ? 'bompai-penthouse' : 'albaraka-villa';
@@ -201,6 +225,9 @@ export default function GameUI({
         else onSetGPSTarget?.("my-home");
       } else if (e.key === 'j' || e.key === 'J') {
         setShowMissions((prev) => !prev);
+      } else if (e.key === 'k' || e.key === 'K') {
+        if (onToggleEmpireModal) onToggleEmpireModal();
+        else setShowEmpire((prev) => !prev);
       } else if (e.key === 'n' || e.key === 'N') {
         onCycleWeather?.();
       } else if (e.key === 'u' || e.key === 'U') {
@@ -209,7 +236,7 @@ export default function GameUI({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [screen, onCycleWeather, onToggleAudioMute, gpsTarget, onFindMyHome, onSetGPSTarget]);
+  }, [screen, onCycleWeather, onToggleAudioMute, onToggleEmpireModal, gpsTarget, onFindMyHome, onSetGPSTarget]);
 
   if (screen === 'menu') {
     return (
@@ -239,6 +266,7 @@ export default function GameUI({
             <div className="ks-control-line"><span className="ks-control-label">RUN</span><span><Key>SHIFT</Key></span></div>
             <div className="ks-control-line"><span className="ks-control-label">JUMP</span><span><Key>SPACE</Key></span></div>
             <div className="ks-control-line"><span className="ks-control-label">CAMERA</span><span><Key>V</Key> <small>1st / 3rd Person</small></span></div>
+            <div className="ks-control-line"><span className="ks-control-label">EMPIRE</span><span><Key>K</Key> <small>Commerce & Fleet</small></span></div>
             <div className="ks-control-line"><span className="ks-control-label">RESET</span><span><Key>R</Key></span></div>
           </div>
           <p className="ks-touch-menu-hint">Use the on-screen pad to move; drag open space to look.</p>
@@ -364,6 +392,23 @@ export default function GameUI({
             >
               <span>🛋️ SHOP</span>
             </button>
+            <button
+              className="ks-hud-directory-btn ks-hud-empire-btn"
+              onClick={() => {
+                if (onToggleEmpireModal) onToggleEmpireModal();
+                else setShowEmpire((prev) => !prev);
+              }}
+              title="Manage Commercial Enterprises, Fleet & Harmattan Season [K]"
+              aria-label="Toggle Empire & Commercial Economy Hub"
+              style={{
+                borderColor: "rgba(245, 158, 11, 0.5)",
+                background: "rgba(217, 119, 6, 0.15)",
+                color: "#fef3c7",
+              }}
+            >
+              <Key>K</Key>
+              <span>EMPIRE</span>
+            </button>
             <span className="ks-pause-hint"><Key>ESC</Key><span>PAUSE</span></span>
           </header>
 
@@ -474,6 +519,10 @@ export default function GameUI({
             <span className="ks-wallet-item">
               <small>CASH</small>
               <strong>₦{(cash ?? 150000).toLocaleString()}</strong>
+            </span>
+            <span className="ks-wallet-item ks-coins-badge" style={{ background: "rgba(217, 119, 6, 0.2)", borderColor: "rgba(245, 158, 11, 0.5)" }} title="Simulated Kano Gold (Developer Test Balance)">
+              <small style={{ color: "#fbbf24" }}>🪙 KANO GOLD</small>
+              <strong style={{ color: "#fef08a" }}>{(premiumCoins ?? 250).toLocaleString()} COINS</strong>
             </span>
             {dailyIncome !== undefined && dailyIncome !== 0 && (
               <span className={`ks-wallet-item ${dailyIncome > 0 ? "ks-biz-badge" : "ks-fine-alert"}`}>
@@ -679,6 +728,25 @@ export default function GameUI({
               onClose={() => onCloseFurnitureShop?.()}
               playerCash={cash ?? 0}
               onPurchaseFurniture={onPurchaseFurniture ?? ((id: string) => ({ success: false, message: "" }))}
+            />
+          )}
+
+          {(showEmpire || isEmpireModalOpen) && (
+            <EmpireModal
+              onClose={() => {
+                setShowEmpire(false);
+                onToggleEmpireModal?.(false);
+              }}
+              cash={cash}
+              premiumCoins={premiumCoins}
+              empireOverview={empireOverview}
+              onUpgradeBusiness={onUpgradeBusiness}
+              onRenovateProperty={onRenovateProperty}
+              onPurchaseVehicle={onPurchaseVehicle}
+              onPurchaseVehicleSkin={onPurchaseVehicleSkin}
+              onClaimAchievement={onClaimAchievement}
+              onClaimSeasonalChallenge={onClaimSeasonalChallenge}
+              onClaimSeasonalMilestone={onClaimSeasonalMilestone}
             />
           )}
 

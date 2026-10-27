@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import GameUI from "./components/GameUI";
 import GameViewport, { type GameViewportHandle } from "./components/GameViewport";
-import type { CareerPathChoice, GameScreen, GameSnapshot, GraphicsQuality, PropertyId } from "./game/types";
+import type { CareerPathChoice, GameScreen, GameSnapshot, GraphicsQuality, PropertyId, BusinessId, CurrencyType } from "./game/types";
 
 const INITIAL_SNAPSHOT: GameSnapshot = {
   mode: "on-foot",
@@ -157,6 +157,38 @@ function App() {
     return viewportRef.current?.toggleCameraMode();
   }, []);
 
+  const toggleEmpireModal = useCallback((force?: boolean) => {
+    return viewportRef.current?.toggleEmpireModal(force);
+  }, []);
+
+  const upgradeBusiness = useCallback((id: BusinessId) => {
+    return viewportRef.current?.upgradeBusiness(id) ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const renovateProperty = useCallback((id: PropertyId, useCoins?: boolean) => {
+    return viewportRef.current?.renovateProperty(id, useCoins) ?? { success: false, costCash: 0, costCoins: 0, newLevel: 0, message: "Engine not ready" };
+  }, []);
+
+  const purchaseVehicle = useCallback((vehicleId: string, currency?: CurrencyType) => {
+    return viewportRef.current?.purchaseVehicle(vehicleId, currency) ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const purchaseVehicleSkin = useCallback((skinId: string, vehicleId: string, currency?: CurrencyType) => {
+    return viewportRef.current?.purchaseVehicleSkin(skinId, vehicleId, currency) ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const claimAchievement = useCallback((achievementId: string) => {
+    return viewportRef.current?.claimAchievement(achievementId) ?? { success: false, rewardCash: 0, rewardCoins: 0, message: "Engine not ready" };
+  }, []);
+
+  const claimSeasonalChallenge = useCallback((challengeId: string) => {
+    return viewportRef.current?.claimSeasonalChallenge(challengeId) ?? { success: false, rewardCash: 0, rewardCoins: 0, message: "Engine not ready" };
+  }, []);
+
+  const claimSeasonalMilestone = useCallback(() => {
+    return viewportRef.current?.claimSeasonalMilestone() ?? { success: false, rewardCoins: 0, message: "Engine not ready" };
+  }, []);
+
   const receiveSnapshot = useCallback((next: GameSnapshot) => {
     setSnapshot((current) => {
       if (
@@ -199,7 +231,10 @@ function App() {
         current.needs?.hunger === next.needs?.hunger &&
         current.needs?.energy === next.needs?.energy &&
         current.needs?.hygiene === next.needs?.hygiene &&
-        current.cameraMode === next.cameraMode
+        current.cameraMode === next.cameraMode &&
+        current.premiumCoins === next.premiumCoins &&
+        current.isEmpireModalOpen === next.isEmpireModalOpen &&
+        current.empireOverview === next.empireOverview
       ) {
         return current;
       }
@@ -256,6 +291,17 @@ function App() {
         freelanceInfo={snapshot.freelanceInfo}
         cameraMode={snapshot.cameraMode ?? "third-person"}
         onToggleCameraMode={toggleCameraMode}
+        premiumCoins={snapshot.premiumCoins}
+        isEmpireModalOpen={snapshot.isEmpireModalOpen}
+        empireOverview={snapshot.empireOverview}
+        onToggleEmpireModal={toggleEmpireModal}
+        onUpgradeBusiness={upgradeBusiness}
+        onRenovateProperty={renovateProperty}
+        onPurchaseVehicle={purchaseVehicle}
+        onPurchaseVehicleSkin={purchaseVehicleSkin}
+        onClaimAchievement={claimAchievement}
+        onClaimSeasonalChallenge={claimSeasonalChallenge}
+        onClaimSeasonalMilestone={claimSeasonalMilestone}
         graphicsQuality={graphicsQuality}
         onStart={start}
         onPause={pause}
