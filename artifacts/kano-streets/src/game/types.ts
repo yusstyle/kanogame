@@ -4,6 +4,8 @@ export type Collider = {
   halfX: number;
   halfZ: number;
   height?: number;
+  isPerimeterWall?: boolean;
+  isFurniture?: boolean;
 };
 
 export type BuildingKind =
@@ -116,6 +118,18 @@ export interface PropertyInfo {
   currentValuation?: number;
 }
 
+export type BusinessCategory =
+  | "restaurant" // Restaurants and food businesses
+  | "retail" // Supermarkets and retail shops
+  | "technology" // Technology businesses
+  | "logistics" // Transport and logistics
+  | "real_estate" // Real estate and property management
+  | "workshop" // Workshops and vehicle services
+  | "hospitality" // Hotels and hospitality
+  | "manufacturing" // Manufacturing and distribution
+  | "education" // Educational businesses
+  | "entertainment"; // Entertainment and leisure
+
 export interface BusinessInfo {
   id: BusinessId;
   name: string;
@@ -130,6 +144,55 @@ export interface BusinessInfo {
   upgradeCost?: number;
   levelTitle?: string;
   perks?: string[];
+  // Phase A Business Management Foundations:
+  category?: BusinessCategory;
+  categoryTitle?: string;
+  condition?: number; // 0 to 100% (premise & equipment physical upkeep)
+  reputation?: number; // 0 to 100% (market standing & goodwill)
+  customerSatisfaction?: number; // 0 to 100% (service rating)
+  employeeCount?: number;
+  inventoryStatus?: string;
+  outstandingObligations?: number;
+  dailyTax?: number;
+  netProfit?: number; // dailyRevenue - dailyCost - dailyTax
+  valuation?: number;
+  maintenanceCost?: number;
+  lastMaintainedDay?: number;
+}
+
+export interface DailyFinancialStatement {
+  day: number;
+  month: number;
+  calendarPeriod: string;
+  grossRevenue: number;
+  businessOperatingCosts: number;
+  employeeSalaries: number;
+  inventoryExpenses: number;
+  propertyUpkeep: number;
+  municipalTaxes: number;
+  totalExpenses: number;
+  netProfit: number; // grossRevenue - totalExpenses
+  netCashFlow: number;
+  liquidCash: number;
+  propertyValuation: number;
+  businessValuation: number;
+  totalEmpireNetWorth: number;
+  timestamp: number;
+}
+
+export interface MonthlyFinancialSummary {
+  month: number;
+  periodName: string;
+  totalRevenue: number;
+  totalOperatingCosts: number;
+  totalSalaries: number;
+  totalInventoryExpenses: number;
+  totalPropertyUpkeep: number;
+  totalTaxes: number;
+  totalExpenses: number;
+  totalNetProfit: number;
+  averageDailyProfit: number;
+  endingNetWorth: number;
 }
 
 export type CurrencyType = "cash" | "premium_coins" | "coins";
@@ -145,6 +208,7 @@ export interface TransactionRecord {
     | "purchase"
     | "upgrade"
     | "renovation"
+    | "maintenance"
     | "mission_reward"
     | "freelance"
     | "seasonal_reward"
@@ -281,6 +345,11 @@ export interface EmpireOverviewSnapshot {
     };
   };
   transactionHistory: TransactionRecord[];
+  // Phase A Financial Reporting & Management Enhancements:
+  financialStatement?: DailyFinancialStatement;
+  monthlySummary?: MonthlyFinancialSummary;
+  recentFinancialStatements?: DailyFinancialStatement[];
+  businessEventNotifications?: string[];
 }
 
 export interface VehicleUpgrade {
@@ -300,6 +369,8 @@ export type SocialContact = {
   affection: number; // 0 to 100
   description: string;
   avatarSeed?: number;
+  lastGreetingTimestamp?: number;
+  dailyGreetingCount?: number;
 };
 
 export type InvestigationChoice = "elders" | "bank" | null;
@@ -388,6 +459,30 @@ export interface FreelanceSnapshotInfo {
   nextAvailableContract: FreelanceContract | null;
 }
 
+export type CameraMode = "third-person" | "road-focused" | "first-person";
+
+export interface CameraDebugInfo {
+  cameraMode: CameraMode;
+  cameraWorldPos: { x: number; y: number; z: number };
+  cameraLookDir: { x: number; y: number; z: number };
+  playerVehicleWorldPos: { x: number; y: number; z: number };
+  nearestObstructingMesh: {
+    name: string;
+    parentName: string;
+    category: "vehicle" | "interior" | "street furniture" | "pedestrian" | "environment" | "seat/chair";
+    distanceToBox: number;
+    distanceToCenter: number;
+    isInsideBoundingBox: boolean;
+    worldPos: { x: number; y: number; z: number };
+    boundingBox: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
+  } | null;
+  mode: GameMode;
+  activeVehicle: VehicleType | null;
+  isIndoors: boolean;
+  activeInterior: InteriorId | null;
+  isSeated: boolean;
+}
+
 export type GameSnapshot = {
   mode: GameMode;
   vehicleType?: VehicleType | null;
@@ -425,10 +520,18 @@ export type GameSnapshot = {
   playerHomes?: PlayerHomeEntry[];
   needs?: NeedsState;
   freelanceInfo?: FreelanceSnapshotInfo;
-  cameraMode?: "third-person" | "first-person";
+  cameraMode?: CameraMode;
+  cameraDebug?: CameraDebugInfo;
   premiumCoins?: number;
   isEmpireModalOpen?: boolean;
   empireOverview?: EmpireOverviewSnapshot;
+  hasSeenOnboarding?: boolean;
+  vehicleCondition?: number;
+  activeConsequence?: string | null;
+  isSmartphoneOpen?: boolean;
+  dailyAtmWithdrawn?: number;
+  atmDailyLimit?: number;
+  socialContacts?: SocialContact[];
 };
 
 export type GameMaterials = {
@@ -479,9 +582,17 @@ export type GameMaterials = {
   headlightBeam?: import("three").MeshStandardMaterial;
   weatheredBrick?: import("three").MeshStandardMaterial;
   rustedZinc?: import("three").MeshStandardMaterial;
+  hazardBarrier?: import("three").MeshStandardMaterial;
+  burlapSack?: import("three").MeshStandardMaterial;
+  signGreenHighway?: import("three").MeshStandardMaterial;
   curbStriped?: import("three").MeshStandardMaterial;
   curbYellowStriped?: import("three").MeshStandardMaterial;
   solarPanel?: import("three").MeshStandardMaterial;
   terracotta?: import("three").MeshStandardMaterial;
   burglarBars?: import("three").MeshStandardMaterial;
+  interiorWall?: import("three").MeshStandardMaterial;
+  ceilingMat?: import("three").MeshStandardMaterial;
+  patternedRug?: import("three").MeshStandardMaterial;
+  woodFloor?: import("three").MeshStandardMaterial;
+  marbleWhite?: import("three").MeshStandardMaterial;
 };

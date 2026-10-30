@@ -1,7 +1,11 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import GameUI from "./components/GameUI";
 import GameViewport, { type GameViewportHandle } from "./components/GameViewport";
 import type { CareerPathChoice, GameScreen, GameSnapshot, GraphicsQuality, PropertyId, BusinessId, CurrencyType } from "./game/types";
+import { authService } from "./game/authService";
+import { isHeadingEquivalent } from "./game/navigation";
+
+export { isHeadingEquivalent };
 
 const INITIAL_SNAPSHOT: GameSnapshot = {
   mode: "on-foot",
@@ -17,6 +21,11 @@ function App() {
   const [screen, setScreen] = useState<GameScreen>("menu");
   const [snapshot, setSnapshot] = useState<GameSnapshot>(INITIAL_SNAPSHOT);
   const [graphicsQuality, setGraphicsQuality] = useState<GraphicsQuality>("balanced");
+
+  useEffect(() => {
+    // Check for existing session on startup (401 seamlessly resolves to Guest Mode)
+    authService.initSession().catch(() => {});
+  }, []);
 
   const start = useCallback(() => {
     setSnapshot(INITIAL_SNAPSHOT);
@@ -157,12 +166,28 @@ function App() {
     return viewportRef.current?.toggleCameraMode();
   }, []);
 
+  const toggleSmartphone = useCallback((force?: boolean) => {
+    return viewportRef.current?.toggleSmartphone(force);
+  }, []);
+
+  const captureScreenshot = useCallback(() => {
+    return viewportRef.current?.captureScreenshot() ?? null;
+  }, []);
+
+  const interactSocial = useCallback((contactId: string, choiceId: string) => {
+    return viewportRef.current?.interactSocial(contactId, choiceId) ?? null;
+  }, []);
+
   const toggleEmpireModal = useCallback((force?: boolean) => {
     return viewportRef.current?.toggleEmpireModal(force);
   }, []);
 
   const upgradeBusiness = useCallback((id: BusinessId) => {
     return viewportRef.current?.upgradeBusiness(id) ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const maintainBusiness = useCallback((id: BusinessId) => {
+    return viewportRef.current?.maintainBusiness(id) ?? { success: false, cost: 0, message: "Engine not ready", newCondition: 0 };
   }, []);
 
   const renovateProperty = useCallback((id: PropertyId, useCoins?: boolean) => {
@@ -189,6 +214,11 @@ function App() {
     return viewportRef.current?.claimSeasonalMilestone() ?? { success: false, rewardCoins: 0, message: "Engine not ready" };
   }, []);
 
+  const dismissOnboarding = useCallback(() => {
+    viewportRef.current?.dismissOnboarding();
+    setSnapshot((prev) => ({ ...prev, hasSeenOnboarding: true }));
+  }, []);
+
   const receiveSnapshot = useCallback((next: GameSnapshot) => {
     setSnapshot((current) => {
       if (
@@ -212,7 +242,7 @@ function App() {
         current.availableMissionsCount === next.availableMissionsCount &&
         current.playerCoords?.x === next.playerCoords?.x &&
         current.playerCoords?.z === next.playerCoords?.z &&
-        current.playerHeading === next.playerHeading &&
+        isHeadingEquivalent(current.playerHeading, next.playerHeading, 0.035) &&
         current.storyInfo?.stageName === next.storyInfo?.stageName &&
         current.storyInfo?.currentObjective === next.storyInfo?.currentObjective &&
         current.weatherPreset === next.weatherPreset &&
@@ -234,7 +264,9 @@ function App() {
         current.cameraMode === next.cameraMode &&
         current.premiumCoins === next.premiumCoins &&
         current.isEmpireModalOpen === next.isEmpireModalOpen &&
-        current.empireOverview === next.empireOverview
+        current.isSmartphoneOpen === next.isSmartphoneOpen &&
+        current.empireOverview === next.empireOverview &&
+        current.hasSeenOnboarding === next.hasSeenOnboarding
       ) {
         return current;
       }
@@ -290,12 +322,19 @@ function App() {
         needs={snapshot.needs}
         freelanceInfo={snapshot.freelanceInfo}
         cameraMode={snapshot.cameraMode ?? "third-person"}
+        cameraDebug={snapshot.cameraDebug}
         onToggleCameraMode={toggleCameraMode}
         premiumCoins={snapshot.premiumCoins}
         isEmpireModalOpen={snapshot.isEmpireModalOpen}
+        isSmartphoneOpen={snapshot.isSmartphoneOpen}
+        onToggleSmartphone={toggleSmartphone}
+        onCaptureScreenshot={captureScreenshot}
+        onInteractSocial={interactSocial}
+        vehicleCondition={snapshot.vehicleCondition}
         empireOverview={snapshot.empireOverview}
         onToggleEmpireModal={toggleEmpireModal}
         onUpgradeBusiness={upgradeBusiness}
+        onMaintainBusiness={maintainBusiness}
         onRenovateProperty={renovateProperty}
         onPurchaseVehicle={purchaseVehicle}
         onPurchaseVehicleSkin={purchaseVehicleSkin}
@@ -333,6 +372,8 @@ function App() {
         getUnplacedFurniture={getUnplacedFurniture}
         getPlacedFurniture={getPlacedFurniture}
         onQualityChange={setGraphicsQuality}
+        hasSeenOnboarding={snapshot.hasSeenOnboarding}
+        onDismissOnboarding={dismissOnboarding}
       />
     </main>
   );

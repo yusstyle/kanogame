@@ -5,7 +5,67 @@ import type {
   AchievementDefinition,
   SeasonDefinition,
   VehicleCatalogItem,
+  BusinessCategory,
 } from "./types";
+
+export interface BusinessMetadataConfig {
+  id: BusinessId;
+  name: string;
+  category: BusinessCategory;
+  categoryTitle: string;
+  categoryIcon: string;
+  location: string;
+  purchasePrice: number;
+  description: string;
+  defaultInventory: string;
+}
+
+export const BUSINESS_METADATA: Record<BusinessId, BusinessMetadataConfig> = {
+  "sabon-gari-shop": {
+    id: "sabon-gari-shop",
+    name: "Sabon Gari Electronics Stall",
+    category: "retail",
+    categoryTitle: "Supermarkets & Retail",
+    categoryIcon: "📱",
+    location: "SABON GARI PLAZA (-22, 48)",
+    purchasePrice: 450000,
+    description: "Retail outlet selling phone accessories, power banks, and electronics. Steady foot traffic from shoppers.",
+    defaultInventory: "Stocked (Smartphones & Accessories)",
+  },
+  "arewa-suya-franchise": {
+    id: "arewa-suya-franchise",
+    name: "Arewa Suya Lounge Franchise Share",
+    category: "restaurant",
+    categoryTitle: "Restaurants & Dining",
+    categoryIcon: "🍢",
+    location: "AIRPORT ROAD CORRIDOR (16, -42)",
+    purchasePrice: 1200000,
+    description: "Franchise revenue share in the premier 24/7 Suya barbecue grill and fast-food dining terrace.",
+    defaultInventory: "Fresh Supplies (Spiced Beef & Charcoal)",
+  },
+  "cyber-hub-station": {
+    id: "cyber-hub-station",
+    name: "Cyber Hub Dual PS5 Gaming Station",
+    category: "entertainment",
+    categoryTitle: "Entertainment & Leisure",
+    categoryIcon: "🎮",
+    location: "KANO CYBER HUB (80, -46)",
+    purchasePrice: 800000,
+    description: "Two dedicated tournament gaming setups leased to competitive players and local esports enthusiasts.",
+    defaultInventory: "Hardware Operational (LAN & Consoles)",
+  },
+  "dawanau-grain-depot": {
+    id: "dawanau-grain-depot",
+    name: "Dawanau Wholesale Grain Depot",
+    category: "logistics",
+    categoryTitle: "Transport & Logistics",
+    categoryIcon: "🌾",
+    location: "DAWANAU WHOLESALE DEPOT (42, -135)",
+    purchasePrice: 4500000,
+    description: "Premier wholesale agricultural grain silo and trans-Saharan bulk export terminal. Massive commercial revenue yield.",
+    defaultInventory: "Bulk Grain Silos (Millet & Sorghum Sacks)",
+  },
+};
 
 export interface BusinessTierConfig {
   level: number;
@@ -14,6 +74,11 @@ export interface BusinessTierConfig {
   dailyRevenue: number;
   dailyOperatingCost: number;
   perks: string[];
+  maintenanceCost: number;
+  employeeCount: number;
+  inventoryStatus: string;
+  baseSatisfaction: number;
+  baseReputation: number;
 }
 
 export const BUSINESS_TIERS: Record<BusinessId, BusinessTierConfig[]> = {
@@ -25,6 +90,11 @@ export const BUSINESS_TIERS: Record<BusinessId, BusinessTierConfig[]> = {
       dailyRevenue: 15000,
       dailyOperatingCost: 5000,
       perks: ["Steady retail foot traffic in Sabon Gari market"],
+      maintenanceCost: 15000,
+      employeeCount: 2,
+      inventoryStatus: "Basic Accessory Stock (65% capacity)",
+      baseSatisfaction: 80,
+      baseReputation: 75,
     },
     {
       level: 2,
@@ -33,6 +103,11 @@ export const BUSINESS_TIERS: Record<BusinessId, BusinessTierConfig[]> = {
       dailyRevenue: 35000,
       dailyOperatingCost: 10000,
       perks: ["+15% regional trading margin", "Unlocks bulk device supply contracts"],
+      maintenanceCost: 30000,
+      employeeCount: 5,
+      inventoryStatus: "Bulk Tech Hardware Stocked (88% capacity)",
+      baseSatisfaction: 86,
+      baseReputation: 84,
     },
     {
       level: 3,
@@ -41,6 +116,11 @@ export const BUSINESS_TIERS: Record<BusinessId, BusinessTierConfig[]> = {
       dailyRevenue: 75000,
       dailyOperatingCost: 20000,
       perks: ["Premier northern consumer electronics dealership", "Daily net profit ~₦55,000/day"],
+      maintenanceCost: 55000,
+      employeeCount: 12,
+      inventoryStatus: "Full Inventory Hub (Authorized Dealership)",
+      baseSatisfaction: 94,
+      baseReputation: 92,
     },
   ],
   "arewa-suya-franchise": [
@@ -51,6 +131,11 @@ export const BUSINESS_TIERS: Record<BusinessId, BusinessTierConfig[]> = {
       dailyRevenue: 40000,
       dailyOperatingCost: 10000,
       perks: ["24/7 highway frontage beside Airport Road"],
+      maintenanceCost: 25000,
+      employeeCount: 4,
+      inventoryStatus: "Daily Fresh Beef Cuts & Yaji Seasonings",
+      baseSatisfaction: 84,
+      baseReputation: 80,
     },
     {
       level: 2,
@@ -59,6 +144,11 @@ export const BUSINESS_TIERS: Record<BusinessId, BusinessTierConfig[]> = {
       dailyRevenue: 90000,
       dailyOperatingCost: 22000,
       perks: ["Automated drive-thru service", "Daily complimentary meal restores 30% hunger & energy"],
+      maintenanceCost: 50000,
+      employeeCount: 9,
+      inventoryStatus: "Industrial Butchery & Charcoal Reserves",
+      baseSatisfaction: 89,
+      baseReputation: 88,
     },
     {
       level: 3,
@@ -67,6 +157,11 @@ export const BUSINESS_TIERS: Record<BusinessId, BusinessTierConfig[]> = {
       dailyRevenue: 180000,
       dailyOperatingCost: 45000,
       perks: ["State banquet catering partner", "High-volume corporate dinner reservations"],
+      maintenanceCost: 95000,
+      employeeCount: 22,
+      inventoryStatus: "Premium Cold-Chain Sourcing & VIP Banquet Stock",
+      baseSatisfaction: 96,
+      baseReputation: 95,
     },
   ],
   "cyber-hub-station": [
@@ -77,6 +172,11 @@ export const BUSINESS_TIERS: Record<BusinessId, BusinessTierConfig[]> = {
       dailyRevenue: 25000,
       dailyOperatingCost: 7000,
       perks: ["Two tournament esports pods leased to competitive local gamers"],
+      maintenanceCost: 20000,
+      employeeCount: 2,
+      inventoryStatus: "Dual 4K Displays & High-Speed LAN",
+      baseSatisfaction: 82,
+      baseReputation: 78,
     },
     {
       level: 2,
@@ -85,6 +185,11 @@ export const BUSINESS_TIERS: Record<BusinessId, BusinessTierConfig[]> = {
       dailyRevenue: 60000,
       dailyOperatingCost: 15000,
       perks: ["Direct high-speed commercial uplink", "+20% freelance software development payout rate"],
+      maintenanceCost: 40000,
+      employeeCount: 6,
+      inventoryStatus: "8 Gaming Rigs, Dedicated Fiber Node & Inverter",
+      baseSatisfaction: 88,
+      baseReputation: 85,
     },
     {
       level: 3,
@@ -93,6 +198,11 @@ export const BUSINESS_TIERS: Record<BusinessId, BusinessTierConfig[]> = {
       dailyRevenue: 130000,
       dailyOperatingCost: 32000,
       perks: ["National gaming league host", "Live tournament stream sponsorships and merchandise"],
+      maintenanceCost: 75000,
+      employeeCount: 16,
+      inventoryStatus: "Stadium Broadcast Gear, Soundproofing & VR Suites",
+      baseSatisfaction: 95,
+      baseReputation: 93,
     },
   ],
   "dawanau-grain-depot": [
@@ -103,6 +213,11 @@ export const BUSINESS_TIERS: Record<BusinessId, BusinessTierConfig[]> = {
       dailyRevenue: 220000,
       dailyOperatingCost: 55000,
       perks: ["Major wholesale grain terminal at Dawanau market", "High-capacity bulk freight storage"],
+      maintenanceCost: 80000,
+      employeeCount: 8,
+      inventoryStatus: "Standard Grain Silo (4,000 Sacks Stored)",
+      baseSatisfaction: 86,
+      baseReputation: 85,
     },
     {
       level: 2,
@@ -111,6 +226,11 @@ export const BUSINESS_TIERS: Record<BusinessId, BusinessTierConfig[]> = {
       dailyRevenue: 420000,
       dailyOperatingCost: 95000,
       perks: ["Direct rail & highway cargo dispatch", "Priority commercial bulk freight rates"],
+      maintenanceCost: 140000,
+      employeeCount: 18,
+      inventoryStatus: "Interstate Dispatch Fleet & 12,000 Sacks",
+      baseSatisfaction: 91,
+      baseReputation: 90,
     },
     {
       level: 3,
@@ -119,6 +239,11 @@ export const BUSINESS_TIERS: Record<BusinessId, BusinessTierConfig[]> = {
       dailyRevenue: 850000,
       dailyOperatingCost: 180000,
       perks: ["International trans-Saharan trade monopoly", "Daily net profit ~₦670,000/day"],
+      maintenanceCost: 260000,
+      employeeCount: 45,
+      inventoryStatus: "Trans-Continental Silo Complex & 35,000 Sacks",
+      baseSatisfaction: 97,
+      baseReputation: 96,
     },
   ],
 };

@@ -279,8 +279,8 @@ export function buildFurnitureMesh(
     }
 
     case "rug_geometric": {
-      // Flat decorative carpet
-      addBox(group, materials.carpetRed || clothRedMat, 0, 0.015, 0, 2.7, 0.02, 1.95, false);
+      // Elegant woven geometric area rug
+      addBox(group, materials.patternedRug || materials.cloth, 0, 0.015, 0, 2.7, 0.02, 1.95, false);
       // Fringe borders
       addBox(group, whiteMat, 0, 0.02, -0.99, 2.7, 0.01, 0.05, false);
       addBox(group, whiteMat, 0, 0.02, 0.99, 2.7, 0.01, 0.05, false);
@@ -705,6 +705,22 @@ export function buildFurnitureMesh(
       break;
     }
   }
+
+  group.userData.isFurniture = true;
+  group.traverse((c) => {
+    if (c instanceof THREE.Mesh) {
+      c.userData.isFurniture = true;
+      if (c.material) {
+        c.material = Array.isArray(c.material) ? c.material.map((m) => m.clone()) : c.material.clone();
+        const mats = Array.isArray(c.material) ? c.material : [c.material];
+        mats.forEach((m) => {
+          m.transparent = true;
+          m.userData = m.userData || {};
+          m.userData.baseOpacity = m.opacity ?? 1.0;
+        });
+      }
+    }
+  });
 
   return {
     group,

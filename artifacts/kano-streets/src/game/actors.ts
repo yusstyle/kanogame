@@ -65,6 +65,54 @@ function addCyl(
   return mesh;
 }
 
+let cachedContactShadowTexture: THREE.CanvasTexture | null = null;
+
+function getContactShadowTexture(): THREE.CanvasTexture | null {
+  if (cachedContactShadowTexture) return cachedContactShadowTexture;
+  if (typeof document === "undefined") return null;
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 128;
+    const ctx = canvas.getContext("2d");
+    if (ctx && typeof ctx.createRadialGradient === "function") {
+      const grad = ctx.createRadialGradient(64, 64, 6, 64, 64, 58);
+      grad.addColorStop(0, "rgba(22, 18, 14, 0.60)");
+      grad.addColorStop(0.3, "rgba(22, 18, 14, 0.38)");
+      grad.addColorStop(0.65, "rgba(22, 18, 14, 0.14)");
+      grad.addColorStop(1, "rgba(22, 18, 14, 0)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 128, 128);
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    cachedContactShadowTexture = tex;
+    return tex;
+  } catch {
+    return null;
+  }
+}
+
+function addContactShadow(root: THREE.Group, width: number, length: number, opacity = 0.36) {
+  const tex = getContactShadowTexture();
+  if (!tex) return;
+  try {
+    const geo = new THREE.PlaneGeometry(width, length);
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 0.035;
+    mesh.renderOrder = 1;
+    root.add(mesh);
+  } catch {
+    // Stub fallback
+  }
+}
+
 export type PlayerModel = {
   root: THREE.Group;
   leftArm: THREE.Group;
@@ -307,7 +355,7 @@ export type CarModel = {
   proceduralBody: THREE.Group;
   gltfBody?: THREE.Group;
   wheelRig: "procedural" | "asset";
-  attachGLTFBody: (gltf: THREE.Group) => void;
+  attachGLTFBody: (gltf: THREE.Group, colorHex?: string) => void;
 };
 
 export type KekeModel = {
@@ -326,17 +374,17 @@ export function createCarModel(
   const root = new THREE.Group();
   const bodyColor = new THREE.MeshPhysicalMaterial({
     color: bodyColorHex,
-    roughness: 0.43,
-    metalness: 0.16,
-    clearcoat: 0.22,
-    clearcoatRoughness: 0.34,
+    roughness: 0.32,
+    metalness: 0.24,
+    clearcoat: 0.58,
+    clearcoatRoughness: 0.2,
   });
   const bodyAccent = new THREE.MeshPhysicalMaterial({
     color: bodyAccentHex,
-    roughness: 0.47,
-    metalness: 0.12,
-    clearcoat: 0.18,
-    clearcoatRoughness: 0.36,
+    roughness: 0.36,
+    metalness: 0.18,
+    clearcoat: 0.42,
+    clearcoatRoughness: 0.25,
   });
   const rubber = new THREE.MeshStandardMaterial({ color: "#262827", roughness: 0.97 });
   const rim = new THREE.MeshStandardMaterial({
@@ -358,9 +406,8 @@ export function createCarModel(
   });
   const licensePlate = makeSignMaterial(plateText, "#e0d8c1");
 
-  // A complete, original procedural sedan silhouette—not a downloaded or
-  // photorealistic model. The proportions and visible mechanical parts are
-  // built as a reusable Three.js model so it can be driven and inspected.
+  // Ground contact shadow and underbody
+  addContactShadow(root, 2.2, 4.4, 0.48);
   addBox(root, materials.black, 0, 0.42, 0, 1.96, 0.26, 4.18);
   addBox(root, bodyColor, 0, 0.7, 0, 2.0, 0.56, 4.08);
   addBox(root, bodyAccent, 0, 0.99, 1.15, 1.98, 0.28, 1.49);
@@ -470,22 +517,86 @@ export function createCarModel(
   // A dark interior, dashboard and headrests remain visible through the glass.
   addBox(proceduralBody, materials.black, 0, 1.03, -0.08, 1.52, 0.17, 1.5);
   for (const x of [-0.43, 0.43]) {
-    addBox(proceduralBody, materials.wood, x, 1.18, -0.02, 0.55, 0.34, 0.61);
-    addBox(proceduralBody, materials.black, x, 1.49, -0.12, 0.36, 0.36, 0.12);
+    const seat = addBox(proceduralBody, materials.wood, x, 1.18, -0.02, 0.55, 0.34, 0.61);
+    const headrest = addBox(proceduralBody, materials.black, x, 1.49, -0.12, 0.36, 0.36, 0.12);
+    if (x < 0) {
+      seat.name = "procedural_driver_seat";
+      seat.userData.isDriverSeatPart = true;
+      headrest.name = "procedural_driver_headrest";
+      headrest.userData.isDriverSeatPart = true;
+    }
   }
   addBox(proceduralBody, materials.black, 0, 1.2, 0.68, 1.52, 0.18, 0.28);
 
-  const attachGLTFBody = (gltf: THREE.Group) => {
+  let gltfBody: THREE.Group | undefined;
+
+  const attachGLTFBody = (gltf: THREE.Group, colorHex?: string) => {
+    if (gltfBody) {
+      root.remove(gltfBody);
+    }
     proceduralBody.visible = false;
     wheels.forEach((pivot) => {
       pivot.visible = false;
     });
-    gltf.rotation.y = Math.PI / 2;
-    gltf.position.set(0, 0.31, 0);
-    root.add(gltf);
+    const model = gltf.clone(true);
+    model.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        const nameLower = child.name.toLowerCase();
+        if (
+          nameLower.includes("headrest") ||
+          nameLower.includes("seat_back") ||
+          nameLower.includes("seat_cushion")
+        ) {
+          child.userData = child.userData || {};
+          child.userData.isSeatMesh = true;
+          // In graphite-four-door-sedan.glb, front seats and headrests:
+          if (
+            child.name.startsWith("Adjustable_headrest") ||
+            child.name.startsWith("Contoured_seat_back") ||
+            child.name.startsWith("Contoured_seat_cushion")
+          ) {
+            child.userData.isDriverSeatPart = true;
+          }
+        }
+      }
+    });
+    if (colorHex) {
+      model.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          if (Array.isArray(child.material)) {
+            child.material = child.material.map((m) => {
+              if (m.name === "paint") {
+                const cloneMat = m.clone();
+                cloneMat.color = new THREE.Color(colorHex);
+                return cloneMat;
+              }
+              return m;
+            });
+          } else if (child.material && child.material.name === "paint") {
+            const cloneMat = child.material.clone();
+            cloneMat.color = new THREE.Color(colorHex);
+            child.material = cloneMat;
+          }
+        }
+      });
+    }
+    model.rotation.y = Math.PI / 2;
+    model.position.set(0, 0.31, 0);
+    gltfBody = model;
+    root.add(model);
   };
 
-  return { root, wheels, frontWheels, proceduralBody, wheelRig: "procedural", attachGLTFBody };
+  return {
+    root,
+    wheels,
+    frontWheels,
+    proceduralBody,
+    get gltfBody() {
+      return gltfBody;
+    },
+    wheelRig: "procedural",
+    attachGLTFBody,
+  };
 }
 
 export function createKekeModel(
@@ -518,7 +629,8 @@ export function createKekeModel(
   });
   const licensePlate = makeSignMaterial(plateText, "#e5aa24");
 
-  // 1. Lower Chassis & Floor
+  // 1. Lower Chassis & Ground Contact Shadow
+  addContactShadow(root, 1.5, 2.8, 0.45);
   addBox(root, black, 0, 0.24, 0, 1.28, 0.14, 2.55);
 
   // 2. Yellow & Green Main Bodywork (Kano commercial tricycle livery)
@@ -558,7 +670,9 @@ export function createKekeModel(
   addBox(root, materials.cloth, 0, 1.69, -0.18, 1.18, 0.05, 1.95);
 
   // 5. Seating & Handlebars
-  addBox(root, black, 0, 0.56, 0.28, 0.48, 0.22, 0.38);
+  const kekeDriverSeat = addBox(root, black, 0, 0.56, 0.28, 0.48, 0.22, 0.38);
+  kekeDriverSeat.name = "keke_driver_seat";
+  kekeDriverSeat.userData.isDriverSeatPart = true;
   addBox(root, black, 0, 0.54, -0.74, 1.14, 0.25, 0.46);
   addBox(root, black, 0, 0.82, -0.98, 1.14, 0.34, 0.14);
 
@@ -744,7 +858,8 @@ export function createDeliveryVanModel(
   const plateMat = makeSignMaterial(plateText, "#e0d8c1");
   const logoMat = makeSignMaterial("KANO RAPID LOGISTICS\nINTRA-CITY EXPRESS", "#1a4f3a");
 
-  // Lower chassis frame & underbody
+  // Lower chassis frame & underbody with contact shadow
+  addContactShadow(body, 2.3, 4.8, 0.48);
   addBox(body, materials.black, 0, 0.45, 0, 2.05, 0.28, 4.6);
   // Main Van Cabin & Enclosed Cargo Box
   addBox(body, vanBody, 0, 1.25, -0.25, 2.02, 1.35, 3.25); // Cargo box
@@ -846,7 +961,8 @@ export function createPickupTruckModel(
   const bedLiner = new THREE.MeshStandardMaterial({ color: "#181818", roughness: 0.95 });
   const plateMat = makeSignMaterial(plateText, "#e0d8c1");
 
-  // Heavy steel chassis rails
+  // Heavy steel chassis rails with contact shadow
+  addContactShadow(body, 2.3, 5.1, 0.48);
   addBox(body, materials.black, 0, 0.48, 0, 2.0, 0.28, 4.9);
   // Dual-Cab Cabin
   addBox(body, truckBody, 0, 1.25, 0.42, 1.96, 0.95, 2.2);
@@ -956,7 +1072,8 @@ export function createMinibusModel(
   const routeBoardMat = makeSignMaterial("SABON GARI · BOMPAI · KAWU INDUSTRIAL\nFARE: ₦300", "#163a24");
   const plateMat = makeSignMaterial(plateText, "#e0d8c1");
 
-  // Underbody
+  // Underbody with ground contact shadow
+  addContactShadow(body, 2.3, 5.3, 0.48);
   addBox(body, materials.black, 0, 0.45, 0, 2.1, 0.28, 5.1);
   // Main Minibus Passenger Body
   addBox(body, busBody, 0, 1.35, 0, 2.06, 1.48, 5.0);
@@ -1068,7 +1185,8 @@ export function createFreightTruckModel(
   const plateMat = makeSignMaterial(plateText, "#e0d8c1");
   const freightDecalMat = makeSignMaterial("KAWU INTERSTATE FREIGHT\nMAX LOAD: 4.5 TONNES", "#264875");
 
-  // Heavy steel ladder chassis
+  // Heavy steel ladder chassis with ground contact shadow
+  addContactShadow(body, 2.7, 7.8, 0.52);
   addBox(body, chassisSteel, 0, 0.58, -0.4, 1.95, 0.35, 6.2);
   // Cylindrical diesel tank (right side) & air tanks (left side)
   addCyl(body, chassisSteel, 0.85, 0.55, -0.4, 0.24, 0.24, 1.25);

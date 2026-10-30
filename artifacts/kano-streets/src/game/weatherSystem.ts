@@ -24,15 +24,15 @@ export const WEATHER_CONFIGS: Record<WeatherPreset, WeatherConfig> = {
   clear: {
     preset: "clear",
     displayName: "Clear Sahel Sky",
-    skyColor: "#dcd4c3",
-    fogColor: "#dcd4c3",
-    fogNear: 45,
-    fogFar: 235,
+    skyColor: "#d8cfbd",
+    fogColor: "#d8cfbd",
+    fogNear: 50,
+    fogFar: 245,
     sunColor: "#fff8ed",
-    sunIntensity: 2.7,
-    hemiSkyColor: "#d8e8f2",
-    hemiGroundColor: "#7a5e42",
-    hemiIntensity: 1.45,
+    sunIntensity: 2.85,
+    hemiSkyColor: "#c2d7e9",
+    hemiGroundColor: "#8e6542",
+    hemiIntensity: 0.95,
     particleCount: 80,
     particleOpacity: 0.12,
     particleSize: 0.28,
@@ -42,14 +42,14 @@ export const WEATHER_CONFIGS: Record<WeatherPreset, WeatherConfig> = {
     preset: "harmattan",
     displayName: "Harmattan Dust Haze",
     skyColor: "#ceb68e",
-    fogColor: "#ceb68e",
+    fogColor: "#c9b085",
     fogNear: 24,
     fogFar: 165,
-    sunColor: "#eed090",
+    sunColor: "#f3d395",
     sunIntensity: 2.1,
-    hemiSkyColor: "#e0cbb2",
-    hemiGroundColor: "#91704d",
-    hemiIntensity: 1.55,
+    hemiSkyColor: "#d8c4a4",
+    hemiGroundColor: "#9e774f",
+    hemiIntensity: 1.05,
     particleCount: 220,
     particleOpacity: 0.58,
     particleSize: 0.42,
@@ -61,12 +61,12 @@ export const WEATHER_CONFIGS: Record<WeatherPreset, WeatherConfig> = {
     skyColor: "#df8855",
     fogColor: "#d97843",
     fogNear: 35,
-    fogFar: 200,
-    sunColor: "#ff9033",
-    sunIntensity: 2.4,
-    hemiSkyColor: "#f7ad72",
-    hemiGroundColor: "#7e4024",
-    hemiIntensity: 1.35,
+    fogFar: 210,
+    sunColor: "#ff8c33",
+    sunIntensity: 2.55,
+    hemiSkyColor: "#f2a265",
+    hemiGroundColor: "#854426",
+    hemiIntensity: 0.85,
     particleCount: 100,
     particleOpacity: 0.22,
     particleSize: 0.32,
@@ -78,12 +78,12 @@ export const WEATHER_CONFIGS: Record<WeatherPreset, WeatherConfig> = {
     skyColor: "#0b1424",
     fogColor: "#0b1424",
     fogNear: 28,
-    fogFar: 175,
-    sunColor: "#4a6890",
-    sunIntensity: 0.38,
+    fogFar: 180,
+    sunColor: "#4f729d",
+    sunIntensity: 0.42,
     hemiSkyColor: "#15243d",
     hemiGroundColor: "#101924",
-    hemiIntensity: 0.65,
+    hemiIntensity: 0.45,
     particleCount: 60,
     particleOpacity: 0.15,
     particleSize: 0.25,
@@ -204,26 +204,47 @@ export class WeatherSystem {
     this.particleGeometry.setDrawRange(0, this.activeCount);
   }
 
+  public getSkyColor(): THREE.Color {
+    return this.colSky;
+  }
+
+  public getGroundColor(): THREE.Color {
+    return this.colHemiGround;
+  }
+
+  public getSunColor(): THREE.Color {
+    return this.colSun;
+  }
+
   public applyToScene(
     scene: THREE.Scene,
     sunLight: THREE.DirectionalLight | null,
     hemiLight: THREE.HemisphereLight | null,
     hourOfDay: number,
     isInterior: boolean,
+    bounceLight?: THREE.DirectionalLight | null,
   ): void {
     if (isInterior) {
       if (scene.fog && scene.fog instanceof THREE.Fog) {
-        scene.fog.near = 15;
-        scene.fog.far = 85;
-        scene.fog.color.set("#1f1a14");
+        // Push fog far beyond interior boundaries (140m+) to maintain crystal-clear visibility
+        scene.fog.near = 140;
+        scene.fog.far = 350;
+        scene.fog.color.set("#2a241e");
       }
+      const isDay = hourOfDay >= 6 && hourOfDay <= 18;
       if (sunLight) {
-        sunLight.intensity = 0.2;
+        // Soft directional window illumination across daytime & night
+        sunLight.intensity = isDay ? 0.75 : 0.22;
+        sunLight.color.set(isDay ? "#fff9ea" : "#8aa0b8");
       }
       if (hemiLight) {
-        hemiLight.intensity = 0.5;
-        hemiLight.color.set("#ffe6cc");
-        hemiLight.groundColor.set("#332211");
+        // High-clarity indirect architectural ambient bounce
+        hemiLight.intensity = 1.25;
+        hemiLight.color.set("#fff7ed");
+        hemiLight.groundColor.set("#857362");
+      }
+      if (bounceLight) {
+        bounceLight.intensity = 0.05;
       }
       this.particles.visible = false;
       return;
@@ -264,15 +285,15 @@ export class WeatherSystem {
           this.colFog.copy(this.tmpDawnFog).lerp(targetFog, t);
           this.colSun.copy(this.tmpDawnSun).lerp(targetSun, t);
         }
-        effectiveSunIntensity = 0.35 + 1.8 * dawnRatio;
-        effectiveHemiIntensity = 0.6 + 0.8 * dawnRatio;
+        effectiveSunIntensity = 0.42 + 2.0 * dawnRatio;
+        effectiveHemiIntensity = 0.45 + 0.5 * dawnRatio;
       } else if (hourOfDay >= 17.2 && hourOfDay < 19.2) {
         // 2. Sunset glow transition: Daylight -> Amber Golden Glow
         const sunsetRatio = (hourOfDay - 17.2) / 2.0;
         this.colSky.lerp(this.tmpSunsetSky, sunsetRatio);
         this.colFog.lerp(this.tmpSunsetFog, sunsetRatio);
         this.colSun.lerp(this.tmpSunsetSun, sunsetRatio);
-        effectiveSunIntensity = config.sunIntensity * (0.85 - 0.3 * sunsetRatio);
+        effectiveSunIntensity = config.sunIntensity * (0.9 - 0.35 * sunsetRatio);
       } else if (hourOfDay >= 19.2 && hourOfDay < 20.6) {
         // 3. Dusk into Night: Sunset Glow -> Starlit Night
         const duskRatio = (hourOfDay - 19.2) / 1.4;
@@ -280,14 +301,14 @@ export class WeatherSystem {
         this.colFog.copy(this.tmpSunsetFog).lerp(this.tmpNightSky, duskRatio);
         this.colSun.copy(this.tmpSunsetSun).lerp(this.tmpNightSun, duskRatio);
         effectiveSunIntensity = 1.4 - 1.05 * duskRatio;
-        effectiveHemiIntensity = 1.1 - 0.5 * duskRatio;
+        effectiveHemiIntensity = 0.85 - 0.4 * duskRatio;
       } else if (hourOfDay >= 20.6 || hourOfDay < 5.0) {
         // 4. Starlit Sahelian Night
         this.colSky.copy(this.tmpNightSky);
         this.colFog.copy(this.tmpNightSky);
         this.colSun.copy(this.tmpNightSun);
-        effectiveSunIntensity = 0.35;
-        effectiveHemiIntensity = 0.65;
+        effectiveSunIntensity = 0.42;
+        effectiveHemiIntensity = 0.45;
       }
     }
 
@@ -312,6 +333,16 @@ export class WeatherSystem {
       hemiLight.color.copy(this.colHemiSky);
       hemiLight.groundColor.copy(this.colHemiGround);
       hemiLight.intensity = effectiveHemiIntensity;
+    }
+
+    if (bounceLight) {
+      if (isDay) {
+        bounceLight.color.set("#c89366");
+        bounceLight.intensity = 0.3 * diurnalFactor;
+      } else {
+        bounceLight.color.set("#223348");
+        bounceLight.intensity = 0.06;
+      }
     }
   }
 

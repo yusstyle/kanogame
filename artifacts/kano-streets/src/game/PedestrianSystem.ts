@@ -13,6 +13,13 @@ import { isValidSeatNearby, findNearestValidSeat, type ValidSeat } from "./seats
 
 export type PedestrianState = "walking" | "idle" | "vendor" | "talking" | "visiting" | "sitting";
 export type NPCRole = "resident" | "trader" | "worker" | "customer" | "worshipper" | "visitor";
+export type DiurnalSchedulePhase = "commute" | "work" | "leisure" | "rest";
+
+export interface RoutineDestination {
+  destinationName: string;
+  destX: number;
+  destZ: number;
+}
 
 export interface Pedestrian {
   id: string;
@@ -34,7 +41,15 @@ export interface Pedestrian {
   personalSpeed: number;
   lookSeed: number;
   blockedRetries: number;
-  schedulePhase: "commute" | "work" | "leisure" | "rest";
+  schedulePhase: DiurnalSchedulePhase;
+  schedule?: Record<DiurnalSchedulePhase, RoutineDestination>;
+}
+
+export function getDiurnalPhase(hours: number): DiurnalSchedulePhase {
+  if (hours >= 6.0 && hours < 9.5) return "commute";
+  if (hours >= 9.5 && hours < 17.0) return "work";
+  if (hours >= 17.0 && hours < 21.0) return "leisure";
+  return "rest";
 }
 
 const NPC_PALETTES: PedestrianOptions[] = [
@@ -83,13 +98,49 @@ const NPC_PALETTES: PedestrianOptions[] = [
     embroideryColor: "#dfc78f",
     hasCap: true,
   },
-  // 6. Charcoal / Minimalist
+  // 6. Charcoal / Minimalist Modern
   {
     skinColor: "#734833",
     tunicColor: "#333333",
     trousersColor: "#222222",
     capColor: "#c4a770",
     embroideryColor: "#cbb17b",
+    hasCap: true,
+  },
+  // 7. Royal Saharan Indigo & Gold
+  {
+    skinColor: "#633f2c",
+    tunicColor: "#1d2b4f",
+    trousersColor: "#1a243a",
+    capColor: "#dfb45f",
+    embroideryColor: "#ecc978",
+    hasCap: true,
+  },
+  // 8. Desert Sand / Harmattan Beige
+  {
+    skinColor: "#825338",
+    tunicColor: "#c9b693",
+    trousersColor: "#5e5241",
+    capColor: "#aa8e60",
+    embroideryColor: "#dfcca3",
+    hasCap: true,
+  },
+  // 9. Deep Maroon / Ancient Dye
+  {
+    skinColor: "#523321",
+    tunicColor: "#692a2a",
+    trousersColor: "#3d2222",
+    capColor: "#cca062",
+    embroideryColor: "#dab77f",
+    hasCap: true,
+  },
+  // 10. Forest Green & Bronze
+  {
+    skinColor: "#784b34",
+    tunicColor: "#234a34",
+    trousersColor: "#1a3325",
+    capColor: "#bda069",
+    embroideryColor: "#c9ab73",
     hasCap: true,
   },
 ];
@@ -106,6 +157,12 @@ const NPC_ROUTINE_PROFILES = [
       "Kano is growing so quickly! The new buildings and apartments along Airport Road look so sharp.",
       "Always obey the traffic signs on Murtala Mohammed Way. KAROTA officers are very watchful today!",
     ],
+    schedule: {
+      commute: { destinationName: "Murtala Mohammed Way Transit Stop", destX: 14, destZ: -12 },
+      work: { destinationName: "Arewa Commercial Bank Plaza", destX: 80, destZ: -22 },
+      leisure: { destinationName: "Dandali Community Square", destX: -72, destZ: -72 },
+      rest: { destinationName: "Bompai Heights Luxury Flats", destX: 18, destZ: 42 },
+    },
   },
   {
     name: "Maryam Sani",
@@ -118,6 +175,12 @@ const NPC_ROUTINE_PROFILES = [
       "Commerce is thriving in Kano! Make sure you visit the electronics arcade and market stalls.",
       "Trade has connected northern Nigeria for centuries. It is the lifeblood of our historic city.",
     ],
+    schedule: {
+      commute: { destinationName: "Sabon Gari Market Entrance Gate", destX: -24, destZ: 22 },
+      work: { destinationName: "Sabon Gari Open-Air Kasuwa", destX: -31, destZ: 31 },
+      leisure: { destinationName: "Arewa Fast Food & Suya Lounge", destX: 16, destZ: -42 },
+      rest: { destinationName: "Airport Road Residential Quarters", destX: -48, destZ: 42 },
+    },
   },
   {
     name: "Suleiman Bello",
@@ -130,6 +193,12 @@ const NPC_ROUTINE_PROFILES = [
       "Northern finance and technology are moving forward. Hope you have a productive and blessed day!",
       "If you need cash for local market purchases, the bank ATM at Bompai branch is always stocked.",
     ],
+    schedule: {
+      commute: { destinationName: "Bank Junction Crosswalk", destX: 76, destZ: -14 },
+      work: { destinationName: "Arewa Commercial Bank Plaza", destX: 80, destZ: -22 },
+      leisure: { destinationName: "Kano Cyber & PS5 Game Hub", destX: 80, destZ: -46 },
+      rest: { destinationName: "Bompai Heights Luxury Flats", destX: 18, destZ: 42 },
+    },
   },
   {
     name: "Ngozi Eze",
@@ -142,6 +211,12 @@ const NPC_ROUTINE_PROFILES = [
       "Have you tried their chilled Chapman? It is so refreshing after walking through the city.",
       "Amina Lawal is inside drafting blueprints. She is one of the top modern architects in Kano!",
     ],
+    schedule: {
+      commute: { destinationName: "Sabon Gari Kasuwa Stalls", destX: -31, destZ: 31 },
+      work: { destinationName: "Electronics & Textile Arcade", destX: -36, destZ: 26 },
+      leisure: { destinationName: "Arewa Fast Food & Suya Lounge", destX: 16, destZ: -42 },
+      rest: { destinationName: "Airport Road Residential Apartments", destX: 14, destZ: 36 },
+    },
   },
   {
     name: "Musa Haruna",
@@ -154,6 +229,12 @@ const NPC_ROUTINE_PROFILES = [
       "The fibre optic speeds at the gaming centre are lightning fast. Great tournament atmosphere!",
       "Street Drift Series is happening this week. The ₦5,000 cash prize is serious motivation.",
     ],
+    schedule: {
+      commute: { destinationName: "Murtala Mohammed Way Walkway", destX: 42, destZ: -12 },
+      work: { destinationName: "Arewa Commercial Bank Plaza", destX: 80, destZ: -22 },
+      leisure: { destinationName: "Kano Cyber & PS5 Game Hub", destX: 80, destZ: -46 },
+      rest: { destinationName: "Al-Baraka Executive Villa", destX: 44, destZ: 39 },
+    },
   },
   {
     name: "Grace Danjuma",
@@ -166,6 +247,12 @@ const NPC_ROUTINE_PROFILES = [
       "May your steps be blessed and guided safely through the neighborhood today.",
       "Sabon Gari is a welcoming community where different cultures and faiths live in harmony.",
     ],
+    schedule: {
+      commute: { destinationName: "St. Stephen's Church Walkway", destX: -42, destZ: 32 },
+      work: { destinationName: "Sabon Gari Community Center", destX: -48, destZ: 37 },
+      leisure: { destinationName: "Sabon Gari Kasuwa Market Square", destX: -31, destZ: 31 },
+      rest: { destinationName: "Airport Road Residential Apartments", destX: -48, destZ: 42 },
+    },
   },
   {
     name: "Abubakar Usman",
@@ -178,6 +265,12 @@ const NPC_ROUTINE_PROFILES = [
       "Kano's heritage is rich and deep. Respect the streets, walk with peace, and drive safely.",
       "The Dala ancient city walls carry over a thousand years of history. Always honor your roots.",
     ],
+    schedule: {
+      commute: { destinationName: "Community Friday Mosque", destX: -31, destZ: -31 },
+      work: { destinationName: "Dandali Heritage Square", destX: -72, destZ: -72 },
+      leisure: { destinationName: "Dandali Neem Shade Dakali", destX: -70, destZ: -65 },
+      rest: { destinationName: "Ancestral Dala Quarters", destX: -85, destZ: -68 },
+    },
   },
   {
     name: "Halima Idris",
@@ -190,6 +283,12 @@ const NPC_ROUTINE_PROFILES = [
       "The tree-lined roads give our neighborhood such a welcoming and clean atmosphere.",
       "If you are looking for long-term real estate, the modern residential villas are top quality.",
     ],
+    schedule: {
+      commute: { destinationName: "Bompai Tree-Lined Avenue", destX: 35, destZ: 25 },
+      work: { destinationName: "Sabon Gari Market Stalls", destX: -31, destZ: 31 },
+      leisure: { destinationName: "Arewa Suya Lounge Garden", destX: 16, destZ: -42 },
+      rest: { destinationName: "Al-Baraka Executive Villa", destX: 44, destZ: 39 },
+    },
   },
   {
     name: "Aliyu Sambo",
@@ -202,6 +301,12 @@ const NPC_ROUTINE_PROFILES = [
       "Check the dispatch bulletin board by the highway entrance if you want delivery contracts!",
       "Always inspect your cargo straps before driving on the ring road highway.",
     ],
+    schedule: {
+      commute: { destinationName: "Kawu Freight Dispatch Board", destX: -42, destZ: -140 },
+      work: { destinationName: "Kawu Central Freight Terminal", destX: -42, destZ: -175 },
+      leisure: { destinationName: "Industrial Workers Canteen", destX: -15, destZ: -155 },
+      rest: { destinationName: "Kawu Drivers Bunkhouse", destX: -38, destZ: -160 },
+    },
   },
   {
     name: "Malam Danladi",
@@ -214,6 +319,12 @@ const NPC_ROUTINE_PROFILES = [
       "Interstate trade is booming. Freight trucks arrive day and night from Lagos and Port Harcourt.",
       "Heavy trucks must weigh in at Dawanau weighbridge platform before departure.",
     ],
+    schedule: {
+      commute: { destinationName: "Container Yard Inspection Gate", destX: 42, destZ: -125 },
+      work: { destinationName: "Kano Container Yard & Customs Gatehouse", destX: 42, destZ: -135 },
+      leisure: { destinationName: "Industrial Workers Canteen", destX: -15, destZ: -155 },
+      rest: { destinationName: "Northern Logistics Quarters", destX: 35, destZ: -145 },
+    },
   },
   {
     name: "Garba Mechanic",
@@ -226,6 +337,12 @@ const NPC_ROUTINE_PROFILES = [
       "If you need suspension upgrades or engine work, Sani Vulcanizer and our workshop have you covered.",
       "Drive gently over the industrial drainage gratings so you do not damage your tie rods!",
     ],
+    schedule: {
+      commute: { destinationName: "Arewa Repairs Workshop Gate", destX: -38, destZ: -125 },
+      work: { destinationName: "Arewa Heavy Vehicle Repairs Workshop", destX: -38, destZ: -135 },
+      leisure: { destinationName: "Industrial Workers Canteen", destX: -15, destZ: -155 },
+      rest: { destinationName: "Workers Dormitory", destX: -25, destZ: -145 },
+    },
   },
   {
     name: "Bala Driver",
@@ -238,6 +355,12 @@ const NPC_ROUTINE_PROFILES = [
       "The northern highway past the gateway is so smooth now. Great connection to the city center.",
       "A good commercial delivery van or pickup truck can make you serious money in Kano.",
     ],
+    schedule: {
+      commute: { destinationName: "Highway Service Station", destX: 10, destZ: -125 },
+      work: { destinationName: "Dawanau Produce Wholesale Depot", destX: 45, destZ: -175 },
+      leisure: { destinationName: "Industrial Workers Canteen", destX: -15, destZ: -155 },
+      rest: { destinationName: "Kawu Drivers Rest Area", destX: -15, destZ: -165 },
+    },
   },
   {
     name: "Habiba Mai Shayi",
@@ -342,6 +465,10 @@ export class PedestrianSystem {
       if (!maleChar && !femaleChar) return;
 
       this.pedestrians.forEach((p, idx) => {
+        // Preserve procedural seated geometry for seated citizens (e.g. Dakali elders on clay benches)
+        // because rigged humanoid avatars only contain standing locomotion mocap clips.
+        if (p.state === "sitting") return;
+
         const sourceChar = idx % 2 === 0 ? maleChar || femaleChar : femaleChar || maleChar;
         if (sourceChar) {
           const clonedRoot = cloneSkeleton(sourceChar.characterRoot) as THREE.Group;
@@ -676,6 +803,47 @@ export class PedestrianSystem {
     });
   }
 
+  public isPositionBlocked(
+    x: number,
+    z: number,
+    radius = 0.38,
+    playerVehiclePos?: THREE.Vector3 | null,
+  ): boolean {
+    if (this.hasObstacleAt(x, z, radius)) return true;
+
+    for (let i = 0; i < this.trafficVehicles.length; i++) {
+      const v = this.trafficVehicles[i];
+      const dx = x - v.position.x;
+      const dz = z - v.position.z;
+      const vRad = 1.6;
+      if (dx * dx + dz * dz < (radius + vRad) * (radius + vRad)) {
+        return true;
+      }
+    }
+
+    if (playerVehiclePos) {
+      const dx = x - playerVehiclePos.x;
+      const dz = z - playerVehiclePos.z;
+      const vRad = 1.7;
+      if (dx * dx + dz * dz < (radius + vRad) * (radius + vRad)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private hasObstacleAt(x: number, z: number, radius = 0.35): boolean {
+    const nearby = this.colliderIndex.query(x, z, radius + 1.0);
+    return nearby.some((col) => {
+      const closestX = THREE.MathUtils.clamp(x, col.x - col.halfX, col.x + col.halfX);
+      const closestZ = THREE.MathUtils.clamp(z, col.z - col.halfZ, col.z + col.halfZ);
+      const dx = x - closestX;
+      const dz = z - closestZ;
+      return dx * dx + dz * dz < radius * radius;
+    });
+  }
+
   private spawnAdditionalWalkers(count: number) {
     const waypoints = this.network.pedestrianWaypointList;
     if (waypoints.length === 0) return;
@@ -684,18 +852,30 @@ export class PedestrianSystem {
       const valid = waypoints.filter((wp) => {
         const distToPlayer = Math.hypot(wp.x - (-4), wp.z - (-4));
         if (distToPlayer < 12) return false;
-        const colliders = this.colliderIndex.query(wp.x, wp.z, 0.45);
-        if (colliders.length > 0) return false;
+        if (this.hasObstacleAt(wp.x, wp.z, 0.35)) return false;
         return true;
       });
 
       if (valid.length === 0) break;
-      const startWp = valid[Math.floor(Math.random() * valid.length)];
+
+      // Prioritize active Northern Nigerian urban hubs (Kasuwa Market, Transit Stops, Bompai Plaza, Dandali Square)
+      const hubCandidates = valid.filter((wp) => {
+        if (wp.area === "market" || wp.area === "crosswalk") return true;
+        const distKasuwa = Math.hypot(wp.x - (-31), wp.z - 31);
+        const distBusStop = Math.hypot(wp.x - 65, wp.z - (-22));
+        const distMurtalaStop = Math.hypot(wp.x - 14, wp.z - (-11.8));
+        const distBompai = Math.hypot(wp.x - 76, wp.z - (-18));
+        const distDandali = Math.hypot(wp.x - (-72), wp.z - (-72));
+        return distKasuwa < 26 || distBusStop < 24 || distMurtalaStop < 22 || distBompai < 24 || distDandali < 26;
+      });
+
+      const pool = hubCandidates.length > 0 && Math.random() < 0.75 ? hubCandidates : valid;
+      const startWp = pool[Math.floor(Math.random() * pool.length)];
       const nextId = startWp.nextIds[Math.floor(Math.random() * startWp.nextIds.length)];
       const nextWp = nextId ? this.network.pedestrianWaypoints.get(nextId) ?? null : null;
 
-      const profile = NPC_ROUTINE_PROFILES[(this.pedestrians.length + i) % NPC_ROUTINE_PROFILES.length];
-      const palette = NPC_PALETTES[(this.pedestrians.length + i) % NPC_PALETTES.length];
+      const profile = NPC_ROUTINE_PROFILES[i % NPC_ROUTINE_PROFILES.length];
+      const palette = NPC_PALETTES[i % NPC_PALETTES.length];
       const model = createPedestrianModel(this.materials, palette);
       const y = this.surfaceHeight(startWp.x, startWp.z);
       const dx = nextWp ? nextWp.x - startWp.x : 0;
@@ -726,6 +906,7 @@ export class PedestrianSystem {
         lookSeed: Math.random() * 10,
         blockedRetries: 0,
         schedulePhase: "work",
+        schedule: profile.schedule,
       });
     }
   }
@@ -734,7 +915,13 @@ export class PedestrianSystem {
     return isValidSeatNearby(p.position, 2.8);
   }
 
-  public checkPedestrianInteraction(playerPos: THREE.Vector3): { prompt: string; action: () => string } | null {
+  public checkPedestrianInteraction(
+    playerPos: THREE.Vector3,
+    consequenceResolver?: (
+      npcName: string,
+      dialogues: string[],
+    ) => { greeting: string; quote: string; trustStatus: string; perkOffered?: string } | null,
+  ): { prompt: string; action: () => string; perkOffered?: string } | null {
     for (const p of this.pedestrians) {
       if (p.position.distanceTo(playerPos) <= 2.4) {
         return {
@@ -746,6 +933,13 @@ export class PedestrianSystem {
             p.state = "talking";
             p.stateTimer = 5.0;
             p.speed = 0;
+
+            if (consequenceResolver) {
+              const res = consequenceResolver(p.name, p.dialogues);
+              if (res) {
+                return `${p.name} (${p.role.toUpperCase()}): ${res.greeting} '${res.quote}' [Reputation: ${res.trustStatus.toUpperCase()}]`;
+              }
+            }
 
             if (p.vendorCry) {
               return `${p.name} (${p.role.toUpperCase()}): '${p.vendorCry}'`;
@@ -805,6 +999,23 @@ export class PedestrianSystem {
       return;
     }
 
+    // Schedule phase & dynamic routine transition without abrupt teleportation
+    const schedulePhase = getDiurnalPhase(this.timeOfDayHours);
+    if (p.schedule && p.schedule[schedulePhase]) {
+      const targetRoutine = p.schedule[schedulePhase];
+      if (p.schedulePhase !== schedulePhase) {
+        p.schedulePhase = schedulePhase;
+        p.destinationName = targetRoutine.destinationName;
+        p.destinationPoint = new THREE.Vector3(targetRoutine.destX, 0, targetRoutine.destZ);
+        if (p.state === "visiting" || p.state === "idle") {
+          p.state = "walking";
+          p.stateTimer = 4.0 + Math.random() * 6.0;
+        }
+      }
+    } else {
+      p.schedulePhase = schedulePhase;
+    }
+
     p.stateTimer -= dt;
 
     // Check interaction with nearby pedestrians (spontaneous street chatting)
@@ -849,32 +1060,25 @@ export class PedestrianSystem {
         }
       }
     } else if (p.state === "walking") {
-      // Schedule phase & pace adjustment based on time of day
-      let schedulePhase: "commute" | "work" | "leisure" | "rest" = "work";
       let scheduleSpeedMult = 1.0;
-      if (this.timeOfDayHours >= 6.5 && this.timeOfDayHours < 9.5) {
-        schedulePhase = "commute";
-        scheduleSpeedMult = 1.25; // Morning rush to commercial hubs and market stalls
-      } else if (this.timeOfDayHours >= 9.5 && this.timeOfDayHours < 17.0) {
-        schedulePhase = "work";
+      if (schedulePhase === "commute") {
+        scheduleSpeedMult = 1.2; // Brisk morning rush to commercial hubs and market stalls
+      } else if (schedulePhase === "work") {
         scheduleSpeedMult = 1.0; // Daytime trading and industrial logistics
-      } else if (this.timeOfDayHours >= 17.0 && this.timeOfDayHours < 21.0) {
-        schedulePhase = "leisure";
+      } else if (schedulePhase === "leisure") {
         scheduleSpeedMult = 0.95; // Evening strolls, Suya lounge, and Dandali square
       } else {
-        schedulePhase = "rest";
         scheduleSpeedMult = 0.75; // Quiet night hours
       }
-      p.schedulePhase = schedulePhase;
 
       // Safe road crossing behavior at crosswalks
       if (p.targetWaypoint?.area === "crosswalk") {
         const oncomingFastVeh = this.trafficVehicles.some((v) => {
           const dist = Math.hypot(v.position.x - p.position.x, v.position.z - p.position.z);
-          return dist < 14.0 && v.speed > 2.0;
+          return dist < 14.0 && Math.abs(v.speed) > 1.8;
         });
         if (oncomingFastVeh && p.stateTimer > 0) {
-          p.speed = 0; // Pause safely at curb
+          p.speed = THREE.MathUtils.damp(p.speed, 0, 8.0, dt);
           p.state = "idle";
           p.stateTimer = 1.8;
           return;
@@ -883,7 +1087,13 @@ export class PedestrianSystem {
 
       p.speed = THREE.MathUtils.damp(p.speed, p.personalSpeed * scheduleSpeedMult, 6, dt);
 
-      if (p.destinationPoint && p.position.distanceTo(p.destinationPoint) <= 6.0 && Math.random() < 0.05) {
+      // Nighttime residential rest check: resting at residential quarters during night phase
+      if (schedulePhase === "rest" && p.destinationPoint && p.position.distanceTo(p.destinationPoint) <= 6.0) {
+        if (Math.random() < 0.1) {
+          p.state = "idle";
+          p.stateTimer = 15.0 + Math.random() * 20.0;
+        }
+      } else if (p.destinationPoint && p.position.distanceTo(p.destinationPoint) <= 6.0 && Math.random() < 0.05) {
         p.state = "visiting";
         p.stateTimer = 6.0 + Math.random() * 8.0;
       } else if (p.stateTimer <= 0 && Math.random() < 0.2) {
@@ -938,23 +1148,55 @@ export class PedestrianSystem {
       }
     }
 
-    // Move and avoid obstacles with bounded retries
+    // Move and avoid obstacles with forward whisker and pedestrian-to-pedestrian separation
     if (p.speed > 0.05) {
-      const moveX = Math.sin(p.yaw) * p.speed * dt;
-      const moveZ = Math.cos(p.yaw) * p.speed * dt;
+      const sinYaw = Math.sin(p.yaw);
+      const cosYaw = Math.cos(p.yaw);
 
-      const nextX = p.position.x + moveX;
-      const nextZ = p.position.z + moveZ;
-      const obstacles = this.colliderIndex.query(nextX, nextZ, 0.42);
+      // 1. Forward whisker probe (0.85m ahead) to detect obstacles early and steer smoothly
+      const whiskerDist = 0.85;
+      const whiskerX = p.position.x + sinYaw * whiskerDist;
+      const whiskerZ = p.position.z + cosYaw * whiskerDist;
+      const whiskerBlocked = this.isPositionBlocked(whiskerX, whiskerZ, 0.38, playerVehiclePos);
 
-      if (obstacles.length === 0) {
-        p.position.x = nextX;
-        p.position.z = nextZ;
+      if (whiskerBlocked) {
+        const steerDir = p.lookSeed > 5 ? 1 : -1;
+        p.yaw += steerDir * 2.6 * dt;
+        p.speed = THREE.MathUtils.damp(p.speed, p.personalSpeed * 0.45, 6.0, dt);
+      }
+
+      const stepDist = p.speed * dt;
+      const nextX = p.position.x + Math.sin(p.yaw) * stepDist;
+      const nextZ = p.position.z + Math.cos(p.yaw) * stepDist;
+      const isBlocked = this.isPositionBlocked(nextX, nextZ, 0.35, playerVehiclePos);
+
+      if (!isBlocked) {
+        // Pedestrian-to-pedestrian personal space separation (prevents crowding and overlapping)
+        let sepX = 0;
+        let sepZ = 0;
+        for (let j = 0; j < this.pedestrians.length; j++) {
+          if (j === pedIdx) continue;
+          const other = this.pedestrians[j];
+          const dx = p.position.x - other.position.x;
+          const dz = p.position.z - other.position.z;
+          const distSq = dx * dx + dz * dz;
+          const personalSpace = 0.92;
+          if (distSq < personalSpace * personalSpace && distSq > 0.0001) {
+            const dist = Math.sqrt(distSq);
+            const push = (personalSpace - dist) / personalSpace;
+            sepX += (dx / dist) * push * 2.4;
+            sepZ += (dz / dist) * push * 2.4;
+          }
+        }
+
+        p.position.x = nextX + sepX * dt;
+        p.position.z = nextZ + sepZ * dt;
         p.blockedRetries = 0;
       } else {
         p.blockedRetries = (p.blockedRetries || 0) + 1;
         p.state = "idle";
-        p.stateTimer = 1.0;
+        p.stateTimer = 0.8;
+        p.speed = 0;
 
         if (p.blockedRetries < 3) {
           // Attempt angle detour around obstacle
@@ -965,7 +1207,7 @@ export class PedestrianSystem {
           p.blockedRetries = 0;
           const candidateWaypoints = this.network.pedestrianWaypointList.filter((wp) => {
             const dist = Math.hypot(wp.x - p.position.x, wp.z - p.position.z);
-            return dist > 4 && dist < 28;
+            return dist > 4 && dist < 28 && !this.isPositionBlocked(wp.x, wp.z, 0.4, playerVehiclePos);
           });
           if (candidateWaypoints.length > 0) {
             p.targetWaypoint = candidateWaypoints[Math.floor(Math.random() * candidateWaypoints.length)];
@@ -979,8 +1221,16 @@ export class PedestrianSystem {
           p.stateTimer = 4.0;
         }
       }
+    }
 
-      p.position.y = this.surfaceHeight(p.position.x, p.position.z);
+    // Firm ground contact: ensure feet are always accurately grounded on surface height
+    p.position.y = this.surfaceHeight(p.position.x, p.position.z);
+
+    // Strict upright posture guarantee: no pitch (x=0) and no roll (z=0)
+    p.model.root.rotation.set(0, p.yaw, 0);
+    p.model.proceduralBody.rotation.set(0, 0, 0);
+    if (p.model.riggedCharacter) {
+      p.model.riggedCharacter.rotation.set(0, 0, 0);
     }
 
     const isMoving = p.speed > 0.15;
@@ -994,7 +1244,6 @@ export class PedestrianSystem {
       }
       p.model.updateAnimation(dt);
       p.model.root.position.set(p.position.x, p.position.y, p.position.z);
-      p.model.root.rotation.set(0, p.yaw, 0);
       return;
     }
 
@@ -1004,10 +1253,20 @@ export class PedestrianSystem {
 
     const swing = isMoving ? Math.sin(p.walkPhase) * 0.46 : 0;
     const idleBreath = !isMoving ? Math.sin(this.time * 2.1 + p.lookSeed) * 0.035 : 0;
-    p.model.leftArm.rotation.x = THREE.MathUtils.damp(p.model.leftArm.rotation.x, -swing + idleBreath, 8, dt);
-    p.model.rightArm.rotation.x = THREE.MathUtils.damp(p.model.rightArm.rotation.x, swing - idleBreath, 8, dt);
-    p.model.leftLeg.rotation.x = THREE.MathUtils.damp(p.model.leftLeg.rotation.x, swing, 8, dt);
-    p.model.rightLeg.rotation.x = THREE.MathUtils.damp(p.model.rightLeg.rotation.x, -swing, 8, dt);
+
+    if (p.state === "talking") {
+      // Natural conversational arm gesture and head nod while talking
+      const talkGesture = Math.sin(this.time * 3.2 + p.lookSeed) * 0.16 + 0.14;
+      p.model.rightArm.rotation.x = THREE.MathUtils.damp(p.model.rightArm.rotation.x, talkGesture, 6, dt);
+      p.model.leftArm.rotation.x = THREE.MathUtils.damp(p.model.leftArm.rotation.x, idleBreath, 6, dt);
+      p.model.leftLeg.rotation.x = THREE.MathUtils.damp(p.model.leftLeg.rotation.x, 0, 8, dt);
+      p.model.rightLeg.rotation.x = THREE.MathUtils.damp(p.model.rightLeg.rotation.x, 0, 8, dt);
+    } else {
+      p.model.leftArm.rotation.x = THREE.MathUtils.damp(p.model.leftArm.rotation.x, -swing + idleBreath, 8, dt);
+      p.model.rightArm.rotation.x = THREE.MathUtils.damp(p.model.rightArm.rotation.x, swing - idleBreath, 8, dt);
+      p.model.leftLeg.rotation.x = THREE.MathUtils.damp(p.model.leftLeg.rotation.x, swing, 8, dt);
+      p.model.rightLeg.rotation.x = THREE.MathUtils.damp(p.model.rightLeg.rotation.x, -swing, 8, dt);
+    }
 
     const bounce = isMoving ? Math.abs(Math.sin(p.walkPhase * 2)) * 0.03 : 0;
     p.model.root.position.set(p.position.x, p.position.y + bounce, p.position.z);
@@ -1031,11 +1290,13 @@ export class PedestrianSystem {
 
   private animateVendor(p: Pedestrian, dt: number) {
     p.position.y = this.surfaceHeight(p.position.x, p.position.z);
+    p.model.root.rotation.set(0, p.yaw, 0);
+    p.model.proceduralBody.rotation.set(0, 0, 0);
     if (p.model.riggedCharacter) {
+      p.model.riggedCharacter.rotation.set(0, 0, 0);
       p.model.playAction("idle", 0.25);
       p.model.updateAnimation(dt);
       p.model.root.position.copy(p.position);
-      p.model.root.rotation.set(0, p.yaw, 0);
       return;
     }
 
@@ -1049,16 +1310,16 @@ export class PedestrianSystem {
     }
 
     p.model.root.position.copy(p.position);
-    p.model.root.rotation.set(0, p.yaw, 0);
   }
 
   private animateSitting(p: Pedestrian, dt: number) {
+    p.position.y = this.surfaceHeight(p.position.x, p.position.z) + 0.35;
+    p.model.root.rotation.set(0, p.yaw, 0);
+    p.model.proceduralBody.rotation.set(0, 0, 0);
     if (p.model.riggedCharacter) {
-      p.model.playAction("idle", 0.3);
-      p.model.updateAnimation(dt);
-      p.model.root.position.copy(p.position);
-      p.model.root.rotation.set(0, p.yaw, 0);
-      return;
+      p.model.riggedCharacter.rotation.set(0, 0, 0);
+      p.model.proceduralBody.visible = true;
+      p.model.riggedCharacter.visible = false;
     }
 
     // Procedural seated pose on clay Dakali ledge
@@ -1077,7 +1338,6 @@ export class PedestrianSystem {
     }
 
     p.model.root.position.copy(p.position);
-    p.model.root.rotation.set(0, p.yaw, 0);
   }
 
   public dispose() {

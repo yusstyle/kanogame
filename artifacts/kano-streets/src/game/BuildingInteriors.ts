@@ -3,6 +3,7 @@ import { makeSignMaterial } from "./materials";
 import type { Collider, GameMaterials, InteriorId, PropertyId, BusinessId, FurnitureInstance } from "./types";
 import { PROPERTY_REGISTRY } from "./propertyRegistry";
 import { buildFurnitureMesh, type RenderedFurnitureResult } from "./furnitureRenderer";
+import { loadGLTFModel } from "./assetManifest";
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
 const unitCyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
@@ -23,6 +24,9 @@ function addBox(
   mesh.scale.set(w, h, d);
   mesh.castShadow = castShadow;
   mesh.receiveShadow = true;
+  if (h <= 2.2 && w < 4.0 && d < 4.0) {
+    mesh.userData.isFurniture = true;
+  }
   parent.add(mesh);
   return mesh;
 }
@@ -41,8 +45,232 @@ function addCyl(
   mesh.scale.set(r * 2, h, r * 2);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
+  if (h <= 2.2) {
+    mesh.userData.isFurniture = true;
+  }
   parent.add(mesh);
   return mesh;
+}
+
+function fitModelToBounds(
+  model: THREE.Group,
+  targetWidth: number,
+  targetDepth: number,
+  targetHeight: number,
+  targetCenterX: number,
+  targetCenterZ: number,
+  groundY = 0,
+  rotY = 0,
+) {
+  model.position.set(0, 0, 0);
+  model.rotation.set(0, rotY, 0);
+  model.scale.set(1, 1, 1);
+  model.updateMatrixWorld(true);
+
+  const bbox = new THREE.Box3().setFromObject(model);
+  const size = bbox.getSize(new THREE.Vector3());
+
+  if (size.x > 0.001 && size.y > 0.001 && size.z > 0.001) {
+    const scale = Math.min(
+      targetWidth / size.x,
+      targetDepth / size.z,
+      targetHeight / size.y,
+    );
+    model.scale.set(scale, scale, scale);
+    model.updateMatrixWorld(true);
+
+    const scaledBbox = new THREE.Box3().setFromObject(model);
+    const scaledCenter = scaledBbox.getCenter(new THREE.Vector3());
+
+    model.position.x = targetCenterX - scaledCenter.x;
+    model.position.y = groundY - scaledBbox.min.y;
+    model.position.z = targetCenterZ - scaledCenter.z;
+    model.updateMatrixWorld(true);
+  }
+}
+
+function addCeiling(
+  parent: THREE.Object3D,
+  material: THREE.Material,
+  y: number,
+  w: number,
+  d: number,
+) {
+  const geo = new THREE.PlaneGeometry(w, d);
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.name = "ceiling";
+  mesh.position.set(0, y, 0);
+  mesh.rotation.x = Math.PI / 2; // Downward facing normal (-Y) into room; culls from above for cutaway
+  mesh.receiveShadow = false;
+  parent.add(mesh);
+  return mesh;
+}
+
+function addPerimeterWall(
+  parent: THREE.Object3D,
+  material: THREE.Material,
+  x: number,
+  y: number,
+  z: number,
+  w: number,
+  h: number,
+  rotY: number,
+) {
+  const geo = new THREE.PlaneGeometry(w, h);
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.name = "perimeter_wall";
+  mesh.position.set(x, y, z);
+  mesh.rotation.y = rotY; // Normal points inward into room; culls from behind for architectural cutaway
+  mesh.receiveShadow = true;
+  parent.add(mesh);
+  return mesh;
+}
+
+function addDoorCasing(
+  parent: THREE.Object3D,
+  material: THREE.Material,
+  x: number,
+  y: number,
+  z: number,
+  w: number,
+  h: number,
+  rotY = 0,
+  casingW = 0.08,
+  casingD = 0.05,
+) {
+  const group = new THREE.Group();
+  group.position.set(x, y, z);
+  group.rotation.y = rotY;
+
+  // Left jamb
+  addBox(group, material, -w / 2 - casingW / 2, h / 2, 0, casingW, h, casingD, false);
+  // Right jamb
+  addBox(group, material, w / 2 + casingW / 2, h / 2, 0, casingW, h, casingD, false);
+  // Top header casing
+  addBox(group, material, 0, h + casingW / 2, 0, w + casingW * 2, casingW, casingD, false);
+
+  parent.add(group);
+  return group;
+}
+
+function addArchitecturalCurtains(
+  parent: THREE.Object3D,
+  rodMat: THREE.Material,
+  fabricMat: THREE.Material,
+  x: number,
+  y: number,
+  z: number,
+  w: number,
+  h: number,
+  rotY = 0,
+) {
+  const group = new THREE.Group();
+  group.position.set(x, y, z);
+  group.rotation.y = rotY;
+
+  // Ceiling curtain track / rod
+  addBox(group, rodMat, 0, h + 0.05, 0, w + 0.5, 0.04, 0.06, false);
+
+  // Left drapery panel (layered pleats)
+  const panelW = 0.65;
+  const leftX = -w / 2 + panelW / 2;
+  const pleatCount = 4;
+  for (let i = 0; i < pleatCount; i++) {
+    const px = leftX - panelW / 2 + (i + 0.5) * (panelW / pleatCount);
+    const pz = i % 2 === 0 ? 0.03 : -0.02;
+    addBox(group, fabricMat, px, h / 2, pz, (panelW / pleatCount) * 0.95, h, 0.08, false);
+  }
+
+  // Right drapery panel (layered pleats)
+  const rightX = w / 2 - panelW / 2;
+  for (let i = 0; i < pleatCount; i++) {
+    const px = rightX - panelW / 2 + (i + 0.5) * (panelW / pleatCount);
+    const pz = i % 2 === 0 ? 0.03 : -0.02;
+    addBox(group, fabricMat, px, h / 2, pz, (panelW / pleatCount) * 0.95, h, 0.08, false);
+  }
+
+  parent.add(group);
+  return group;
+}
+
+function addPowerOutlet(
+  parent: THREE.Object3D,
+  faceplateMat: THREE.Material,
+  x: number,
+  y: number,
+  z: number,
+  rotY = 0,
+) {
+  const group = new THREE.Group();
+  group.position.set(x, y, z);
+  group.rotation.y = rotY;
+
+  // Faceplate
+  addBox(group, faceplateMat, 0, 0, 0, 0.14, 0.14, 0.015, false);
+
+  parent.add(group);
+  return group;
+}
+
+function addWallArtwork(
+  parent: THREE.Object3D,
+  frameMat: THREE.Material,
+  canvasMat: THREE.Material,
+  x: number,
+  y: number,
+  z: number,
+  w: number,
+  h: number,
+  rotY = 0,
+) {
+  const group = new THREE.Group();
+  group.position.set(x, y, z);
+  group.rotation.y = rotY;
+
+  // Outer frame
+  addBox(group, frameMat, 0, 0, 0, w, h, 0.04, false);
+  // Recessed canvas / artwork
+  addBox(group, canvasMat, 0, 0, 0.015, w - 0.08, h - 0.08, 0.02, false);
+
+  parent.add(group);
+  return group;
+}
+
+function addPottedPlant(
+  parent: THREE.Object3D,
+  potMat: THREE.Material,
+  standMat: THREE.Material,
+  foliageMat: THREE.Material,
+  x: number,
+  y: number,
+  z: number,
+) {
+  const group = new THREE.Group();
+  group.position.set(x, y, z);
+
+  // Wooden tripod stand legs
+  for (let a = 0; a < 3; a++) {
+    const angle = (a * Math.PI * 2) / 3;
+    const lx = Math.cos(angle) * 0.22;
+    const lz = Math.sin(angle) * 0.22;
+    addCyl(group, standMat, lx, 0.18, lz, 0.02, 0.36);
+  }
+
+  // Cylindrical Ceramic Pot
+  addCyl(group, potMat, 0, 0.52, 0, 0.24, 0.42);
+
+  // Foliage Stems & Broad Leaves
+  addCyl(group, standMat, 0, 0.85, 0, 0.03, 0.4);
+  const leafAngles = [0, 1.3, 2.5, 3.8, 5.0];
+  leafAngles.forEach((ang, idx) => {
+    const lx = Math.cos(ang) * 0.26;
+    const lz = Math.sin(ang) * 0.26;
+    const ly = 0.88 + idx * 0.12;
+    addBox(group, foliageMat, lx, ly, lz, 0.22, 0.35, 0.04);
+  });
+
+  parent.add(group);
+  return group;
 }
 
 export interface InteractiveDoor {
@@ -58,6 +286,15 @@ export interface InteractiveDoor {
   position: THREE.Vector3;
 }
 
+export interface InteriorBounds {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+  minY: number;
+  maxY: number;
+}
+
 export interface InteriorZone {
   id: InteriorId;
   name: string;
@@ -70,6 +307,8 @@ export interface InteriorZone {
   outdoorDoorPosition: THREE.Vector3;
   outdoorDoorYaw: number;
   lights?: THREE.PointLight[];
+  height?: number;
+  bounds?: InteriorBounds;
   checkInteraction?: (
     playerPos: THREE.Vector3,
     state: {
@@ -156,11 +395,14 @@ export class BuildingInteriorManager {
     doorMesh.receiveShadow = true;
     pivot.add(doorMesh);
 
-    // Brass handle
-    const handle = new THREE.Mesh(unitBox, this.materials.goldTrim || this.materials.trim);
-    handle.position.set(w - 0.12, h * 0.5, 0.08);
-    handle.scale.set(0.06, 0.14, 0.12);
-    pivot.add(handle);
+    // Architectural lever handle with backplate rosette on both sides
+    const handleMat = this.materials.metal || this.materials.goldTrim || this.materials.trim;
+    const handleGroup = new THREE.Group();
+    handleGroup.position.set(w - 0.12, h * 0.5, 0);
+    addBox(handleGroup, handleMat, 0, 0, 0, 0.06, 0.16, d + 0.02, false);
+    addBox(handleGroup, handleMat, -0.06, 0.03, d / 2 + 0.04, 0.12, 0.025, 0.03, false);
+    addBox(handleGroup, handleMat, -0.06, 0.03, -d / 2 - 0.04, 0.12, 0.025, 0.03, false);
+    pivot.add(handleGroup);
 
     const collider: Collider = {
       x: worldCx + x,
@@ -220,6 +462,10 @@ export class BuildingInteriorManager {
     return null;
   }
 
+  public getZone(zoneId: InteriorId): InteriorZone | undefined {
+    return this.interiors.get(zoneId);
+  }
+
   public toggleInteriorLights(zoneId?: InteriorId): boolean {
     const targetId = zoneId ?? this.activeInterior;
     if (!targetId) return this.lightsOn;
@@ -277,7 +523,7 @@ export class BuildingInteriorManager {
     const height = 4.0;
 
     const floorMat = this.materials.tileFloor || this.materials.concrete;
-    const wallMat = this.materials.white;
+    const wallMat = this.materials.interiorWall || this.materials.white;
     const woodMat = this.materials.wood;
     const glassMat = this.materials.glassLit || this.materials.glass;
     const metalMat = this.materials.metal;
@@ -289,13 +535,21 @@ export class BuildingInteriorManager {
 
     // 1. Floor & Ceiling Slabs
     addBox(group, floorMat, 0, 0, 0, width, 0.1, depth, false);
-    addBox(group, wallMat, 0, height, 0, width, 0.1, depth, false);
+    addCeiling(group, this.materials.ceilingMat || wallMat, height, width, depth);
 
-    // 2. Perimeter Exterior Walls
-    addBox(group, wallMat, 0, height / 2, -depth / 2, width, height, 0.25); // North Wall
-    addBox(group, wallMat, 0, height / 2, depth / 2, width, height, 0.25);  // South Wall (Front)
-    addBox(group, wallMat, -width / 2, height / 2, 0, 0.25, height, depth); // West Wall
-    addBox(group, wallMat, width / 2, height / 2, 0, 0.25, height, depth);  // East Wall
+    // 2. Perimeter Cutaway Walls (Single-sided inward-facing planes with walnut baseboards)
+    addPerimeterWall(group, wallMat, 0, height / 2, -depth / 2, width, height, 0); // North Wall
+    addPerimeterWall(group, wallMat, 0, height / 2, depth / 2, width, height, Math.PI);  // South Wall (Front)
+    addPerimeterWall(group, wallMat, -width / 2, height / 2, 0, depth, height, Math.PI / 2); // West Wall
+    addPerimeterWall(group, wallMat, width / 2, height / 2, 0, depth, height, -Math.PI / 2);  // East Wall
+    // Baseboards for crisp floor/wall definition
+    addBox(group, darkMat, 0, 0.08, -depth / 2 + 0.04, width, 0.16, 0.04, false);
+    addBox(group, darkMat, 0, 0.08, depth / 2 - 0.04, width, 0.16, 0.04, false);
+    addBox(group, darkMat, -width / 2 + 0.04, 0.08, 0, 0.04, 0.16, depth, false);
+    addBox(group, darkMat, width / 2 - 0.04, 0.08, 0, 0.04, 0.16, depth, false);
+
+    // Partition wall baseboards
+    addBox(group, darkMat, 0.8, 0.08, -4.5, 0.24, 0.16, 7.0, false);
 
     // 3. Front Shaded Veranda & Reception Zaure (z: 5.5 to 9.0)
     addBox(group, this.materials.ochre, 0, 0.08, 7.2, 8.0, 0.16, 3.6, false);
@@ -307,39 +561,54 @@ export class BuildingInteriorManager {
       { x: cx + 3.2, z: cz + 7.2, halfX: 0.6, halfZ: 1.6, height: 0.8 },
     );
 
-    // Double Mahogany Entrance Doors with wrought iron studs
+    // Double Mahogany Entrance Doors with casing & wrought iron hardware
+    addDoorCasing(group, darkMat, 0, 0, depth / 2 - 0.08, 2.6, 2.4, 0);
     addBox(group, woodMat, -0.7, 1.2, depth / 2 - 0.08, 1.2, 2.4, 0.12);
     addBox(group, woodMat, 0.7, 1.2, depth / 2 - 0.08, 1.2, 2.4, 0.12);
+    addBox(group, metalMat, -0.15, 1.2, depth / 2 - 0.02, 0.08, 0.25, 0.04, false);
+    addBox(group, metalMat, 0.15, 1.2, depth / 2 - 0.02, 0.08, 0.25, 0.04, false);
     // Illuminated Exit Sign above door
     const exitSignMat = makeSignMaterial("EXIT TO RESIDENTIAL QUARTER", "#065f46");
     addBox(group, exitSignMat, 0, 2.65, depth / 2 - 0.08, 1.8, 0.4, 0.06);
 
     // 4. Grand Family Parlour (Palour) (x: -9.5 to 0.5, z: -1.0 to 5.5)
-    // Rich Northern Patterned Carpet
-    addBox(group, this.materials.carpetRed || this.materials.clothRed, -4.2, 0.05, 2.2, 7.6, 0.02, 6.2, false);
-    // 8-Seater Northern Modular Sectional Sofa Set
-    addBox(group, darkMat, -4.2, 0.48, 4.4, 6.2, 0.52, 1.1); // Back sofa
-    addBox(group, darkMat, -7.5, 0.48, 2.2, 1.1, 0.52, 5.0); // Left sofa
-    addBox(group, darkMat, -0.9, 0.48, 2.2, 1.1, 0.52, 3.4); // Right sofa
+    // Rich Traditional Northern Patterned Area Carpet (replaces giant flat red slab)
+    addBox(group, this.materials.patternedRug || this.materials.cloth, -4.2, 0.02, 2.2, 5.8, 0.02, 4.4, false);
+    // 8-Seater Northern Modular Sectional Sofa Set with layered contoured cushions
+    addBox(group, darkMat, -4.2, 0.20, 4.4, 6.2, 0.14, 1.1); // Plinth
+    addBox(group, this.materials.cloth, -4.2, 0.42, 4.4, 6.0, 0.32, 1.05); // Seat
+    addBox(group, this.materials.cloth, -4.2, 0.78, 4.8, 6.0, 0.45, 0.25); // Back
+    addBox(group, darkMat, -7.5, 0.20, 2.2, 1.1, 0.14, 5.0);
+    addBox(group, this.materials.cloth, -7.5, 0.42, 2.2, 1.05, 0.32, 4.8);
+    addBox(group, this.materials.cloth, -7.9, 0.78, 2.2, 0.25, 0.45, 4.8);
+    addBox(group, darkMat, -0.9, 0.20, 2.2, 1.1, 0.14, 3.4);
+    addBox(group, this.materials.cloth, -0.9, 0.42, 2.2, 1.05, 0.32, 3.2);
     // Scatter cushions
     addBox(group, this.materials.clothRed, -5.5, 0.65, 4.2, 0.45, 0.35, 0.15);
     addBox(group, goldMat, -2.8, 0.65, 4.2, 0.45, 0.35, 0.15);
-    // Carved mahogany coffee table with brass filigree trays
-    addBox(group, woodMat, -4.2, 0.35, 2.2, 2.4, 0.38, 1.4);
-    addBox(group, goldMat, -4.2, 0.4, 2.2, 0.8, 0.04, 0.6); // Brass filigree tray
+    addBox(group, goldMat, -7.4, 0.65, 3.6, 0.15, 0.35, 0.45);
+    // Carved mahogany coffee table with brass filigree trays & marble inlay
+    addBox(group, darkMat, -4.2, 0.18, 2.2, 2.2, 0.10, 1.2); // Frame
+    addBox(group, this.materials.marbleWhite || woodMat, -4.2, 0.36, 2.2, 2.4, 0.06, 1.4);
+    addBox(group, goldMat, -4.2, 0.42, 2.2, 0.8, 0.04, 0.6); // Brass filigree tray
     // Brass Kano Ornamental Urns & Water Pots
     addCyl(group, goldMat, -7.6, 0.55, 5.0, 0.35, 1.1);
     addCyl(group, goldMat, -0.8, 0.55, 5.0, 0.35, 1.1);
 
+    // Potted plant in parlour
+    addPottedPlant(group, whiteMat, woodMat, this.materials.foliage, -8.6, 0, 5.0);
+
     // 75-inch Flat Screen Media Wall & Credenza (West Wall)
-    addBox(group, woodMat, -9.6, 0.5, 2.2, 0.6, 0.65, 4.6);
+    addBox(group, darkMat, -9.6, 0.5, 2.2, 0.6, 0.65, 4.6);
     addBox(group, blackMat, -9.7, 1.8, 2.2, 0.1, 1.6, 3.0);
     addBox(group, cyanMat, -9.64, 1.8, 2.2, 0.02, 1.45, 2.8); // QLED Screen glow
     addBox(group, goldMat, -9.6, 1.8, 0.6, 0.06, 1.7, 0.06);  // Brass corner trim
     addBox(group, goldMat, -9.6, 1.8, 3.8, 0.06, 1.7, 0.06);
+    addPowerOutlet(group, whiteMat, -9.4, 0.65, 0.8, Math.PI / 2);
 
     // Wall Switch for Parlour Chandelier
     addBox(group, whiteMat, -0.5, 1.4, 4.5, 0.1, 0.14, 0.04);
+    addBox(group, darkMat, -0.5, 1.4, 4.47, 0.03, 0.05, 0.02, false);
 
     // 5. Formal Dining Room (x: 1.0 to 9.5, z: 0.5 to 5.5)
     // Partition Wall between Parlour and Dining with Arched Passage
@@ -347,10 +616,13 @@ export class BuildingInteriorManager {
     addBox(group, wallMat, 0.8, height / 2, 1.0, 0.2, height, 1.0);
     addBox(group, wallMat, 0.8, 3.2, 2.5, 0.2, 1.6, 2.0); // Arch lintel
     // 8-Seater Solid Mahogany Dining Table & Chairs
-    addBox(group, woodMat, 5.2, 0.78, 2.8, 3.6, 0.08, 1.8);
+    addBox(group, darkMat, 5.2, 0.72, 2.8, 3.4, 0.06, 1.6); // Table apron
+    addBox(group, woodMat, 5.2, 0.78, 2.8, 3.6, 0.08, 1.8); // Top
     for (const dx of [-1.3, 0, 1.3]) {
-      addBox(group, darkMat, 5.2 + dx, 0.48, 1.5, 0.45, 0.5, 0.45);
-      addBox(group, darkMat, 5.2 + dx, 0.48, 4.1, 0.45, 0.5, 0.45);
+      addBox(group, this.materials.cloth, 5.2 + dx, 0.48, 1.5, 0.45, 0.08, 0.45);
+      addBox(group, darkMat, 5.2 + dx, 0.75, 1.25, 0.45, 0.45, 0.04);
+      addBox(group, this.materials.cloth, 5.2 + dx, 0.48, 4.1, 0.45, 0.08, 0.45);
+      addBox(group, darkMat, 5.2 + dx, 0.75, 4.35, 0.45, 0.45, 0.04);
     }
     // Sideboard buffet credenza with brass serving dishes
     addBox(group, woodMat, 8.8, 0.5, 2.8, 0.6, 0.9, 3.2);
@@ -359,21 +631,25 @@ export class BuildingInteriorManager {
     // 6. Executive Family Kitchen & Store (x: 1.0 to 9.5, z: -5.0 to 0.5)
     // Kitchen Partition Wall with Doorway
     addBox(group, wallMat, 5.2, height / 2, 0.5, 9.5, height, 0.2);
-    // L-Shaped Kitchen Counter & Cabinets
-    addBox(group, this.materials.concrete, 6.8, 0.95, -2.5, 1.2, 1.0, 4.2);
-    addBox(group, darkMat, 6.8, 1.02, -2.5, 1.3, 0.08, 4.4); // Granite top
+    // L-Shaped Kitchen Counter & Cabinets with recessed toe kick
+    addBox(group, darkMat, 6.8, 0.05, -2.5, 1.1, 0.10, 4.0); // Toe kick
+    addBox(group, this.materials.white, 6.8, 0.52, -2.5, 1.2, 0.85, 4.2);
+    addBox(group, darkMat, 6.8, 0.98, -2.5, 1.3, 0.08, 4.4); // Granite top
     // Double stainless sink & swivel tap
-    addBox(group, metalMat, 6.8, 1.03, -1.5, 0.8, 0.02, 1.2);
-    addBox(group, metalMat, 7.2, 1.28, -1.5, 0.08, 0.3, 0.15);
+    addBox(group, metalMat, 6.8, 0.99, -1.5, 0.8, 0.02, 1.2);
+    addCyl(group, metalMat, 7.2, 1.28, -1.5, 0.04, 0.32);
     // 4-Burner gas cooker & range hood
     addBox(group, darkMat, 6.8, 0.95, -3.6, 1.1, 0.95, 0.85);
-    addBox(group, blackMat, 6.8, 1.03, -3.6, 0.85, 0.04, 0.75);
+    addBox(group, blackMat, 6.8, 1.02, -3.6, 0.85, 0.04, 0.75);
     addBox(group, metalMat, 6.8, 2.4, -3.6, 0.9, 0.5, 0.7); // Extractor hood
     // Upper wall cabinets
     addBox(group, woodMat, 7.2, 2.3, -2.0, 0.6, 0.85, 2.5);
-    // French-Door Stainless Refrigerator
-    addBox(group, metalMat, 8.8, 1.4, -4.2, 1.2, 2.3, 1.1);
-    addBox(group, darkMat, 8.15, 1.4, -4.2, 0.04, 0.8, 0.04); // Handle
+    // French-Door Stainless Refrigerator with vertical tubular handles
+    addBox(group, darkMat, 8.8, 0.04, -4.2, 1.1, 0.08, 1.0); // Kickplate
+    addBox(group, metalMat, 8.8, 1.25, -4.2, 1.2, 2.3, 1.1);
+    addBox(group, darkMat, 8.15, 1.4, -4.4, 0.03, 0.8, 0.03); // Handles
+    addBox(group, darkMat, 8.15, 1.4, -4.0, 0.03, 0.8, 0.03);
+    addPowerOutlet(group, whiteMat, 7.5, 1.25, 0.35, 0);
 
     // 7. Central Corridor Wall (z: -1.0 to -8.5)
     addBox(group, wallMat, 0.8, height / 2, -4.5, 0.2, height, 7.0);
@@ -381,6 +657,7 @@ export class BuildingInteriorManager {
     // 8. Dakin Karatu (Private Study & Prayer Room) (x: -9.5 to -4.0, z: -1.0 to -4.5)
     addBox(group, wallMat, -4.0, height / 2, -1.0, 10.0, height, 0.2);
     addBox(group, wallMat, -4.0, height / 2, -4.5, 10.0, height, 0.2);
+    addDoorCasing(group, darkMat, -4.0, 0, -1.0, 1.1, 2.4, Math.PI / 2);
     // Authentic Kano Prayer Carpets
     addBox(group, this.materials.carpetRed || this.materials.cloth, -6.5, 0.05, -2.0, 3.6, 0.02, 1.8, false);
     // Polished Mahogany Study Desk & Chair
@@ -393,11 +670,15 @@ export class BuildingInteriorManager {
     addBox(group, woodMat, -9.6, 1.8, -2.8, 0.6, 3.2, 3.0);
 
     // 9. Master Bedroom Suite & Ensuite Bath (x: -9.5 to 0.5, z: -4.5 to -8.5)
-    // King-Size Bed with Carved Hardwood Headboard
-    addBox(group, woodMat, -5.5, 0.45, -6.5, 2.6, 0.52, 2.8);
-    addBox(group, whiteMat, -5.5, 0.75, -6.5, 2.4, 0.25, 2.6); // Mattress
-    addBox(group, this.materials.cloth, -5.5, 0.82, -6.0, 2.4, 0.15, 1.6); // Embroidered coverlet
-    addBox(group, woodMat, -5.5, 1.4, -7.85, 2.8, 1.4, 0.15); // Headboard
+    addDoorCasing(group, darkMat, -4.0, 0, -4.5, 1.1, 2.4, Math.PI / 2);
+    // King-Size Bed with Carved Hardwood Headboard & Fluting
+    addBox(group, darkMat, -5.5, 0.22, -6.5, 2.6, 0.14, 2.8); // Plinth
+    addBox(group, whiteMat, -5.5, 0.50, -6.5, 2.4, 0.28, 2.6); // Deep mattress
+    addBox(group, this.materials.cloth, -5.5, 0.68, -6.0, 2.4, 0.14, 1.6); // Coverlet
+    addBox(group, this.materials.clothRed, -5.5, 0.70, -5.4, 2.4, 0.06, 0.45); // Runner
+    addBox(group, darkMat, -5.5, 1.4, -7.85, 2.8, 1.4, 0.15); // Headboard
+    addBox(group, this.materials.cloth, -5.5, 1.4, -7.78, 2.6, 1.2, 0.05); // Padded insert
+    addWallArtwork(group, darkMat, this.materials.clothRed, -5.5, 2.6, -7.86, 2.0, 0.9, 0);
     // Twin Nightstands & Lamps
     addBox(group, woodMat, -7.4, 0.4, -6.5, 0.6, 0.65, 0.5);
     addBox(group, woodMat, -3.6, 0.4, -6.5, 0.6, 0.65, 0.5);
@@ -440,43 +721,49 @@ export class BuildingInteriorManager {
     this.addInteractiveDoor(group, "house", "villa_rear_yard_door", "Rear Compound Yard Door", 0.8, 0, -8.8, 1.2, 2.4, 0.1, woodMat, cx, cz, true, colliders);
 
     // Multi-Room Atmospheric Point Lights
-    const parlourLight = new THREE.PointLight("#fff0d4", 2.6, 20, 1.2);
-    parlourLight.position.set(-4.2, height - 0.6, 2.2);
-    parlourLight.userData.baseIntensity = 2.6;
+    const parlourLight = new THREE.PointLight("#fff2da", 3.2, 24, 1.05);
+    parlourLight.position.set(-4.2, height - 0.5, 2.2);
+    parlourLight.userData.baseIntensity = 3.2;
     group.add(parlourLight);
     lights.push(parlourLight);
 
-    const masterLight = new THREE.PointLight("#ffe0b2", 1.8, 12, 1.3);
-    masterLight.position.set(-5.5, height - 0.7, -6.5);
-    masterLight.userData.baseIntensity = 1.8;
+    const masterLight = new THREE.PointLight("#ffe5c4", 2.5, 20, 1.05);
+    masterLight.position.set(-5.5, height - 0.5, -6.5);
+    masterLight.userData.baseIntensity = 2.5;
     group.add(masterLight);
     lights.push(masterLight);
 
-    const diningLight = new THREE.PointLight("#fff5e6", 1.8, 12, 1.3);
-    diningLight.position.set(5.2, height - 0.6, 2.8);
-    diningLight.userData.baseIntensity = 1.8;
+    const diningLight = new THREE.PointLight("#fff6ea", 2.6, 20, 1.05);
+    diningLight.position.set(5.2, height - 0.5, 2.8);
+    diningLight.userData.baseIntensity = 2.6;
     group.add(diningLight);
     lights.push(diningLight);
 
-    const studyLight = new THREE.PointLight("#ffeedd", 1.8, 10, 1.3);
-    studyLight.position.set(-6.5, height - 0.6, -2.8);
-    studyLight.userData.baseIntensity = 1.8;
+    const studyLight = new THREE.PointLight("#fff0e0", 2.4, 18, 1.05);
+    studyLight.position.set(-6.5, height - 0.5, -2.8);
+    studyLight.userData.baseIntensity = 2.4;
     group.add(studyLight);
     lights.push(studyLight);
 
-    const kitchenLight = new THREE.PointLight("#fffbe8", 1.8, 12, 1.2);
-    kitchenLight.position.set(6.8, height - 0.6, -2.5);
-    kitchenLight.userData.baseIntensity = 1.8;
+    const kitchenLight = new THREE.PointLight("#fffbe8", 2.5, 20, 1.05);
+    kitchenLight.position.set(6.8, height - 0.5, -2.5);
+    kitchenLight.userData.baseIntensity = 2.5;
     group.add(kitchenLight);
     lights.push(kitchenLight);
 
+    const foyerLight = new THREE.PointLight("#ffeec8", 2.2, 18, 1.05);
+    foyerLight.position.set(0, height - 0.5, 3.5);
+    foyerLight.userData.baseIntensity = 2.2;
+    group.add(foyerLight);
+    lights.push(foyerLight);
+
     // Colliders (shifted to world coordinates cx, cz)
     colliders.push(
-      // Perimeter Boundary Walls
-      { x: cx, z: cz - depth / 2, halfX: width / 2, halfZ: 0.3, height },
-      { x: cx, z: cz + depth / 2, halfX: width / 2, halfZ: 0.3, height },
-      { x: cx - width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height },
-      { x: cx + width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height },
+      // Perimeter Boundary Walls (isPerimeterWall: true permits elevated camera to frame room without clipping)
+      { x: cx, z: cz - depth / 2, halfX: width / 2, halfZ: 0.3, height, isPerimeterWall: true },
+      { x: cx, z: cz + depth / 2, halfX: width / 2, halfZ: 0.3, height, isPerimeterWall: true },
+      { x: cx - width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height, isPerimeterWall: true },
+      { x: cx + width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height, isPerimeterWall: true },
       // Parlour Sectional Sofa
       { x: cx - 4.2, z: cz + 4.4, halfX: 3.1, halfZ: 0.6, height: 1.2 },
       { x: cx - 7.5, z: cz + 2.2, halfX: 0.6, halfZ: 2.5, height: 1.2 },
@@ -510,6 +797,7 @@ export class BuildingInteriorManager {
       root: group,
       colliders,
       lights,
+      height: 4.0,
       spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.8),
       spawnYaw: Math.PI,
       exitPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.1),
@@ -732,7 +1020,7 @@ export class BuildingInteriorManager {
     const floor2Elevation = 3.4;
 
     const marbleMat = this.materials.tileFloor || this.materials.white;
-    const wallMat = this.materials.white;
+    const wallMat = this.materials.interiorWall || this.materials.white;
     const woodMat = this.materials.wood;
     const glassMat = this.materials.glassLit || this.materials.glass;
     const darkMat = this.materials.darkTrim;
@@ -743,18 +1031,25 @@ export class BuildingInteriorManager {
 
     // 1. Lower Floor (Floor 1, y = 0) & Double-Height Ceiling Slab (y = 6.8)
     addBox(group, marbleMat, 0, 0, 0, width, 0.1, depth, false);
-    addBox(group, wallMat, 0, totalHeight, 0, width, 0.1, depth, false);
+    addCeiling(group, this.materials.ceilingMat || wallMat, totalHeight, width, depth);
 
-    // 2. Perimeter Walls
-    addBox(group, wallMat, 0, totalHeight / 2, -depth / 2, width, totalHeight, 0.25); // North Wall
-    addBox(group, wallMat, 0, totalHeight / 2, depth / 2, width, totalHeight, 0.25);  // South Wall (Foyer & Terrace)
-    addBox(group, wallMat, -width / 2, totalHeight / 2, 0, 0.25, totalHeight, depth); // West Wall
-    addBox(group, wallMat, width / 2, totalHeight / 2, 0, 0.25, totalHeight, depth);  // East Wall
+    // 2. Perimeter Cutaway Walls (Single-sided inward-facing planes with dark trim baseboards)
+    addPerimeterWall(group, wallMat, 0, totalHeight / 2, -depth / 2, width, totalHeight, 0); // North Wall
+    addPerimeterWall(group, wallMat, 0, totalHeight / 2, depth / 2, width, totalHeight, Math.PI);  // South Wall (Foyer & Terrace)
+    addPerimeterWall(group, wallMat, -width / 2, totalHeight / 2, 0, depth, totalHeight, Math.PI / 2); // West Wall
+    addPerimeterWall(group, wallMat, width / 2, totalHeight / 2, 0, depth, totalHeight, -Math.PI / 2);  // East Wall
+    addBox(group, darkMat, 0, 0.08, -depth / 2 + 0.04, width, 0.16, 0.04, false);
+    addBox(group, darkMat, 0, 0.08, depth / 2 - 0.04, width, 0.16, 0.04, false);
+    addBox(group, darkMat, -width / 2 + 0.04, 0.08, 0, 0.04, 0.16, depth, false);
+    addBox(group, darkMat, width / 2 - 0.04, 0.08, 0, 0.04, 0.16, depth, false);
 
     // 3. Lower Level: Grand Foyer (z: 5.5 to 8.0, x: -2.5 to 2.5)
-    // Double Entry Doors
+    // Double Entry Doors with door casing
+    addDoorCasing(group, darkMat, 0, 0, depth / 2 - 0.08, 2.5, 2.4, 0);
     addBox(group, woodMat, -0.65, 1.2, depth / 2 - 0.08, 1.2, 2.4, 0.12);
     addBox(group, woodMat, 0.65, 1.2, depth / 2 - 0.08, 1.2, 2.4, 0.12);
+    addBox(group, metalMat, -0.15, 1.2, depth / 2 - 0.02, 0.06, 0.22, 0.04, false);
+    addBox(group, metalMat, 0.15, 1.2, depth / 2 - 0.02, 0.06, 0.22, 0.04, false);
     // Illuminated Exit Sign above doors
     const exitSignMat = makeSignMaterial("EXIT TO BOMPAI AVENUE", "#065f46");
     addBox(group, exitSignMat, 0, 2.55, depth / 2 - 0.08, 1.8, 0.38, 0.06);
@@ -763,44 +1058,60 @@ export class BuildingInteriorManager {
     addBox(group, this.materials.goldTrim || metalMat, 0, 1.1, 6.8, 0.35, 0.35, 0.25); // Sculpture
     // Wall Switch in Foyer
     addBox(group, whiteMat, -1.0, 1.4, depth / 2 - 0.2, 0.1, 0.14, 0.04);
+    addBox(group, darkMat, -1.0, 1.4, depth / 2 - 0.23, 0.03, 0.05, 0.02, false);
 
     // 4. Lower Level: Panoramic Living Salon (x: -8.5 to 1.0, z: -7.0 to 3.0)
     // Floor-to-Ceiling Panoramic Glass Window Wall on North side
     addBox(group, glassMat, -3.5, totalHeight / 2, -depth / 2 + 0.12, 9.5, totalHeight - 0.5, 0.1);
-    // Luxury Cream Leather Sectional Suite
-    addBox(group, whiteMat, -3.5, 0.48, -4.5, 5.4, 0.52, 1.1);
-    addBox(group, whiteMat, -6.0, 0.48, -2.5, 1.1, 0.52, 3.8);
+    // Luxury Cream Sectional Suite with contoured cushions
+    addBox(group, darkMat, -3.5, 0.18, -4.5, 5.4, 0.12, 1.1); // Plinth
+    addBox(group, whiteMat, -3.5, 0.44, -4.5, 5.2, 0.28, 1.05); // Seat
+    addBox(group, this.materials.cloth, -3.5, 0.78, -4.9, 5.2, 0.44, 0.22); // Back
+    addBox(group, darkMat, -6.0, 0.18, -2.5, 1.1, 0.12, 3.8);
+    addBox(group, whiteMat, -6.0, 0.44, -2.5, 1.05, 0.28, 3.6);
+    addBox(group, this.materials.cloth, -6.4, 0.78, -2.5, 0.22, 0.44, 3.6);
     // Accent pillows
     addBox(group, this.materials.goldTrim || darkMat, -4.5, 0.65, -4.2, 0.4, 0.35, 0.15);
     addBox(group, this.materials.goldTrim || darkMat, -2.5, 0.65, -4.2, 0.4, 0.35, 0.15);
-    // Polished Black Marble Coffee Table
-    addBox(group, blackMat, -3.5, 0.35, -2.5, 2.2, 0.38, 1.2);
-    addBox(group, glassMat, -3.5, 0.4, -2.5, 0.4, 0.12, 0.4); // Centerpiece
+    // Polished Carrara & Black Marble Coffee Table
+    addBox(group, darkMat, -3.5, 0.18, -2.5, 2.0, 0.10, 1.0);
+    addBox(group, this.materials.marbleWhite || blackMat, -3.5, 0.36, -2.5, 2.2, 0.06, 1.2);
+    addBox(group, glassMat, -3.5, 0.44, -2.5, 0.4, 0.12, 0.4); // Centerpiece
+    // Potted plant in living salon
+    addPottedPlant(group, whiteMat, darkMat, this.materials.foliage, -1.2, 0, -6.2);
+    // Wall artwork in salon
+    addWallArtwork(group, darkMat, this.materials.clothRed, -8.7, 4.2, -2.5, 3.2, 1.6, Math.PI / 2);
     // 85-inch Entertainment Wall with wood slats and OLED screen
     addBox(group, darkMat, -8.7, 1.4, -2.5, 0.25, 2.6, 4.4);
     addBox(group, blackMat, -8.6, 1.8, -2.5, 0.08, 1.6, 3.2);
     addBox(group, cyanMat, -8.55, 1.8, -2.5, 0.02, 1.45, 3.0); // OLED Screen glow
     addBox(group, metalMat, -8.55, 0.85, -2.5, 0.12, 0.08, 2.2); // Soundbar
+    addPowerOutlet(group, whiteMat, -8.5, 0.55, -4.2, Math.PI / 2);
 
     // 5. Lower Level: Gourmet Island Kitchen (x: 2.0 to 8.5, z: -7.0 to 0.5)
-    // Central Granite Chef Island
-    addBox(group, darkMat, 5.0, 0.95, -3.5, 2.4, 1.0, 4.0);
-    addBox(group, blackMat, 5.0, 1.02, -3.5, 2.6, 0.08, 4.2); // Black granite top
-    addBox(group, darkMat, 5.0, 1.04, -4.5, 0.8, 0.02, 0.9);  // Induction hob
-    // 3 Leather Bar Stools
+    // Central Granite Chef Island with recessed toe-kick
+    addBox(group, darkMat, 5.0, 0.05, -3.5, 2.2, 0.10, 3.8); // Toe-kick
+    addBox(group, darkMat, 5.0, 0.52, -3.5, 2.4, 0.85, 4.0);
+    addBox(group, this.materials.marbleWhite || blackMat, 5.0, 0.98, -3.5, 2.6, 0.08, 4.2); // Marble/Granite top
+    addBox(group, blackMat, 5.0, 1.03, -4.5, 0.8, 0.02, 0.9);  // Induction hob
+    // 3 Leather Bar Stools with metallic footrests
     for (const dz of [-1.2, 0, 1.2]) {
-      addCyl(group, metalMat, 3.4, 0.65, -3.5 + dz, 0.22, 0.65);
+      addCyl(group, metalMat, 3.4, 0.35, -3.5 + dz, 0.03, 0.70);
+      addCyl(group, metalMat, 3.4, 0.20, -3.5 + dz, 0.22, 0.03); // Footrest ring
       addBox(group, darkMat, 3.4, 0.72, -3.5 + dz, 0.4, 0.08, 0.4);
     }
     // Full-height cabinetry wall & double oven
     addBox(group, woodMat, 8.2, 1.6, -3.5, 0.8, 3.0, 5.0);
     addBox(group, metalMat, 7.8, 1.4, -2.0, 0.1, 1.1, 0.8); // Double built-in oven
-    // Double-Door Stainless Smart Refrigerator with Ice Dispenser
-    addBox(group, metalMat, 7.8, 1.45, -6.5, 1.4, 2.4, 1.3);
-    addBox(group, darkMat, 7.1, 1.4, -6.5, 0.04, 0.9, 0.04); // Handles
+    // Double-Door Stainless Smart Refrigerator with Ice Dispenser & kickplate
+    addBox(group, darkMat, 7.8, 0.04, -6.5, 1.3, 0.08, 1.2);
+    addBox(group, metalMat, 7.8, 1.35, -6.5, 1.4, 2.4, 1.3);
+    addBox(group, darkMat, 7.1, 1.4, -6.8, 0.03, 0.9, 0.03); // Tubular handles
+    addBox(group, darkMat, 7.1, 1.4, -6.2, 0.03, 0.9, 0.03);
     // Undermount double sink & faucet
-    addBox(group, metalMat, 5.0, 1.04, -2.4, 0.7, 0.02, 1.2);
-    addBox(group, metalMat, 5.0, 1.3, -2.4, 0.08, 0.35, 0.15); // Gooseneck tap
+    addBox(group, metalMat, 5.0, 0.99, -2.4, 0.7, 0.02, 1.2);
+    addCyl(group, metalMat, 5.0, 1.25, -2.4, 0.03, 0.35); // Gooseneck tap
+    addPowerOutlet(group, whiteMat, 7.7, 1.15, -0.2, Math.PI);
 
     // 6. Lower Level: Guest Bedroom & Bathroom Suite (x: 2.0 to 8.5, z: 1.0 to 7.0)
     addBox(group, wallMat, 5.0, 3.4 / 2, 0.5, 6.5, 3.4, 0.2); // Partition wall
@@ -854,16 +1165,28 @@ export class BuildingInteriorManager {
 
     // 10. Upper Level: Master Penthouse Suite (x: -8.5 to -1.0, z: 0 to 5.5)
     addBox(group, wallMat, -1.0, floor2Elevation + (totalHeight - floor2Elevation) / 2, 2.8, 0.2, totalHeight - floor2Elevation, 5.5);
-    // King-Size Master Bed with velvet tufted headboard
-    addBox(group, woodMat, -5.0, floor2Elevation + 0.45, 2.8, 2.6, 0.55, 2.8);
-    addBox(group, whiteMat, -5.0, floor2Elevation + 0.75, 2.8, 2.4, 0.25, 2.6);
-    addBox(group, this.materials.cloth, -5.0, floor2Elevation + 0.82, 3.2, 2.4, 0.14, 1.6); // Silk Duvet
+    addDoorCasing(group, darkMat, -1.0, floor2Elevation, 1.2, 1.1, 2.4, Math.PI / 2);
+    // King-Size Master Bed with velvet tufted headboard & fluting
+    addBox(group, darkMat, -5.0, floor2Elevation + 0.22, 2.8, 2.6, 0.14, 2.8); // Plinth
+    addBox(group, whiteMat, -5.0, floor2Elevation + 0.48, 2.8, 2.4, 0.28, 2.6); // Deep mattress
+    addBox(group, this.materials.cloth, -5.0, floor2Elevation + 0.65, 3.2, 2.4, 0.14, 1.6); // Silk Duvet
+    addBox(group, this.materials.clothRed, -5.0, floor2Elevation + 0.68, 3.8, 2.4, 0.06, 0.45); // Runner
+    // 4 Layered Pillows
+    addBox(group, whiteMat, -5.5, floor2Elevation + 0.72, 1.8, 0.8, 0.14, 0.45);
+    addBox(group, whiteMat, -4.5, floor2Elevation + 0.72, 1.8, 0.8, 0.14, 0.45);
+    addBox(group, this.materials.goldTrim || darkMat, -5.5, floor2Elevation + 0.82, 2.0, 0.6, 0.12, 0.35);
+    addBox(group, this.materials.goldTrim || darkMat, -4.5, floor2Elevation + 0.82, 2.0, 0.6, 0.12, 0.35);
     addBox(group, darkMat, -5.0, floor2Elevation + 1.4, 1.35, 2.8, 1.4, 0.15); // Headboard
+    addBox(group, this.materials.cloth, -5.0, floor2Elevation + 1.4, 1.42, 2.6, 1.2, 0.05); // Tufted insert
+    // Wall artwork above master bed
+    addWallArtwork(group, darkMat, this.materials.clothRed, -5.0, floor2Elevation + 2.5, 1.34, 2.2, 0.9, 0);
     // Nightstands with lamps
     addBox(group, woodMat, -6.8, floor2Elevation + 0.4, 1.5, 0.6, 0.65, 0.5);
     addBox(group, woodMat, -3.2, floor2Elevation + 0.4, 1.5, 0.6, 0.65, 0.5);
     addBox(group, this.materials.lampGlow || whiteMat, -6.8, floor2Elevation + 0.85, 1.5, 0.25, 0.35, 0.25);
     addBox(group, this.materials.lampGlow || whiteMat, -3.2, floor2Elevation + 0.85, 1.5, 0.25, 0.35, 0.25);
+    addPowerOutlet(group, whiteMat, -6.8, floor2Elevation + 0.55, 1.34, 0);
+    addPowerOutlet(group, whiteMat, -3.2, floor2Elevation + 0.55, 1.34, 0);
     // Mirrored Walk-in Dressing Wardrobe
     addBox(group, woodMat, -8.2, floor2Elevation + 1.4, 2.8, 0.65, 2.5, 2.4);
     addBox(group, glassMat, -7.85, floor2Elevation + 1.4, 2.8, 0.04, 2.3, 2.2);
@@ -890,43 +1213,49 @@ export class BuildingInteriorManager {
     this.addInteractiveDoor(group, "penthouse", "penthouse_terrace_door", "Rooftop Skyline Terrace Door", 0, floor2Elevation, 5.5, 1.4, 2.4, 0.08, glassMat, cx, cz, true, colliders);
 
     // Multi-Room Atmospheric Point Lights
-    const salonChandelier = new THREE.PointLight("#fff5d0", 2.8, 22, 1.1);
+    const salonChandelier = new THREE.PointLight("#fff5e2", 3.6, 28, 1.05);
     salonChandelier.position.set(-3.5, totalHeight - 1.2, -1.0);
-    salonChandelier.userData.baseIntensity = 2.8;
+    salonChandelier.userData.baseIntensity = 3.6;
     group.add(salonChandelier);
     lights.push(salonChandelier);
 
-    const masterLight = new THREE.PointLight("#ffe0b2", 1.8, 12, 1.2);
+    const masterLight = new THREE.PointLight("#ffe8cc", 2.6, 20, 1.05);
     masterLight.position.set(-5.0, totalHeight - 1.2, 2.8);
-    masterLight.userData.baseIntensity = 1.8;
+    masterLight.userData.baseIntensity = 2.6;
     group.add(masterLight);
     lights.push(masterLight);
 
-    const kitchenLight = new THREE.PointLight("#fff0d4", 1.8, 12, 1.2);
+    const kitchenLight = new THREE.PointLight("#fff2dc", 2.5, 18, 1.05);
     kitchenLight.position.set(5.0, 3.4 - 0.5, -3.5);
-    kitchenLight.userData.baseIntensity = 1.8;
+    kitchenLight.userData.baseIntensity = 2.5;
     group.add(kitchenLight);
     lights.push(kitchenLight);
 
-    const guestLight = new THREE.PointLight("#fff5e6", 1.6, 10, 1.3);
+    const guestLight = new THREE.PointLight("#fff6ea", 2.4, 18, 1.05);
     guestLight.position.set(5.0, 3.4 - 0.5, 3.5);
-    guestLight.userData.baseIntensity = 1.6;
+    guestLight.userData.baseIntensity = 2.4;
     group.add(guestLight);
     lights.push(guestLight);
 
-    const galleryLight = new THREE.PointLight("#f8fafc", 1.8, 12, 1.2);
+    const galleryLight = new THREE.PointLight("#fbfcfe", 2.6, 22, 1.05);
     galleryLight.position.set(5.0, totalHeight - 1.2, 2.8);
-    galleryLight.userData.baseIntensity = 1.8;
+    galleryLight.userData.baseIntensity = 2.6;
     group.add(galleryLight);
     lights.push(galleryLight);
+
+    const stairLight = new THREE.PointLight("#fffaee", 2.2, 18, 1.05);
+    stairLight.position.set(0.2, 3.8, 3.2);
+    stairLight.userData.baseIntensity = 2.2;
+    group.add(stairLight);
+    lights.push(stairLight);
 
     // Colliders (shifted to world coordinates cx, cz)
     colliders.push(
       // Perimeter Boundary Walls
-      { x: cx, z: cz - depth / 2, halfX: width / 2, halfZ: 0.3, height: totalHeight },
-      { x: cx, z: cz + depth / 2, halfX: width / 2, halfZ: 0.3, height: totalHeight },
-      { x: cx - width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height: totalHeight },
-      { x: cx + width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height: totalHeight },
+      { x: cx, z: cz - depth / 2, halfX: width / 2, halfZ: 0.3, height: totalHeight, isPerimeterWall: true },
+      { x: cx, z: cz + depth / 2, halfX: width / 2, halfZ: 0.3, height: totalHeight, isPerimeterWall: true },
+      { x: cx - width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height: totalHeight, isPerimeterWall: true },
+      { x: cx + width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height: totalHeight, isPerimeterWall: true },
       // Living Room Sofa & Media Wall
       { x: cx - 3.5, z: cz - 4.5, halfX: 2.8, halfZ: 0.6, height: 1.2 },
       { x: cx - 6.0, z: cz - 2.5, halfX: 0.6, halfZ: 2.0, height: 1.2 },
@@ -953,7 +1282,8 @@ export class BuildingInteriorManager {
       root: group,
       colliders,
       lights,
-      spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.6),
+      height: totalHeight,
+      spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + 1.8),
       spawnYaw: Math.PI,
       exitPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 0.9),
       outdoorDoorPosition: new THREE.Vector3(18, 0, 39.5),
@@ -1178,7 +1508,7 @@ export class BuildingInteriorManager {
     const height = 3.5;
 
     const floorMat = this.materials.tileFloor || this.materials.concrete;
-    const wallMat = this.materials.white;
+    const wallMat = this.materials.interiorWall || this.materials.white;
     const woodMat = this.materials.wood;
     const glassMat = this.materials.glassLit || this.materials.glass;
     const darkMat = this.materials.darkTrim;
@@ -1189,86 +1519,319 @@ export class BuildingInteriorManager {
 
     // Floor & Ceiling Slabs
     addBox(group, floorMat, 0, 0, 0, width, 0.1, depth, false);
-    addBox(group, wallMat, 0, height, 0, width, 0.1, depth, false);
+    addCeiling(group, this.materials.ceilingMat || wallMat, height, width, depth);
 
-    // Perimeter Walls
-    addBox(group, wallMat, 0, height / 2, -depth / 2, width, height, 0.25); // North Wall
-    addBox(group, wallMat, 0, height / 2, depth / 2, width, height, 0.25);  // South Wall (Entry)
-    addBox(group, wallMat, -width / 2, height / 2, 0, 0.25, height, depth); // West Wall
-    addBox(group, wallMat, width / 2, height / 2, 0, 0.25, height, depth);  // East Wall
+    // Perimeter Cutaway Walls (Single-sided inward-facing planes for unobstructed architectural cutaway)
+    addPerimeterWall(group, wallMat, 0, height / 2, -depth / 2, width, height, 0); // North Wall
+    addPerimeterWall(group, wallMat, 0, height / 2, depth / 2, width, height, Math.PI);  // South Wall (Entry)
+    addPerimeterWall(group, wallMat, -width / 2, height / 2, 0, depth, height, Math.PI / 2); // West Wall
+    addPerimeterWall(group, wallMat, width / 2, height / 2, 0, depth, height, -Math.PI / 2);  // East Wall
+    // Baseboards for crisp floor/wall definition
+    addBox(group, darkMat, 0, 0.08, -depth / 2 + 0.04, width, 0.16, 0.04, false);
+    addBox(group, darkMat, 0, 0.08, depth / 2 - 0.04, width, 0.16, 0.04, false);
+    addBox(group, darkMat, -width / 2 + 0.04, 0.08, 0, 0.04, 0.16, depth, false);
+    addBox(group, darkMat, width / 2 - 0.04, 0.08, 0, 0.04, 0.16, depth, false);
+
+    // Partition Wall Baseboards
+    addBox(group, darkMat, -1.2, 0.08, 3.9, 0.24, 0.16, 3.8, false);
+    addBox(group, darkMat, 1.2, 0.08, 3.9, 0.24, 0.16, 3.8, false);
 
     // 1. Entrance Vestibule & Hallway (z: 3.6 to 5.8, x: -1.2 to 1.2)
+    addDoorCasing(group, darkMat, 0, 0, depth / 2 - 0.08, 1.2, 2.2, 0);
     addBox(group, woodMat, 0, 1.1, depth / 2 - 0.08, 1.2, 2.2, 0.1); // Front Door
+    // Chrome lever handle on entrance door
+    addBox(group, metalMat, 0.45, 1.1, depth / 2 - 0.02, 0.12, 0.025, 0.04, false);
     // Illuminated Exit Sign above door
     const exitSignMat = makeSignMaterial("EXIT TO AIRPORT ROAD", "#065f46");
     addBox(group, exitSignMat, 0, 2.45, depth / 2 - 0.08, 1.6, 0.38, 0.06);
     // Welcome mat
     addBox(group, darkMat, 0, 0.04, 4.8, 1.2, 0.02, 0.8, false);
-    // Wooden shoe cabinet
+    // Wooden shoe cabinet with slatted doors
     addBox(group, woodMat, 1.0, 0.45, 4.8, 0.35, 0.8, 1.2);
-    // Wall coat pegs with hooks
+    addBox(group, darkMat, 0.82, 0.45, 4.8, 0.02, 0.74, 1.14, false);
+    // Wall coat pegs with brass hooks
     addBox(group, woodMat, -1.0, 1.6, 4.8, 0.08, 0.15, 1.0);
+    for (const hx of [-0.3, 0, 0.3]) {
+      addBox(group, metalMat, -1.05, 1.6, 4.8 + hx, 0.05, 0.06, 0.03, false);
+    }
     // Wall light switch
     addBox(group, whiteMat, -0.6, 1.4, 3.8, 0.1, 0.14, 0.04);
+    addBox(group, darkMat, -0.6, 1.4, 3.77, 0.03, 0.05, 0.02, false); // Rocker switch
 
     // 2. Open-Concept Living Room (x: -6.8 to -0.6, z: -3.8 to 2.2)
-    // 3-Seater L-Sectional Sofa & Armchair
-    addBox(group, this.materials.cloth, -3.4, 0.48, -0.6, 3.4, 0.52, 1.1); // Sofa main
-    addBox(group, this.materials.cloth, -5.6, 0.48, 0.8, 1.0, 0.52, 2.2);  // Chaise
-    addBox(group, this.materials.cloth, -1.6, 0.48, 1.2, 0.9, 0.52, 0.85); // Single Armchair
-    // Scatter cushions
-    addBox(group, this.materials.clothRed, -4.2, 0.65, -0.4, 0.4, 0.35, 0.15);
-    addBox(group, this.materials.goldTrim || woodMat, -2.6, 0.65, -0.4, 0.4, 0.35, 0.15);
-    // Coffee Table with glass surface
-    addBox(group, woodMat, -3.4, 0.35, 0.8, 1.6, 0.36, 0.9);
-    addBox(group, glassMat, -3.4, 0.39, 0.8, 1.5, 0.02, 0.8);
-    // Arewa geometric pattern rug
-    addBox(group, this.materials.carpetRed || this.materials.clothRed, -3.4, 0.05, 0.3, 4.2, 0.02, 3.6, false);
-    // Floating Entertainment Media Console
-    addBox(group, darkMat, -3.4, 0.45, -3.8, 3.6, 0.6, 0.5);
-    // 55" Smart TV with glowing screen
-    addBox(group, blackMat, -3.4, 1.6, -3.85, 2.4, 1.3, 0.08);
-    addBox(group, cyanMat, -3.4, 1.6, -3.81, 2.2, 1.15, 0.02); // Screen glow
-    // Soundbar
-    addBox(group, metalMat, -3.4, 0.78, -3.8, 1.4, 0.08, 0.12);
-    // Standing floor arc lamp
-    addCyl(group, this.materials.goldTrim || metalMat, -5.8, 0.9, -3.5, 0.16, 1.8);
-    addBox(group, this.materials.lampGlow || whiteMat, -5.8, 1.85, -3.3, 0.45, 0.35, 0.45);
+    // Procedural Fallback Group for Sofa
+    const proceduralSofa = new THREE.Group();
+    proceduralSofa.name = "proceduralSofa";
+    group.add(proceduralSofa);
 
-    // 3. Private Executive Balcony (x: -6.8 to -1.0, z: -5.8 to -4.0)
+    // Tapered Metal Legs for Sofa (grounding clearance & contact shadow)
+    for (const lx of [-5.0, -3.4, -1.8]) {
+      for (const lz of [-1.1, -0.1]) {
+        addCyl(proceduralSofa, darkMat, lx, 0.06, lz, 0.035, 0.12);
+      }
+    }
+    // Chaise lounge legs
+    addCyl(proceduralSofa, darkMat, -5.6, 0.06, 1.8, 0.035, 0.12);
+    addCyl(proceduralSofa, darkMat, -5.0, 0.06, 1.8, 0.035, 0.12);
+
+    // Sofa Base Plinth
+    addBox(proceduralSofa, darkMat, -3.4, 0.16, -0.6, 3.4, 0.08, 1.1);
+    addBox(proceduralSofa, darkMat, -5.3, 0.16, 0.8, 1.0, 0.08, 2.0);
+
+    // Deep Comfortable Seat Cushions (3 distinct segmented cushions with contoured welt bevel)
+    addBox(proceduralSofa, this.materials.cloth, -4.5, 0.28, -0.55, 1.05, 0.16, 0.95);
+    addBox(proceduralSofa, this.materials.cloth, -4.5, 0.38, -0.55, 0.98, 0.06, 0.88); // Bevel contour
+    addBox(proceduralSofa, this.materials.cloth, -3.4, 0.28, -0.55, 1.05, 0.16, 0.95);
+    addBox(proceduralSofa, this.materials.cloth, -3.4, 0.38, -0.55, 0.98, 0.06, 0.88);
+    addBox(proceduralSofa, this.materials.cloth, -2.3, 0.28, -0.55, 1.05, 0.16, 0.95);
+    addBox(proceduralSofa, this.materials.cloth, -2.3, 0.38, -0.55, 0.98, 0.06, 0.88);
+    // Chaise cushion
+    addBox(proceduralSofa, this.materials.cloth, -5.3, 0.28, 0.8, 0.95, 0.16, 1.8);
+    addBox(proceduralSofa, this.materials.cloth, -5.3, 0.38, 0.8, 0.88, 0.06, 1.72);
+
+    // Ergonomic Padded Backrest with rear support and plush front cushion
+    addBox(proceduralSofa, darkMat, -3.4, 0.65, -1.12, 3.4, 0.46, 0.14);
+    addBox(proceduralSofa, this.materials.cloth, -3.4, 0.65, -1.02, 3.32, 0.42, 0.14);
+    addBox(proceduralSofa, darkMat, -5.76, 0.65, 0.8, 0.14, 0.46, 1.8);
+    addBox(proceduralSofa, this.materials.cloth, -5.66, 0.65, 0.8, 0.14, 0.42, 1.72);
+
+    // Sculpted Armrests with rounded top padding
+    addBox(proceduralSofa, darkMat, -1.6, 0.48, -0.55, 0.22, 0.32, 1.05);
+    addBox(proceduralSofa, this.materials.cloth, -1.6, 0.65, -0.55, 0.20, 0.04, 1.0);
+
+    // Designer Scatter Cushions (Authentic Kano terracotta, Sahelian gold, and linen)
+    addBox(proceduralSofa, this.materials.goldTrim || woodMat, -4.4, 0.58, -0.85, 0.42, 0.38, 0.14);
+    addBox(proceduralSofa, this.materials.clothRed, -2.4, 0.58, -0.85, 0.42, 0.38, 0.14);
+    addBox(proceduralSofa, this.materials.cloth, -5.3, 0.58, 0.1, 0.14, 0.38, 0.42);
+
+    // Asynchronously prototype realistic 3D Sectional Sofa
+    loadGLTFModel("/assets/furniture/SheenWoodLeatherSofa.glb").then((model) => {
+      if (!model) return;
+      fitModelToBounds(model, 3.2, 1.35, 1.05, -3.4, -0.55, 0.02, 0);
+      proceduralSofa.visible = false;
+      group.add(model);
+    });
+
+    // Framed Contemporary Artwork on wall above sofa
+    addWallArtwork(group, darkMat, this.materials.clothRed, -3.4, 2.1, -1.2, 2.4, 1.2, 0);
+
+    // Designer Armchair in Living Room Conversation Nook (positioned naturally on rug, clears hallway)
+    const chairX = -2.05;
+    const chairZ = 0.55;
+    const chairRotY = -Math.PI * 0.55;
+
+    const proceduralArmchair = new THREE.Group();
+    proceduralArmchair.name = "proceduralArmchair";
+    proceduralArmchair.position.set(chairX, 0, chairZ);
+    proceduralArmchair.rotation.y = chairRotY;
+    group.add(proceduralArmchair);
+
+    addCyl(proceduralArmchair, darkMat, -0.32, 0.06, 0.32, 0.03, 0.12);
+    addCyl(proceduralArmchair, darkMat, 0.32, 0.06, 0.32, 0.03, 0.12);
+    addCyl(proceduralArmchair, darkMat, -0.32, 0.06, -0.32, 0.03, 0.12);
+    addCyl(proceduralArmchair, darkMat, 0.32, 0.06, -0.32, 0.03, 0.12);
+    addBox(proceduralArmchair, darkMat, 0, 0.18, 0, 0.82, 0.08, 0.82); // Chair base
+    addBox(proceduralArmchair, this.materials.cloth, 0, 0.32, 0, 0.74, 0.18, 0.74); // Seat
+    addBox(proceduralArmchair, this.materials.cloth, 0, 0.65, 0.35, 0.74, 0.44, 0.14); // Back
+    addBox(proceduralArmchair, woodMat, -0.41, 0.52, 0, 0.10, 0.24, 0.74); // Polished walnut arms
+    addBox(proceduralArmchair, woodMat, 0.41, 0.52, 0, 0.10, 0.24, 0.74);
+
+    proceduralArmchair.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.userData.isFurniture = true;
+        child.userData.roomObject = "armchair";
+        if (child.material) {
+          child.material = Array.isArray(child.material)
+            ? child.material.map((m) => m.clone())
+            : child.material.clone();
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach((m) => {
+            m.transparent = true;
+            m.userData = m.userData || {};
+            m.userData.baseOpacity = m.opacity ?? 1.0;
+          });
+        }
+      }
+    });
+
+    // Asynchronously prototype realistic 3D Accent Armchair
+    loadGLTFModel("/assets/furniture/SheenChair.glb").then((model) => {
+      if (!model) return;
+      fitModelToBounds(model, 0.88, 0.88, 0.86, chairX, chairZ, 0.02, chairRotY);
+      model.name = "realisticArmchair";
+      model.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.userData.isFurniture = true;
+          child.userData.roomObject = "armchair";
+          if (child.material) {
+            child.material = Array.isArray(child.material)
+              ? child.material.map((m) => m.clone())
+              : child.material.clone();
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach((m) => {
+              m.transparent = true;
+              m.userData = m.userData || {};
+              m.userData.baseOpacity = m.opacity ?? 1.0;
+            });
+          }
+        }
+      });
+      proceduralArmchair.visible = false;
+      group.add(model);
+    });
+
+    // Designer Woven Geometric Area Rug (authentic Nigerian terracotta/linen borders)
+    addBox(group, this.materials.patternedRug || this.materials.cloth, -3.4, 0.015, 0.4, 3.2, 0.02, 2.4, false);
+
+    // Architectural Coffee Table
+    for (const cx of [-4.0, -2.8]) {
+      for (const cz of [0.1, 0.7]) {
+        addCyl(group, darkMat, cx, 0.17, cz, 0.025, 0.34);
+      }
+    }
+    // Lower Walnut Magazine Shelf
+    addBox(group, woodMat, -3.4, 0.12, 0.4, 1.35, 0.03, 0.75);
+    // Carrara Marble Beveled Top
+    addBox(group, darkMat, -3.4, 0.33, 0.4, 1.40, 0.02, 0.80); // Under-bevel apron
+    addBox(group, this.materials.marbleWhite || glassMat, -3.4, 0.36, 0.4, 1.45, 0.04, 0.85);
+    // Tabletop accessories: ceramic tray, art book, decorative bowl
+    addBox(group, darkMat, -3.6, 0.39, 0.35, 0.35, 0.02, 0.25);
+    addBox(group, this.materials.white, -3.2, 0.39, 0.45, 0.28, 0.025, 0.22);
+    addCyl(group, metalMat, -3.4, 0.40, 0.55, 0.08, 0.05);
+
+    // Floating Entertainment Media Console
+    addBox(group, darkMat, -3.4, 0.45, -3.7, 3.4, 0.52, 0.48);
+    // Polished granite console top
+    addBox(group, this.materials.marbleWhite || darkMat, -3.4, 0.72, -3.7, 3.45, 0.04, 0.50);
+    // Slatted cabinet door division lines & brushed metal pulls
+    for (const dx of [-4.5, -3.9, -3.4, -2.9, -2.3]) {
+      addBox(group, woodMat, dx, 0.45, -3.45, 0.02, 0.48, 0.02);
+    }
+    addBox(group, metalMat, -3.4, 0.45, -3.44, 0.12, 0.02, 0.03); // Handle
+    // Duplex power outlet behind console
+    addPowerOutlet(group, whiteMat, -4.6, 0.45, -3.95, 0);
+
+    // 55" Thin-Bezel Smart OLED TV on pedestal stand
+    addBox(group, metalMat, -3.4, 0.75, -3.7, 0.4, 0.02, 0.25); // Metal base
+    addCyl(group, metalMat, -3.4, 0.83, -3.7, 0.04, 0.16); // Center neck
+    addBox(group, blackMat, -3.4, 1.45, -3.7, 2.2, 1.15, 0.04); // Frame
+    addBox(group, cyanMat, -3.4, 1.45, -3.67, 2.12, 1.08, 0.02); // Ambient screen
+    // Compact Soundbar
+    addBox(group, metalMat, -3.4, 0.76, -3.48, 1.2, 0.06, 0.08);
+
+    // Potted Fiddle Leaf Fig Plant in Ceramic Planter
+    addPottedPlant(group, whiteMat, woodMat, this.materials.foliage, -5.8, 0, -2.4);
+
+    // Designer Floor Lamp
+    addCyl(group, metalMat, -5.6, 0.02, -3.4, 0.2, 0.03);
+    addCyl(group, metalMat, -5.6, 0.95, -3.4, 0.025, 1.9);
+    addCyl(group, this.materials.lampGlow || whiteMat, -5.6, 1.85, -3.4, 0.25, 0.35);
+
+    // 3. Private Executive Balcony & Draped Window Opening (x: -6.8 to -1.0, z: -5.8 to -4.0)
     addBox(group, this.materials.concrete, -3.4, 0.05, -4.8, 5.6, 0.08, 1.6, false);
-    addBox(group, metalMat, -3.4, 0.55, -5.7, 5.6, 1.1, 0.08); // Railing
-    addBox(group, glassMat, -3.4, 1.4, -4.0, 3.2, 2.4, 0.08);  // Sliding glass door
-    // Teak Bistro Set
+    // Balcony Railing: Glass balustrade with bronze handrail
+    addBox(group, darkMat, -3.4, 0.55, -5.7, 5.6, 1.1, 0.08); // Railing base & post
+    addBox(group, glassMat, -3.4, 0.65, -5.7, 5.4, 0.85, 0.04); // Glass balustrade
+
+    // Sliding Glass Door Aluminum Perimeter Frame & Mullions
+    addBox(group, darkMat, -3.4, 2.42, -4.0, 3.2, 0.06, 0.12); // Top header
+    addBox(group, darkMat, -3.4, 0.04, -4.0, 3.2, 0.06, 0.12); // Bottom track sill
+    addBox(group, darkMat, -5.0, 1.2, -4.0, 0.06, 2.4, 0.12);  // Left jamb
+    addBox(group, darkMat, -1.8, 1.2, -4.0, 0.06, 2.4, 0.12);  // Right jamb
+    addBox(group, darkMat, -3.4, 1.2, -4.0, 0.06, 2.4, 0.08);  // Center mullion
+    addBox(group, metalMat, -3.32, 1.15, -3.94, 0.03, 0.35, 0.03); // Sliding pull handle
+    addBox(group, glassMat, -3.4, 1.2, -4.0, 3.1, 2.3, 0.04); // Glass pane
+
+    // Floor-to-Ceiling Pleated Linen Curtains flanking balcony doors
+    addArchitecturalCurtains(group, darkMat, this.materials.cloth, -3.4, 0, -3.95, 3.2, 2.4, 0);
+
+    // Teak Bistro Set on Balcony
     addBox(group, woodMat, -3.4, 0.45, -4.8, 0.8, 0.06, 0.8);
     addBox(group, darkMat, -4.2, 0.42, -4.8, 0.42, 0.42, 0.42);
     addBox(group, darkMat, -2.6, 0.42, -4.8, 0.42, 0.42, 0.42);
 
     // 4. Open-Plan Kitchen & Dining (x: 0.8 to 6.8, z: -3.8 to 2.2)
-    // L-Shaped Kitchen Base & Granite Countertop
-    addBox(group, this.materials.concrete, 5.8, 0.95, -1.4, 1.4, 1.0, 4.2);
-    addBox(group, darkMat, 5.8, 1.02, -1.4, 1.5, 0.08, 4.4); // Granite top
-    // Stainless steel undermount sink & faucet
-    addBox(group, metalMat, 5.8, 1.03, -0.6, 0.7, 0.02, 1.1);
-    addBox(group, metalMat, 6.2, 1.25, -0.6, 0.08, 0.25, 0.15); // Faucet
-    // 4-Burner gas stove & oven
-    addBox(group, darkMat, 5.8, 0.95, -2.4, 1.2, 0.95, 0.85);
-    addBox(group, blackMat, 5.8, 1.03, -2.4, 0.85, 0.04, 0.75); // Cooker top
-    addBox(group, glassMat, 5.2, 0.55, -2.4, 0.04, 0.45, 0.6);  // Oven door
-    // Wall-mounted upper cabinets
+    // L-Shaped Kitchen Base with Recessed Toe-Kick (grounding contact shadow)
+    addBox(group, darkMat, 5.8, 0.05, -1.4, 1.2, 0.10, 4.0); // 10cm recessed toe-kick
+    addBox(group, this.materials.white, 5.8, 0.52, -1.4, 1.35, 0.85, 4.2); // Base cabinets
+    addBox(group, darkMat, 5.8, 0.98, -1.4, 1.45, 0.06, 4.3); // Granite countertop
+    // Cabinet door borders and brushed metal bar handles
+    for (const hz of [-3.0, -2.4, -1.8, -1.0, -0.4, 0.2]) {
+      addBox(group, metalMat, 5.1, 0.65, hz, 0.02, 0.18, 0.03);
+    }
+    // Stainless steel undermount double sink & high-arc gooseneck faucet
+    addBox(group, metalMat, 5.8, 0.99, -0.6, 0.65, 0.02, 0.95);
+    addCyl(group, metalMat, 6.1, 1.18, -0.6, 0.025, 0.32);
+    addBox(group, metalMat, 5.98, 1.32, -0.6, 0.22, 0.03, 0.03); // Spout
+    addBox(group, metalMat, 6.1, 1.10, -0.5, 0.02, 0.08, 0.02);  // Single lever mixer
+    // 4-Burner induction cooktop with glowing burner rings
+    addBox(group, blackMat, 5.8, 1.02, -2.4, 0.75, 0.03, 0.75);
+    // Wall-mounted upper cabinets with under-cabinet downlight strip
     addBox(group, woodMat, 6.2, 2.4, -1.4, 0.7, 0.9, 4.2);
-    // Refrigerator
-    addBox(group, metalMat, 4.2, 1.4, -3.6, 0.9, 2.2, 0.8);
-    addBox(group, darkMat, 3.75, 1.4, -3.6, 0.04, 0.8, 0.04); // Fridge handle
-    // Countertop microwave & espresso maker
-    addBox(group, metalMat, 5.8, 1.25, -3.2, 0.6, 0.38, 0.42);
+    addBox(group, this.materials.lampGlow || whiteMat, 5.88, 1.94, -1.4, 0.04, 0.02, 4.0, false);
+    // Duplex power outlets on kitchen backsplash
+    addPowerOutlet(group, whiteMat, 6.5, 1.25, -1.4, Math.PI / 2);
+    // French-Door Stainless Refrigerator with dual upper doors and bottom freezer drawer
+    addBox(group, darkMat, 4.2, 0.04, -3.6, 0.95, 0.08, 0.85); // Recessed kickplate
+    addBox(group, metalMat, 4.2, 1.08, -3.6, 0.95, 2.00, 0.85); // Refrigerator body
+    // Full-length vertical tubular handles on upper french doors
+    addBox(group, darkMat, 3.7, 1.35, -3.75, 0.03, 0.75, 0.03);
+    addBox(group, darkMat, 3.7, 1.35, -3.45, 0.03, 0.75, 0.03);
+    // Bottom freezer drawer horizontal pull handle
+    addBox(group, darkMat, 3.7, 0.45, -3.6, 0.03, 0.03, 0.50);
+    // Countertop espresso maker & electric kettle
+    addBox(group, metalMat, 5.8, 1.20, -3.2, 0.5, 0.36, 0.38);
+    addCyl(group, metalMat, 5.8, 1.12, -0.05, 0.10, 0.22);
+
     // Dining Table & Chairs
-    addBox(group, woodMat, 2.6, 0.76, 0.5, 1.8, 0.08, 1.2);
-    for (const sx of [-0.65, 0.65]) {
-      for (const sz of [-0.45, 0.45]) {
-        addCyl(group, metalMat, 2.6 + sx, 0.38, 0.5 + sz, 0.035, 0.72);
-        addBox(group, darkMat, 2.6 + sx * 1.3, 0.48, 0.5 + sz, 0.42, 0.48, 0.42);
+    for (const tx of [1.9, 3.3]) {
+      for (const tz of [0.0, 1.0]) {
+        addCyl(group, woodMat, tx, 0.36, tz, 0.035, 0.72);
       }
+    }
+    // Solid walnut table with beveled top edge and apron
+    addBox(group, darkMat, 2.6, 0.70, 0.5, 1.6, 0.04, 1.1); // Apron frame
+    addBox(group, woodMat, 2.6, 0.74, 0.5, 1.7, 0.04, 1.2);  // Tabletop
+    // Centerpiece ceramic decorative bowl
+    addCyl(group, this.materials.white, 2.6, 0.80, 0.5, 0.18, 0.08);
+
+    // 4 Modern Open-Back Dining Chairs
+    const chairPositions = [
+      { x: 2.1, z: -0.2, rot: 0 },
+      { x: 3.1, z: -0.2, rot: 0 },
+      { x: 2.1, z: 1.2, rot: Math.PI },
+      { x: 3.1, z: 1.2, rot: Math.PI },
+    ];
+    for (const c of chairPositions) {
+      const chairGroup = new THREE.Group();
+      chairGroup.name = "diningChair";
+      for (const legX of [-0.18, 0.18]) {
+        for (const legZ of [-0.18, 0.18]) {
+          addCyl(chairGroup, darkMat, c.x + legX, 0.22, c.z + legZ, 0.02, 0.44);
+        }
+      }
+      addBox(chairGroup, this.materials.cloth.clone(), c.x, 0.46, c.z, 0.44, 0.06, 0.44); // Woven fabric seat cushion
+      const backZ = c.rot === 0 ? c.z - 0.2 : c.z + 0.2;
+      addBox(chairGroup, darkMat, c.x - 0.18, 0.65, backZ, 0.03, 0.35, 0.03);
+      addBox(chairGroup, darkMat, c.x + 0.18, 0.65, backZ, 0.03, 0.35, 0.03);
+      addBox(chairGroup, darkMat, c.x, 0.8, backZ, 0.42, 0.06, 0.03);
+      chairGroup.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.userData.isFurniture = true;
+          child.userData.roomObject = "chair";
+          if (child.material) {
+            child.material = Array.isArray(child.material) ? child.material.map((m) => m.clone()) : child.material.clone();
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach((m) => {
+              m.transparent = true;
+              m.userData = m.userData || {};
+              m.userData.baseOpacity = m.opacity ?? 1.0;
+            });
+          }
+        }
+      });
+      group.add(chairGroup);
+      colliders.push({ x: cx + c.x, z: cz + c.z, halfX: 0.24, halfZ: 0.24, height: 0.82 });
     }
 
     // 5. Study & Workstation (x: 0.8 to 3.8, z: -3.8 to -1.8)
@@ -1276,81 +1839,165 @@ export class BuildingInteriorManager {
     addBox(group, darkMat, 2.4, 0.88, -3.6, 0.2, 0.18, 0.15); // Monitor stand
     addBox(group, cyanMat, 2.4, 1.15, -3.6, 0.8, 0.48, 0.04); // Glowing screen
     addBox(group, blackMat, 2.4, 0.8, -3.25, 0.5, 0.02, 0.2); // Keyboard
-    addBox(group, darkMat, 2.4, 0.5, -2.7, 0.55, 0.55, 0.55); // Swivel chair
-    addBox(group, woodMat, 2.4, 2.1, -3.8, 1.5, 0.7, 0.28);  // Bookshelf
-    const deskSignMat = makeSignMaterial("UNIT 2B · LEASE & DEED WORKSTATION\n₦75,000 / MO · ₦18,000,000 FREEHOLD", "#1e3c28");
+    const swivelChair = addBox(group, darkMat.clone(), 2.4, 0.5, -2.7, 0.55, 0.55, 0.55); // Swivel chair
+    swivelChair.name = "swivelChair";
+    swivelChair.userData.isFurniture = true;
+    swivelChair.userData.roomObject = "chair";
+    if (swivelChair.material) {
+      const swMat = swivelChair.material as THREE.Material;
+      swMat.transparent = true;
+      swMat.userData = { baseOpacity: 1.0 };
+    }
+    colliders.push({ x: cx + 2.4, z: cz - 2.7, halfX: 0.30, halfZ: 0.30, height: 0.80 });
+    addBox(group, woodMat, 2.4, 2.1, -3.8, 1.5, 0.7, 0.28); // Bookshelf
+    const deskSignMat = makeSignMaterial(
+      "UNIT 2B · LEASE & DEED WORKSTATION\n₦75,000 / MO · ₦18,000,000 FREEHOLD",
+      "#1e3c28",
+    );
     addBox(group, deskSignMat, 2.4, 1.72, -3.8, 1.6, 0.45, 0.06);
+    addPowerOutlet(group, whiteMat, 3.2, 0.65, -3.95, 0);
 
     // 6. Master Bedroom (x: -6.8 to -1.2, z: 2.0 to 5.8)
     addBox(group, wallMat, -1.2, height / 2, 3.9, 0.2, height, 3.8); // Partition Wall
-    // Queen Bed
-    addBox(group, woodMat, -4.2, 0.42, 3.8, 2.2, 0.45, 2.4);
-    addBox(group, whiteMat, -4.2, 0.68, 3.8, 2.1, 0.22, 2.3);
-    addBox(group, this.materials.cloth, -4.2, 0.75, 4.2, 2.1, 0.12, 1.4); // Duvet
-    addBox(group, whiteMat, -4.8, 0.78, 2.9, 0.7, 0.14, 0.45); // Pillows
-    addBox(group, whiteMat, -3.6, 0.78, 2.9, 0.7, 0.14, 0.45);
-    addBox(group, darkMat, -4.2, 1.3, 5.0, 2.4, 1.2, 0.12); // Headboard
-    // Twin Nightstands & Bedside Lamps
-    addBox(group, woodMat, -5.8, 0.4, 4.8, 0.6, 0.65, 0.5);
-    addBox(group, woodMat, -2.6, 0.4, 4.8, 0.6, 0.65, 0.5);
-    addBox(group, this.materials.lampGlow || whiteMat, -5.8, 0.85, 4.8, 0.25, 0.35, 0.25);
-    addBox(group, this.materials.lampGlow || whiteMat, -2.6, 0.85, 4.8, 0.25, 0.35, 0.25);
+    addDoorCasing(group, darkMat, -1.2, 0, 2.2, 1.1, 2.4, Math.PI / 2);
+
+    // Master Bed Procedural Fallback Group
+    const proceduralBed = new THREE.Group();
+    proceduralBed.name = "proceduralBed";
+    group.add(proceduralBed);
+
+    // Raised Wooden Bed Frame on 4 Corner Legs (shadow gap)
+    for (const bx of [-5.2, -3.2]) {
+      for (const bz of [2.8, 4.8]) {
+        addCyl(proceduralBed, darkMat, bx, 0.08, bz, 0.04, 0.16);
+      }
+    }
+    addBox(proceduralBed, darkMat, -4.2, 0.22, 3.8, 2.25, 0.14, 2.25); // Plinth base
+
+    // Deep Tufted Mattress with rounded top profile
+    addBox(proceduralBed, whiteMat, -4.2, 0.42, 3.8, 2.15, 0.26, 2.15);
+    addBox(proceduralBed, whiteMat, -4.2, 0.56, 3.8, 2.08, 0.04, 2.08); // Pillow top
+
+    // Folded Duvet with Contrast Terracotta Sahelian Bed Runner
+    addBox(proceduralBed, this.materials.cloth, -4.2, 0.6, 4.2, 2.16, 0.08, 1.3);
+    addBox(proceduralBed, this.materials.clothRed, -4.2, 0.61, 4.6, 2.18, 0.07, 0.45);
+
+    // 4 Layered Pillows
+    addBox(proceduralBed, whiteMat, -4.75, 0.65, 3.0, 0.75, 0.12, 0.45);
+    addBox(proceduralBed, whiteMat, -3.65, 0.65, 3.0, 0.75, 0.12, 0.45);
+    addBox(proceduralBed, this.materials.goldTrim || woodMat, -4.75, 0.74, 3.2, 0.6, 0.1, 0.35);
+    addBox(proceduralBed, this.materials.goldTrim || woodMat, -3.65, 0.74, 3.2, 0.6, 0.1, 0.35);
+
+    // Padded Headboard with Walnut Border & Fluted Channels
+    addBox(proceduralBed, darkMat, -4.2, 1.05, 4.95, 2.45, 1.45, 0.1);
+    addBox(proceduralBed, this.materials.cloth, -4.2, 1.05, 4.9, 2.25, 1.25, 0.06);
+    for (const hx of [-0.6, -0.2, 0.2, 0.6]) {
+      addBox(proceduralBed, darkMat, -4.2 + hx, 1.05, 4.88, 0.02, 1.2, 0.02, false); // Fluting
+    }
+
+    // Asynchronously prototype realistic 3D Bed (Vintage Day Bed with Duvet & Pillows)
+    loadGLTFModel("/assets/furniture/vintage_day_bed/vintage_day_bed_1k.gltf").then((model) => {
+      if (!model) return;
+      fitModelToBounds(model, 2.25, 2.25, 1.25, -4.2, 4.25, 0.02, Math.PI);
+      proceduralBed.visible = false;
+      group.add(model);
+    });
+    // Framed art above bed
+    addWallArtwork(group, darkMat, this.materials.cloth, -4.2, 2.2, 4.96, 1.8, 0.8, Math.PI);
+
+    // Floating Nightstands with Bedside Touch Lamps
+    addBox(group, woodMat, -5.7, 0.38, 4.7, 0.55, 0.45, 0.45);
+    addBox(group, metalMat, -5.7, 0.38, 4.47, 0.1, 0.02, 0.02, false); // Pull
+    addBox(group, woodMat, -2.7, 0.38, 4.7, 0.55, 0.45, 0.45);
+    addBox(group, metalMat, -2.7, 0.38, 4.47, 0.1, 0.02, 0.02, false);
+    addCyl(group, metalMat, -5.7, 0.66, 4.7, 0.03, 0.12);
+    addCyl(group, metalMat, -2.7, 0.66, 4.7, 0.03, 0.12);
+    addCyl(group, this.materials.lampGlow || whiteMat, -5.7, 0.82, 4.7, 0.14, 0.2);
+    addCyl(group, this.materials.lampGlow || whiteMat, -2.7, 0.82, 4.7, 0.14, 0.2);
+    // Duplex power outlets beside nightstands
+    addPowerOutlet(group, whiteMat, -5.7, 0.55, 4.96, Math.PI);
+    addPowerOutlet(group, whiteMat, -2.7, 0.55, 4.96, Math.PI);
+
     // Mirrored 2-Door Wardrobe
     addBox(group, woodMat, -6.4, 1.4, 3.0, 0.65, 2.4, 1.8);
     addBox(group, glassMat, -6.05, 1.4, 3.0, 0.04, 2.2, 1.6); // Mirror door
+    addBox(group, metalMat, -6.03, 1.4, 2.4, 0.02, 0.6, 0.02); // Mirror handle
 
     // 7. Ensuite Bathroom (x: 1.2 to 6.8, z: 2.0 to 5.8)
     addBox(group, wallMat, 1.2, height / 2, 3.9, 0.2, height, 3.8); // Partition Wall
+    addDoorCasing(group, darkMat, 1.2, 0, 2.2, 1.1, 2.4, -Math.PI / 2);
+
     // Ceramic Vanity Washbasin & Lighted Mirror
     addBox(group, this.materials.tileFloor || whiteMat, 3.2, 0.85, 5.2, 1.2, 0.85, 0.6);
     addBox(group, metalMat, 3.2, 1.15, 5.1, 0.08, 0.25, 0.15); // Chrome tap
-    addBox(group, glassMat, 3.2, 1.85, 5.45, 0.9, 0.85, 0.04);  // Lighted mirror
+    addBox(group, glassMat, 3.2, 1.85, 5.45, 0.9, 0.85, 0.04); // Lighted mirror
+    addBox(group, this.materials.lampGlow || whiteMat, 3.2, 1.85, 5.44, 0.96, 0.91, 0.02, false); // Backlight glow frame
     // Ceramic Toilet & Cistern
     addBox(group, whiteMat, 5.0, 0.42, 5.2, 0.5, 0.42, 0.65);
     addBox(group, whiteMat, 5.0, 0.85, 5.45, 0.55, 0.5, 0.25);
+    addCyl(group, metalMat, 5.0, 1.11, 5.45, 0.03, 0.02); // Dual flush button
     // Walk-in Glass Shower Stall
     addBox(group, glassMat, 5.4, 1.3, 3.0, 1.6, 2.4, 1.6);
     addBox(group, metalMat, 5.4, 2.2, 3.0, 0.25, 0.08, 0.25); // Rain head
     // Towel rack with towels
-    addBox(group, whiteMat, 2.0, 1.3, 5.45, 0.6, 0.5, 0.08);
+    addBox(group, metalMat, 2.0, 1.3, 5.47, 0.6, 0.04, 0.06);
+    addBox(group, whiteMat, 2.0, 1.25, 5.45, 0.55, 0.35, 0.08);
 
     // Interactive Doors
     this.addInteractiveDoor(group, "apartment", "apt_bedroom_door", "Master Bedroom Door", -1.2, 0, 2.2, 1.1, 2.4, 0.08, woodMat, cx, cz, false, colliders);
     this.addInteractiveDoor(group, "apartment", "apt_bathroom_door", "Bathroom Door", 1.2, 0, 2.2, 1.1, 2.4, 0.08, woodMat, cx, cz, false, colliders);
     this.addInteractiveDoor(group, "apartment", "apt_balcony_door", "Balcony Sliding Door", -3.4, 0, -4.0, 1.4, 2.4, 0.08, glassMat, cx, cz, true, colliders);
 
-    // Multi-Room Atmospheric Point Lights
-    const aptLivingLight = new THREE.PointLight("#fff5e6", 2.2, 14, 1.2);
-    aptLivingLight.position.set(-3.4, height - 0.6, -0.6);
-    aptLivingLight.userData.baseIntensity = 2.2;
+    // Multi-Room Atmospheric Point Lights with Warm Natural Color Temperatures
+    // 1. Living room warm ambient pendant (3000K)
+    const aptLivingLight = new THREE.PointLight("#fff5e6", 2.9, 22, 1.15);
+    aptLivingLight.position.set(-3.4, height - 0.5, -0.6);
+    aptLivingLight.userData.baseIntensity = 2.9;
     group.add(aptLivingLight);
     lights.push(aptLivingLight);
 
-    const aptBedLight = new THREE.PointLight("#ffe0b2", 1.8, 10, 1.3);
-    aptBedLight.position.set(-4.2, height - 0.7, 3.8);
-    aptBedLight.userData.baseIntensity = 1.8;
+    // 2. Balcony window daylight bounce light entering into living area
+    const aptBalconyBounce = new THREE.PointLight("#fff9eb", 1.8, 16, 1.2);
+    aptBalconyBounce.position.set(-3.4, 2.2, -3.6);
+    aptBalconyBounce.userData.baseIntensity = 1.8;
+    group.add(aptBalconyBounce);
+    lights.push(aptBalconyBounce);
+
+    // 3. Bedroom cozy bedtime light (2700K)
+    const aptBedLight = new THREE.PointLight("#ffe8cc", 2.5, 18, 1.15);
+    aptBedLight.position.set(-4.2, height - 0.5, 3.8);
+    aptBedLight.userData.baseIntensity = 2.5;
     group.add(aptBedLight);
     lights.push(aptBedLight);
 
-    const aptKitchenLight = new THREE.PointLight("#fff0d4", 1.8, 10, 1.3);
-    aptKitchenLight.position.set(3.6, height - 0.7, -0.6);
-    aptKitchenLight.userData.baseIntensity = 1.8;
+    // 4. Kitchen bright culinary light (3200K)
+    const aptKitchenLight = new THREE.PointLight("#fff8ec", 2.5, 18, 1.15);
+    aptKitchenLight.position.set(3.6, height - 0.5, -0.6);
+    aptKitchenLight.userData.baseIntensity = 2.5;
     group.add(aptKitchenLight);
     lights.push(aptKitchenLight);
 
-    const aptBathLight = new THREE.PointLight("#ffffff", 1.6, 8, 1.4);
-    aptBathLight.position.set(3.8, height - 0.7, 4.0);
-    aptBathLight.userData.baseIntensity = 1.6;
+    // 5. Bathroom clean vanity light (4500K)
+    const aptBathLight = new THREE.PointLight("#ffffff", 2.2, 14, 1.15);
+    aptBathLight.position.set(3.8, height - 0.5, 4.0);
+    aptBathLight.userData.baseIntensity = 2.2;
     group.add(aptBathLight);
     lights.push(aptBathLight);
 
+    // 6. Entrance Foyer warm greeting light
+    const aptFoyerLight = new THREE.PointLight("#fff2dc", 2.2, 16, 1.15);
+    aptFoyerLight.position.set(0, height - 0.5, 4.5);
+    aptFoyerLight.userData.baseIntensity = 2.2;
+    group.add(aptFoyerLight);
+    lights.push(aptFoyerLight);
+
     // Colliders (shifted to world coordinates cx, cz)
     colliders.push(
-      // Perimeter Boundary Walls
-      { x: cx, z: cz - depth / 2, halfX: width / 2, halfZ: 0.3, height },
-      { x: cx, z: cz + depth / 2, halfX: width / 2, halfZ: 0.3, height },
-      { x: cx - width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height },
-      { x: cx + width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height },
+      // Perimeter Boundary Walls (isPerimeterWall: true permits elevated camera to frame room without clipping)
+      { x: cx, z: cz - depth / 2, halfX: width / 2, halfZ: 0.3, height, isPerimeterWall: true },
+      { x: cx, z: cz + depth / 2, halfX: width / 2, halfZ: 0.3, height, isPerimeterWall: true },
+      { x: cx - width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height, isPerimeterWall: true },
+      { x: cx + width / 2, z: cz, halfX: 0.3, halfZ: depth / 2, height, isPerimeterWall: true },
       // Bedroom & Bathroom Partition Walls
       { x: cx - 1.2, z: cz + 3.9, halfX: 0.15, halfZ: 1.9, height },
       { x: cx + 1.2, z: cz + 3.9, halfX: 0.15, halfZ: 1.9, height },
@@ -1358,6 +2005,8 @@ export class BuildingInteriorManager {
       { x: cx - 3.4, z: cz - 0.6, halfX: 1.8, halfZ: 0.6, height: 1.2 },
       { x: cx - 5.6, z: cz + 0.8, halfX: 0.6, halfZ: 1.2, height: 1.2 },
       { x: cx - 3.4, z: cz + 0.8, halfX: 0.85, halfZ: 0.5, height: 0.6 },
+      // Living Room Designer Accent Armchair (clears hallway, prevents camera & player clipping)
+      { x: cx + chairX, z: cz + chairZ, halfX: 0.44, halfZ: 0.44, height: 0.90 },
       // Media Credenza & TV
       { x: cx - 3.4, z: cz - 3.8, halfX: 1.9, halfZ: 0.3, height: 2.0 },
       // Balcony Railing
@@ -1384,7 +2033,16 @@ export class BuildingInteriorManager {
       root: group,
       colliders,
       lights,
-      spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.6),
+      height: 3.5,
+      bounds: {
+        minX: cx - width / 2,
+        maxX: cx + width / 2,
+        minZ: cz - depth / 2,
+        maxZ: cz + depth / 2,
+        minY: cy,
+        maxY: cy + height,
+      },
+      spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + 1.8),
       spawnYaw: Math.PI,
       exitPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.1),
       outdoorDoorPosition: new THREE.Vector3(48, 0, -43.5),
@@ -1402,9 +2060,22 @@ export class BuildingInteriorManager {
           };
         }
 
-        // 2. Living room sofa seating (cx - 3.4, cz - 0.6)
+        // 2a. Living room accent armchair seating (cx + chairX, cz + chairZ)
+        const distArmchair = pos.distanceTo(new THREE.Vector3(cx + chairX, cy + 0.1, cz + chairZ));
+        if (distArmchair <= 1.4) {
+          return {
+            prompt: "Sit & Rest on Accent Armchair",
+            action: () => ({
+              statusMessage: "Settled comfortably into the living room accent armchair. Peaceful moments at home.",
+              sitDown: { label: "Unit 2B Accent Armchair", energyRestored: 20 },
+              timeDeltaMinutes: 15,
+            }),
+          };
+        }
+
+        // 2b. Living room sofa seating (cx - 3.4, cz - 0.6)
         const distSofa = pos.distanceTo(new THREE.Vector3(cx - 3.4, cy + 0.1, cz - 0.6));
-        if (distSofa <= 2.2) {
+        if (distSofa <= 2.0) {
           return {
             prompt: "Sit & Rest on Living Room Sofa",
             action: () => ({
@@ -1572,13 +2243,14 @@ export class BuildingInteriorManager {
     this.root.add(group);
 
     const colliders: Collider[] = [];
+    const lights: THREE.PointLight[] = [];
     const width = 14;
     const depth = 22;
     const height = 7.5;
 
-    // Stone Floor & Timber Roof
+    // Stone Floor & Timber Roof with Downward-Facing Cutaway Ceiling
     addBox(group, this.materials.stone, 0, 0, 0, width, 0.1, depth, false);
-    addBox(group, this.materials.wood, 0, height, 0, width, 0.2, depth, false);
+    addCeiling(group, this.materials.wood, height, width, depth);
 
     // Vaulted wooden roof trusses
     for (let z = -depth / 2 + 3; z <= depth / 2 - 3; z += 3.8) {
@@ -1652,13 +2324,23 @@ export class BuildingInteriorManager {
     addBox(group, this.materials.wood, 0.65, 1.3, depth / 2 - 0.1, 1.2, 2.6, 0.15);
 
     // Church Chandelier Lighting
-    const sanctuaryLight = new THREE.PointLight("#ffe8c4", 2.2, 22, 1.2);
+    const sanctuaryLight = new THREE.PointLight("#fff2dc", 3.4, 28, 1.05);
     sanctuaryLight.position.set(0, height - 1.2, 0);
+    sanctuaryLight.userData.baseIntensity = 3.4;
     group.add(sanctuaryLight);
+    lights.push(sanctuaryLight);
 
-    const altarLight = new THREE.PointLight("#fff5d0", 2.0, 12, 1.0);
-    altarLight.position.set(0, 4.5, -depth / 2 + 3);
+    const altarLight = new THREE.PointLight("#fff8e0", 2.8, 18, 1.05);
+    altarLight.position.set(0, 4.8, -depth / 2 + 3);
+    altarLight.userData.baseIntensity = 2.8;
     group.add(altarLight);
+    lights.push(altarLight);
+
+    const entranceLight = new THREE.PointLight("#ffe8cc", 2.5, 20, 1.05);
+    entranceLight.position.set(0, height - 1.5, depth / 2 - 4);
+    entranceLight.userData.baseIntensity = 2.5;
+    group.add(entranceLight);
+    lights.push(entranceLight);
 
     colliders.push(
       { x: cx, z: cz - depth / 2, halfX: width / 2, halfZ: 0.3, height },
@@ -1677,6 +2359,8 @@ export class BuildingInteriorManager {
       districtLabel: "SABON GARI · CHURCH NAVE",
       root: group,
       colliders,
+      lights,
+      height: 7.5,
       spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 2.2),
       spawnYaw: Math.PI,
       exitPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.2),
@@ -1714,13 +2398,14 @@ export class BuildingInteriorManager {
     this.root.add(group);
 
     const colliders: Collider[] = [];
+    const lights: THREE.PointLight[] = [];
     const width = 11;
     const depth = 8;
     const height = 3.4;
 
     // Floor & Ceiling
     addBox(group, this.materials.concrete, 0, 0, 0, width, 0.1, depth, false);
-    addBox(group, this.materials.white, 0, height, 0, width, 0.1, depth, false);
+    addCeiling(group, this.materials.ceilingMat || this.materials.white, height, width, depth);
 
     // Walls
     addBox(group, this.materials.policeNavy || this.materials.darkTrim, 0, height / 2, -depth / 2, width, height, 0.2);
@@ -1751,9 +2436,23 @@ export class BuildingInteriorManager {
     // Exit Door
     addBox(group, this.materials.wood, 0, 1.1, depth / 2 - 0.08, 1.2, 2.2, 0.1);
 
-    const stationLight = new THREE.PointLight("#e8f0ff", 1.8, 14, 1.2);
-    stationLight.position.set(0, height - 0.6, 0);
+    const stationLight = new THREE.PointLight("#f1f5f9", 2.8, 20, 1.05);
+    stationLight.position.set(0, height - 0.5, 0);
+    stationLight.userData.baseIntensity = 2.8;
     group.add(stationLight);
+    lights.push(stationLight);
+
+    const deskLight = new THREE.PointLight("#f8fafc", 2.4, 16, 1.05);
+    deskLight.position.set(-2.0, height - 0.5, -1.0);
+    deskLight.userData.baseIntensity = 2.4;
+    group.add(deskLight);
+    lights.push(deskLight);
+
+    const karotaLight = new THREE.PointLight("#f1f5f9", 2.4, 16, 1.05);
+    karotaLight.position.set(2.8, height - 0.5, -1.2);
+    karotaLight.userData.baseIntensity = 2.4;
+    group.add(karotaLight);
+    lights.push(karotaLight);
 
     colliders.push(
       { x: cx, z: cz - depth / 2, halfX: width / 2, halfZ: 0.3, height },
@@ -1772,7 +2471,9 @@ export class BuildingInteriorManager {
       districtLabel: "AIRPORT ROAD · SECURITY POST",
       root: group,
       colliders,
-      spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.6),
+      lights,
+      height: 3.4,
+      spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + 1.8),
       spawnYaw: Math.PI,
       exitPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.1),
       outdoorDoorPosition: new THREE.Vector3(28, 0, -12.5),
@@ -1831,13 +2532,14 @@ export class BuildingInteriorManager {
     this.root.add(group);
 
     const colliders: Collider[] = [];
+    const lights: THREE.PointLight[] = [];
     const width = 14;
     const depth = 11;
     const height = 3.8;
 
     // Floor (Polished Terrazzo Tiles) & Ceiling
     addBox(group, this.materials.tileFloor || this.materials.concrete, 0, 0, 0, width, 0.1, depth, false);
-    addBox(group, this.materials.white, 0, height, 0, width, 0.1, depth, false);
+    addCeiling(group, this.materials.ceilingMat || this.materials.white, height, width, depth);
 
     // Perimeter Walls in Warm Terracotta
     const wallMat = this.materials.warmOrange || this.materials.ochre;
@@ -1892,13 +2594,23 @@ export class BuildingInteriorManager {
     // Exit Door
     addBox(group, this.materials.wood, 0, 1.1, depth / 2 - 0.08, 1.4, 2.4, 0.1);
 
-    const restoLight1 = new THREE.PointLight("#ffe2b8", 2.0, 16, 1.1);
-    restoLight1.position.set(-2, height - 0.6, -1);
+    const restoLight1 = new THREE.PointLight("#ffe8c4", 2.9, 22, 1.05);
+    restoLight1.position.set(-2.5, height - 0.5, -1);
+    restoLight1.userData.baseIntensity = 2.9;
     group.add(restoLight1);
+    lights.push(restoLight1);
 
-    const restoLight2 = new THREE.PointLight("#ffcca0", 1.8, 16, 1.1);
-    restoLight2.position.set(3, height - 0.6, 1);
+    const restoLight2 = new THREE.PointLight("#ffd5a4", 2.7, 22, 1.05);
+    restoLight2.position.set(3.0, height - 0.5, 1.5);
+    restoLight2.userData.baseIntensity = 2.7;
     group.add(restoLight2);
+    lights.push(restoLight2);
+
+    const grillGlow = new THREE.PointLight("#ff8c42", 2.3, 16, 1.05);
+    grillGlow.position.set(counterX, 2.0, counterZ);
+    grillGlow.userData.baseIntensity = 2.3;
+    group.add(grillGlow);
+    lights.push(grillGlow);
 
     colliders.push(
       { x: cx, z: cz - depth / 2, halfX: width / 2, halfZ: 0.3, height },
@@ -1914,6 +2626,8 @@ export class BuildingInteriorManager {
       districtLabel: "AIRPORT ROAD · AREWA LOUNGE",
       root: group,
       colliders,
+      lights,
+      height: 3.8,
       spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.8),
       spawnYaw: Math.PI,
       exitPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.1),
@@ -1988,12 +2702,13 @@ export class BuildingInteriorManager {
     this.root.add(group);
 
     const colliders: Collider[] = [];
+    const lights: THREE.PointLight[] = [];
     const width = 13;
     const depth = 10;
     const height = 3.6;
 
     addBox(group, this.materials.black, 0, 0, 0, width, 0.1, depth, false);
-    addBox(group, this.materials.black, 0, height, 0, width, 0.1, depth, false);
+    addCeiling(group, this.materials.darkTrim, height, width, depth);
 
     const cyanMat = this.materials.neonCyan || this.materials.glassLit;
     const magentaMat = this.materials.neonMagenta || this.materials.glassLit;
@@ -2042,13 +2757,29 @@ export class BuildingInteriorManager {
     addBox(group, cyanMat, arcX, 1.2, arcZ - 0.38, 0.7, 0.65, 0.08);
     colliders.push({ x: cx + arcX, z: cz + arcZ, halfX: 0.6, halfZ: 0.6, height: 2.0 });
 
-    const cyberLight1 = new THREE.PointLight("#18d6e8", 2.2, 14, 1.2);
-    cyberLight1.position.set(-2.5, height - 0.6, -1);
-    group.add(cyberLight1);
+    const ambientWhite = new THREE.PointLight("#f8fafc", 2.4, 22, 1.05);
+    ambientWhite.position.set(0, height - 0.4, 0);
+    ambientWhite.userData.baseIntensity = 2.4;
+    group.add(ambientWhite);
+    lights.push(ambientWhite);
 
-    const cyberLight2 = new THREE.PointLight("#e8188e", 2.2, 14, 1.2);
-    cyberLight2.position.set(2.5, height - 0.6, 1);
+    const cyberLight1 = new THREE.PointLight("#18d6e8", 2.8, 18, 1.05);
+    cyberLight1.position.set(-2.5, height - 0.5, -1);
+    cyberLight1.userData.baseIntensity = 2.8;
+    group.add(cyberLight1);
+    lights.push(cyberLight1);
+
+    const cyberLight2 = new THREE.PointLight("#e8188e", 2.8, 18, 1.05);
+    cyberLight2.position.set(2.5, height - 0.5, 1);
+    cyberLight2.userData.baseIntensity = 2.8;
     group.add(cyberLight2);
+    lights.push(cyberLight2);
+
+    const cashierLight = new THREE.PointLight("#e0f2fe", 2.2, 16, 1.05);
+    cashierLight.position.set(0, height - 0.5, depth / 2 - 2.5);
+    cashierLight.userData.baseIntensity = 2.2;
+    group.add(cashierLight);
+    lights.push(cashierLight);
 
     addBox(group, this.materials.wood, 0, 1.1, depth / 2 - 0.08, 1.4, 2.4, 0.1);
 
@@ -2065,6 +2796,8 @@ export class BuildingInteriorManager {
       districtLabel: "AIRPORT ROAD · GAMING HUB",
       root: group,
       colliders,
+      lights,
+      height: 3.6,
       spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.8),
       spawnYaw: Math.PI,
       exitPoint: new THREE.Vector3(cx, cy + 0.1, cz + depth / 2 - 1.1),
@@ -2174,14 +2907,14 @@ export class BuildingInteriorManager {
     addBox(group, this.materials.darkTrim, width / 2 - 0.16, 0.25, 0, 0.04, 0.4, depth);
 
     // Modern Commercial Grid Ceiling with Track Downlights
-    addBox(group, this.materials.roof, 0, height, 0, width, 0.2, depth, false);
+    addCeiling(group, this.materials.ceilingMat || this.materials.roof, height, width, depth);
 
     // Showroom Lighting Fixtures
     for (const lx of [-5, 0, 5]) {
       for (const lz of [-4, 0, 4]) {
-        const light = new THREE.PointLight("#fff9eb", 1.8, 12);
+        const light = new THREE.PointLight("#fff9eb", 2.4, 16, 1.05);
         light.position.set(cx + lx, cy + height - 0.4, cz + lz);
-        light.userData.baseIntensity = 1.8;
+        light.userData.baseIntensity = 2.4;
         this.root.add(light);
         lights.push(light);
 
@@ -2378,6 +3111,7 @@ export class BuildingInteriorManager {
       root: group,
       colliders,
       lights,
+      height: 4.2,
       spawnPoint: new THREE.Vector3(cx, cy + 0.1, cz + 4.8),
       spawnYaw: Math.PI,
       exitPoint: new THREE.Vector3(cx, cy + 0.1, cz + 5.9),
@@ -2509,6 +3243,23 @@ export class BuildingInteriorManager {
     }
 
     return closest ? closest.interaction : null;
+  }
+
+  public restoreInteriorFurnitureOpacity(interiorId: InteriorId) {
+    const zone = this.interiors.get(interiorId);
+    if (!zone) return;
+    zone.root.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.userData.isFurniture) {
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        for (const mat of materials) {
+          if (mat && "opacity" in mat) {
+            const baseOpacity = (mat.userData?.baseOpacity as number) ?? 1.0;
+            mat.opacity = baseOpacity;
+            mat.transparent = false;
+          }
+        }
+      }
+    });
   }
 
   public getActiveZone(): InteriorZone | null {

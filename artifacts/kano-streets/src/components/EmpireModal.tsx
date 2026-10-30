@@ -13,6 +13,7 @@ export interface EmpireModalProps {
   premiumCoins?: number;
   empireOverview?: EmpireOverviewSnapshot;
   onUpgradeBusiness?: (id: BusinessId) => { success: boolean; cost?: number; newLevel?: number; message: string };
+  onMaintainBusiness?: (id: BusinessId) => { success: boolean; cost?: number; message: string; newCondition?: number };
   onRenovateProperty?: (id: PropertyId, useCoins?: boolean) => { success: boolean; costCash: number; costCoins: number; newLevel: number; message: string };
   onPurchaseVehicle?: (vehicleId: string, currency?: CurrencyType) => { success: boolean; message: string; costCash?: number; costCoins?: number };
   onPurchaseVehicleSkin?: (skinId: string, vehicleId: string, currency?: CurrencyType) => { success: boolean; message: string; costCash?: number; costCoins?: number };
@@ -29,6 +30,7 @@ export default function EmpireModal({
   premiumCoins = 250,
   empireOverview,
   onUpgradeBusiness,
+  onMaintainBusiness,
   onRenovateProperty,
   onPurchaseVehicle,
   onPurchaseVehicleSkin,
@@ -63,6 +65,24 @@ export default function EmpireModal({
         setConfirmDialog(null);
         if (onUpgradeBusiness) {
           const res = onUpgradeBusiness(bizId);
+          notify(res.message, res.success ? "success" : "error");
+        }
+      },
+    });
+  };
+
+  const handleMaintainBiz = (bizId: BusinessId, name: string, cost: number) => {
+    if (cash < cost) {
+      notify(`Insufficient cash! Maintaining ${name} requires ₦${cost.toLocaleString()}.`, "error");
+      return;
+    }
+    setConfirmDialog({
+      title: `Routine Business Maintenance`,
+      description: `Commission facility overhaul and equipment maintenance for ${name} for ₦${cost.toLocaleString()}? This restores premise condition to 100% and boosts customer satisfaction.`,
+      onConfirm: () => {
+        setConfirmDialog(null);
+        if (onMaintainBusiness) {
+          const res = onMaintainBusiness(bizId);
           notify(res.message, res.success ? "success" : "error");
         }
       },
@@ -286,6 +306,7 @@ export default function EmpireModal({
                           <span className="district-tag">{biz.location}</span>
                         </div>
                         <div className="level-badge">
+                          <span className="category-pill">{biz.categoryTitle || "Commercial"}</span>
                           {biz.isOwned ? (
                             <span className={`badge-lvl lvl-${level}`}>LEVEL {level} / 3</span>
                           ) : (
@@ -298,22 +319,56 @@ export default function EmpireModal({
 
                       {biz.isOwned ? (
                         <>
+                          <div className="enterprise-condition-strip">
+                            <div className="meter-header">
+                              <small>PREMISE & ASSET CONDITION</small>
+                              <strong className={(biz.condition ?? 100) > 75 ? "text-emerald" : (biz.condition ?? 100) > 40 ? "text-amber" : "text-rose"}>
+                                {biz.condition ?? 100}%
+                              </strong>
+                            </div>
+                            <div className="meter-bar-track">
+                              <div
+                                className="meter-bar-fill"
+                                style={{
+                                  width: `${biz.condition ?? 100}%`,
+                                  backgroundColor: (biz.condition ?? 100) > 75 ? "#10b981" : (biz.condition ?? 100) > 40 ? "#f59e0b" : "#ef4444",
+                                }}
+                              />
+                            </div>
+                          </div>
+
                           <div className="enterprise-stats-box">
                             <div className="stat-row">
                               <span>Tier Title:</span>
                               <strong>{biz.levelTitle || `Level ${level}`}</strong>
                             </div>
                             <div className="stat-row">
-                              <span>Gross Revenue:</span>
+                              <span>Gross Daily Revenue:</span>
                               <strong className="text-emerald">+₦{biz.dailyRevenue.toLocaleString()}/day</strong>
                             </div>
                             <div className="stat-row">
-                              <span>Operating Cost:</span>
+                              <span>Daily Operating Costs:</span>
                               <strong className="text-amber">-₦{biz.dailyCost.toLocaleString()}/day</strong>
+                            </div>
+                            <div className="stat-row">
+                              <span>Municipal Commerce Levy (5%):</span>
+                              <strong className="text-amber">-₦{(biz.dailyTax ?? Math.round(biz.dailyRevenue * 0.05)).toLocaleString()}/day</strong>
                             </div>
                             <div className="stat-row highlight">
                               <span>Net Daily Profit:</span>
-                              <strong className="text-emerald">₦{(biz.dailyRevenue - biz.dailyCost).toLocaleString()}/day</strong>
+                              <strong className="text-emerald">₦{(biz.dailyRevenue - biz.dailyCost - (biz.dailyTax ?? Math.round(biz.dailyRevenue * 0.05))).toLocaleString()}/day</strong>
+                            </div>
+                            <div className="stat-row">
+                              <span>Active Workforce:</span>
+                              <strong>{biz.employeeCount ?? 2} staff assigned</strong>
+                            </div>
+                            <div className="stat-row">
+                              <span>Customer Satisfaction:</span>
+                              <strong>{biz.customerSatisfaction ?? 85}% ({biz.reputation ?? 80}% Rep)</strong>
+                            </div>
+                            <div className="stat-row">
+                              <span>Inventory Status:</span>
+                              <small>{biz.inventoryStatus || "Optimal Stock"}</small>
                             </div>
                           </div>
 
@@ -329,6 +384,17 @@ export default function EmpireModal({
                           )}
 
                           <div className="card-actions">
+                            {(biz.condition ?? 100) < 100 && (
+                              <button
+                                className="action-btn maintain-btn"
+                                onClick={() => handleMaintainBiz(biz.id, biz.name, biz.maintenanceCost ?? 15000)}
+                                disabled={cash < (biz.maintenanceCost ?? 15000)}
+                              >
+                                <span>🔧 Routine Maintenance Overhaul</span>
+                                <strong>₦{(biz.maintenanceCost ?? 15000).toLocaleString()}</strong>
+                              </button>
+                            )}
+
                             {!isMax ? (
                               <button
                                 className="action-btn upgrade-btn"
@@ -714,6 +780,38 @@ export default function EmpireModal({
                   Immutable chronological audit record of all debits, credits, enterprise dividends, and renovation investments. Ensures economy integrity and safe cloud profile reconciliation.
                 </p>
               </div>
+
+              {/* Authoritative Financial Statement P&L */}
+              {overview?.financialStatement && (
+                <div className="financial-statement-card">
+                  <div className="statement-head">
+                    <h4>Authoritative P&L Statement — {overview.financialStatement.calendarPeriod}</h4>
+                    <span className="net-profit-badge">Net Daily Profit: ₦{overview.financialStatement.netProfit.toLocaleString()}/day</span>
+                  </div>
+                  <div className="statement-grid">
+                    <div className="stmt-col">
+                      <small>GROSS REVENUE</small>
+                      <strong className="text-emerald">+₦{overview.financialStatement.grossRevenue.toLocaleString()}</strong>
+                    </div>
+                    <div className="stmt-col">
+                      <small>OPERATING COSTS</small>
+                      <strong className="text-amber">-₦{overview.financialStatement.businessOperatingCosts.toLocaleString()}</strong>
+                    </div>
+                    <div className="stmt-col">
+                      <small>PROPERTY UPKEEP</small>
+                      <strong className="text-amber">-₦{overview.financialStatement.propertyUpkeep.toLocaleString()}</strong>
+                    </div>
+                    <div className="stmt-col">
+                      <small>COMMERCE LEVY (5%)</small>
+                      <strong className="text-amber">-₦{overview.financialStatement.municipalTaxes.toLocaleString()}</strong>
+                    </div>
+                    <div className="stmt-col highlight">
+                      <small>NET CASH PROFIT</small>
+                      <strong className="text-emerald">₦{overview.financialStatement.netProfit.toLocaleString()}</strong>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="ledger-table-wrap">
                 <table className="ledger-table">

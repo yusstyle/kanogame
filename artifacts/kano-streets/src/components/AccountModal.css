@@ -1,0 +1,586 @@
+.ks-account-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 15, 29, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  padding: 1rem;
+}
+
+.ks-account-modal {
+  width: 100%;
+  max-width: 520px;
+  background: linear-gradient(145deg, rgba(26, 32, 53, 0.98), rgba(15, 23, 42, 0.98));
+  border: 1px solid rgba(217, 119, 6, 0.35);
+  border-radius: 12px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 30px rgba(217, 119, 6, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #f8fafc;
+  font-family: inherit;
+  animation: ksAccountModalIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes ksAccountModalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.ks-account-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  background: rgba(15, 23, 42, 0.6);
+  border-bottom: 1px solid rgba(217, 119, 6, 0.2);
+}
+
+.ks-account-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.ks-account-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #d97706, #92400e);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.4);
+}
+
+.ks-account-title h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #f1f5f9;
+  text-transform: uppercase;
+}
+
+.ks-account-title p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  letter-spacing: 0.03em;
+}
+
+.ks-account-close {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.ks-account-close:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
+
+/* Local progress banner */
+.ks-guest-banner {
+  margin: 1rem 1.5rem 0.5rem 1.5rem;
+  padding: 0.85rem 1rem;
+  background: rgba(217, 119, 6, 0.1);
+  border: 1px solid rgba(217, 119, 6, 0.3);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.ks-guest-banner-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #fbbf24;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ks-guest-stats {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  color: #e2e8f0;
+}
+
+.ks-guest-stats span {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.ks-guest-note {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  line-height: 1.3;
+}
+
+/* Navigation tabs */
+.ks-account-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 0.75rem 1.5rem 0 1.5rem;
+}
+
+.ks-account-tab {
+  flex: 1;
+  padding: 0.75rem 0.5rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.03em;
+}
+
+.ks-account-tab:hover {
+  color: #f1f5f9;
+}
+
+.ks-account-tab.active {
+  color: #fbbf24;
+  border-bottom-color: #d97706;
+}
+
+/* Forms */
+.ks-account-body {
+  padding: 1.25rem 1.5rem 1.5rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ks-account-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.ks-account-field label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  letter-spacing: 0.02em;
+}
+
+.ks-account-input {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 0.65rem 0.85rem;
+  color: #f8fafc;
+  font-size: 0.9rem;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.ks-account-input:focus {
+  border-color: #d97706;
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.25);
+  background: rgba(15, 23, 42, 0.95);
+}
+
+.ks-account-input::placeholder {
+  color: #64748b;
+}
+
+.ks-input-hint {
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+/* Alerts */
+.ks-account-alert {
+  padding: 0.65rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ks-account-alert.error {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+}
+
+.ks-account-alert.success {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #6ee7b7;
+}
+
+/* Primary actions */
+.ks-account-btn {
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, #d97706, #b45309);
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);
+}
+
+.ks-account-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  box-shadow: 0 6px 16px rgba(217, 119, 6, 0.4);
+  transform: translateY(-1px);
+}
+
+.ks-account-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ks-account-btn.secondary {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cbd5e1;
+  box-shadow: none;
+}
+
+.ks-account-btn.secondary:hover:not(:disabled) {
+  background: rgba(51, 65, 85, 0.9);
+  color: #ffffff;
+}
+
+.ks-account-btn.danger {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  box-shadow: none;
+}
+
+.ks-account-btn.danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.35);
+  color: #fef2f2;
+}
+
+/* Authenticated profile view */
+.ks-profile-card {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ks-profile-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.ks-profile-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10b981, #047857);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.ks-profile-meta h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.ks-profile-meta p {
+  margin: 0.15rem 0 0 0;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.ks-profile-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.5rem;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 4px;
+  font-size: 0.7rem;
+  color: #6ee7b7;
+  font-weight: 600;
+  margin-top: 0.35rem;
+}
+
+.ks-profile-badge::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+.ks-profile-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ks-profile-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.ks-profile-item span:first-child {
+  font-size: 0.7rem;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.ks-profile-item span:last-child {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.ks-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #ffffff;
+  animation: ksSpin 0.8s linear infinite;
+}
+
+@keyframes ksSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Milestone 16 Phase 4: Cloud Sync & Conflict Resolution Styles */
+.ks-sync-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  width: fit-content;
+}
+
+.ks-sync-badge.synced {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #6ee7b7;
+}
+
+.ks-sync-badge.checking,
+.ks-sync-badge.uploading {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #93c5fd;
+}
+
+.ks-sync-badge.conflict {
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  color: #fef08a;
+  animation: ksPulse 1.8s infinite;
+}
+
+.ks-sync-badge.offline,
+.ks-sync-badge.error {
+  background: rgba(100, 116, 139, 0.2);
+  border: 1px solid rgba(100, 116, 139, 0.4);
+  color: #cbd5e1;
+}
+
+@keyframes ksPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.ks-conflict-card {
+  background: rgba(30, 27, 24, 0.95);
+  border: 1.5px solid rgba(245, 158, 11, 0.6);
+  border-radius: 10px;
+  padding: 1.1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.15);
+}
+
+.ks-conflict-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.ks-conflict-header h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fef08a;
+  text-transform: uppercase;
+}
+
+.ks-conflict-desc {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+
+.ks-conflict-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.76rem;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ks-conflict-table th {
+  background: rgba(15, 23, 42, 0.9);
+  padding: 0.45rem 0.65rem;
+  text-align: left;
+  color: #94a3b8;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ks-conflict-table td {
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #e2e8f0;
+}
+
+.ks-conflict-table tr:last-child td {
+  border-bottom: none;
+}
+
+.ks-conflict-table td.local {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.ks-conflict-table td.cloud {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.ks-conflict-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ks-conflict-btn {
+  padding: 0.55rem 0.9rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.15s ease;
+  border: none;
+}
+
+.ks-conflict-btn.local {
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  color: #ffffff;
+}
+
+.ks-conflict-btn.local:hover {
+  background: linear-gradient(135deg, #0369a1, #075985);
+}
+
+.ks-conflict-btn.cloud {
+  background: linear-gradient(135deg, #d97706, #b45309);
+  color: #ffffff;
+}
+
+.ks-conflict-btn.cloud:hover {
+  background: linear-gradient(135deg, #b45309, #92400e);
+}
+
+.ks-conflict-btn.later {
+  background: rgba(51, 65, 85, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+  justify-content: center;
+}
+
+.ks-conflict-btn.later:hover {
+  background: rgba(71, 85, 105, 0.8);
+}
+
+.ks-recovery-hint {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  line-height: 1.4;
+  margin: 0;
+  text-align: center;
+}
+

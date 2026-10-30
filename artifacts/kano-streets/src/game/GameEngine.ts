@@ -15,15 +15,15 @@ import {
 import { loadGLTFModel, loadHumanoidCharacter } from "./assetManifest";
 import { BuildingInteriorManager } from "./BuildingInteriors";
 import { ColliderIndex } from "./ColliderIndex";
-import { getDistrict, getDistrictLabel, ROAD_LAYOUT } from "./layout";
-import { createMaterials } from "./materials";
+import { getDistrict, getDistrictLabel, ROAD_LAYOUT, WORLD_BOUNDS_NORTH } from "./layout";
+import { createMaterials, createKanoEnvironmentMap } from "./materials";
 import { buildNavigationNetwork, type NavigationNetwork } from "./navigation";
 import { PedestrianSystem } from "./PedestrianSystem";
 import { TrafficSystem } from "./TrafficSystem";
 import { createWorld } from "./world";
-import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType, CareerPathChoice, PropertyId, InteriorId, FurnitureInstance, HomeNavInfo, PlayerHomeEntry, BusinessId, CurrencyType } from "./types";
+import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType, CareerPathChoice, PropertyId, InteriorId, FurnitureInstance, HomeNavInfo, PlayerHomeEntry, BusinessId, CurrencyType, CameraMode } from "./types";
 import { SocialSystem } from "./socialSystem";
-import { EconomySystem, normalizePropertyId } from "./economySystem";
+import { EconomySystem, normalizePropertyId, ATM_DAILY_LIMIT } from "./economySystem";
 import { KANO_LANDMARKS, getNearestLandmark, getGpsLandmark } from "./landmarks";
 import { MissionSystem } from "./missionSystem";
 import { StorySystem } from "./storySystem";
@@ -33,11 +33,12 @@ import { getPropertyByEntrance, getPropertyRegistryEntry } from "./propertyRegis
 import { LifeSimulationSystem } from "./lifeSimulation";
 import { FreelanceSystem, FREELANCE_CONTRACT_CATALOG } from "./freelanceSystem";
 import { findNearestValidSeat, isValidSeatNearby } from "./seats";
+import { ConsequenceSystem } from "./consequenceSystem";
 
 const PLAYER_START = new THREE.Vector3(-4, 0, -4);
 const CAR_START = new THREE.Vector3(-2, 0, -8);
 const KEKE_START = new THREE.Vector3(6, 0, -8);
-const VAN_START = new THREE.Vector3(-30, 0, -165);
+const VAN_START = new THREE.Vector3(-26, 0, -156);
 const PICKUP_START = new THREE.Vector3(22, 0, -135);
 const MINIBUS_START = new THREE.Vector3(-12, 0, -145);
 const TRUCK_START = new THREE.Vector3(32, 0, -180);
@@ -76,6 +77,9 @@ export class GameEngine {
   private readonly desiredCameraQuaternion = new THREE.Quaternion();
   private readonly callbacks: GameEngineCallbacks;
   private sunLight: THREE.DirectionalLight | null = null;
+  private bounceLight: THREE.DirectionalLight | null = null;
+  private vehicleChassisPitch = 0;
+  private vehicleChassisRoll = 0;
   private hemiLight: THREE.HemisphereLight | null = null;
   private vehicleHeadlight: THREE.SpotLight | null = null;
   private readonly weatherSystem: WeatherSystem;
@@ -108,6 +112,9 @@ export class GameEngine {
   private playerYaw = 0;
   private cameraYaw = 0;
   private cameraPitch = 0.29;
+  private drivingFollowYaw?: number;
+  private lastCameraMode: CameraMode = "third-person";
+  private lastActiveVehicle: VehicleType = "sedan";
   private carPosition = CAR_START.clone();
   private carYaw = 0;
   private carSpeed = 0;
@@ -145,6 +152,12 @@ export class GameEngine {
   public readonly storySystem = new StorySystem();
   public readonly lifeSim = new LifeSimulationSystem();
   public readonly freelanceSystem = new FreelanceSystem();
+  public readonly consequenceSystem = new ConsequenceSystem();
+  private radiatorSteamGroup = new THREE.Group();
+  private suyaSmokeGroup = new THREE.Group();
+  private suyaLanternLight: THREE.PointLight | null = null;
+  private suyaSmokeMeshes: THREE.Mesh[] = [];
+  private radiatorSteamMeshes: THREE.Mesh[] = [];
   private van!: UsableVehicleModel;
   private pickup!: UsableVehicleModel;
   private minibus!: UsableVehicleModel;
@@ -160,7 +173,8 @@ export class GameEngine {
   private isFurnishingMode = false;
   private isFurnitureShopOpen = false;
   private isEmpireModalOpen = false;
-  private cameraMode: "third-person" | "first-person" = "third-person";
+  private isSmartphoneOpen = false;
+  private cameraMode: CameraMode = "third-person";
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -171,6 +185,7 @@ export class GameEngine {
         antialias: true,
         powerPreference: "low-power",
         failIfMajorPerformanceCaveat: false,
+        preserveDrawingBuffer: true,
       }),
   ) {
     this.callbacks = callbacks;
@@ -190,6 +205,7 @@ export class GameEngine {
 
     this.audioSystem = new AudioSystem(false, 0.65);
 
+    this.scene.environment = createKanoEnvironmentMap();
     this.materials = createMaterials();
     this.interiorManager = new BuildingInteriorManager(this.materials);
     this.scene.add(this.interiorManager.root);
@@ -220,12 +236,20 @@ export class GameEngine {
       if (saved.completedFreelanceContracts) {
         this.freelanceSystem.loadSnapshot(saved.completedFreelanceContracts, saved.freelanceEarnings);
       }
+      if (saved.npcMemory || saved.vehicleConditions || saved.consequencesHistory) {
+        this.consequenceSystem.deserialize(saved);
+      }
     }
     this.economy.resolveSelectedHome(this.hasApartmentRental);
     this.syncAllPlacedFurniture();
     this.world = createWorld(this.materials);
     this.colliderIndex = new ColliderIndex(this.world.colliders);
     this.scene.add(this.world.root);
+    this.radiatorSteamGroup.name = "RadiatorSteamEffects";
+    this.scene.add(this.radiatorSteamGroup);
+    this.suyaSmokeGroup.name = "SuyaSmokeEffects";
+    this.scene.add(this.suyaSmokeGroup);
+    this.initSuyaVisuals();
     this.addLighting();
 
     this.navigation = buildNavigationNetwork();
@@ -396,6 +420,7 @@ export class GameEngine {
     const bounce = new THREE.DirectionalLight("#a3c0d4", 0.55);
     bounce.position.set(52, 28, 40);
     this.scene.add(bounce);
+    this.bounceLight = bounce;
 
     const headlight = new THREE.SpotLight("#fff5d0", 2.6, 42, Math.PI / 5.5, 0.45, 1.2);
     headlight.visible = false;
@@ -412,17 +437,50 @@ export class GameEngine {
     this.weatherSystem.applyToScene(this.scene, this.sunLight, this.hemiLight, hour, isInterior);
 
     // Diurnal street lantern & interior window glow
-    const isNightOrTwilight = hour < 6.2 || hour > 18.6;
+    const isNightOrTwilight = hour <= 6.8 || hour >= 17.6;
+    let headlightIntensity = 0;
+    if (hour >= 17.6 && hour <= 20.0) {
+      const progress = (hour - 17.6) / 2.4;
+      headlightIntensity = 0.4 + progress * 3.4;
+    } else if (hour > 20.0 || hour < 5.0) {
+      headlightIntensity = 3.8;
+    } else if (hour >= 5.0 && hour <= 6.8) {
+      const progress = (6.8 - hour) / 1.8;
+      headlightIntensity = 0.4 + progress * 3.4;
+    }
+
+    if (this.bounceLight) {
+      if (hour >= 11 && hour <= 15) {
+        this.bounceLight.intensity = Math.max(0.2, (this.sunLight.intensity || 2.5) * 0.22);
+      } else if (isNightOrTwilight) {
+        this.bounceLight.intensity = 0.05;
+      } else {
+        this.bounceLight.intensity = 0.35;
+      }
+    }
+
+    let lampIntensity = 0.2;
+    if (hour >= 17.5 && hour <= 20.5) {
+      const progress = (hour - 17.5) / 3.0;
+      lampIntensity = 0.2 + progress * 2.2;
+    } else if (hour > 20.5 || hour < 5.0) {
+      lampIntensity = 2.4;
+    } else if (hour >= 5.0 && hour <= 7.0) {
+      const progress = (7.0 - hour) / 2.0;
+      lampIntensity = 0.2 + progress * 2.2;
+    }
+
     if (this.materials.lampGlow) {
-      this.materials.lampGlow.emissiveIntensity = isNightOrTwilight ? 2.4 : 0.2;
+      this.materials.lampGlow.emissiveIntensity = lampIntensity;
     }
     if (this.materials.glassLit) {
-      this.materials.glassLit.emissiveIntensity = isNightOrTwilight ? 1.35 : 0.15;
+      this.materials.glassLit.emissiveIntensity = lampIntensity * 0.58;
     }
 
     if (this.vehicleHeadlight) {
       if (isNightOrTwilight && this.mode === "driving" && !isInterior) {
         this.vehicleHeadlight.visible = true;
+        this.vehicleHeadlight.intensity = headlightIntensity;
         const vPos = this.getActiveVehiclePosition();
         const vYaw = this.getActiveVehicleYaw();
         this.vehicleHeadlight.position.set(vPos.x, vPos.y + 0.85, vPos.z);
@@ -573,6 +631,10 @@ export class GameEngine {
       this.toggleCameraMode();
       return;
     }
+    if (normalized === "p" && this.screen === "playing") {
+      this.toggleSmartphone();
+      return;
+    }
     if (normalized === "k" && this.screen === "playing") {
       this.toggleEmpireModal();
       return;
@@ -582,6 +644,11 @@ export class GameEngine {
       return;
     }
     if (normalized === "escape" && this.screen === "playing") {
+      if (this.isSmartphoneOpen) {
+        this.isSmartphoneOpen = false;
+        this.pushSnapshot(true);
+        return;
+      }
       if (this.isEmpireModalOpen) {
         this.isEmpireModalOpen = false;
         this.pushSnapshot(true);
@@ -731,6 +798,10 @@ export class GameEngine {
       this.toggleCameraMode();
       return;
     }
+    if (key === "p" && !event.repeat && this.screen === "playing") {
+      this.toggleSmartphone();
+      return;
+    }
     if (key === "k" && !event.repeat && this.screen === "playing") {
       this.toggleEmpireModal();
       return;
@@ -772,21 +843,63 @@ export class GameEngine {
   private handleInteract() {
     // 1. Check Mission Checkpoint Interaction (active mission step - works on foot or in vehicle)
     const activeTarget = this.mode === "driving" ? this.getActiveVehiclePosition() : this.playerPosition;
+    const activeMission = this.missionSystem.getActiveMission();
+    const stageBefore = activeMission?.currentStageIndex;
     const missionInter = this.missionSystem.checkMissionInteraction(activeTarget);
     if (missionInter) {
       const outcome = this.missionSystem.advanceStage(activeTarget, this.economy.getOwnedBusinessesList());
-      if (outcome) {
-        this.statusMessage = outcome.message;
+      if (outcome && activeMission) {
+        if (!outcome.completed && stageBefore === 0 && activeMission.currentStageIndex === 1) {
+          this.consequenceSystem.onMissionCargoPickup();
+        }
         if (outcome.completed) {
+          const clientNpc = activeMission.category === "local_delivery"
+            ? "Chinedu Okeke"
+            : activeMission.category === "freight" || activeMission.category === "workshop"
+              ? "Master Garba"
+              : activeMission.category === "business_supply"
+                ? "Alhaji Ibrahim"
+                : "Malam Danladi";
+          const deliveryRes = this.consequenceSystem.onMissionCargoDelivery(
+            activeMission.id,
+            clientNpc,
+            outcome.reward,
+          );
+          outcome.reward = deliveryRes.payout;
+          outcome.message = `${outcome.message} ${deliveryRes.dialogue}`;
           this.cash += outcome.reward + outcome.bonus;
           this.saveGame();
         }
+        this.statusMessage = outcome.message;
         this.pushSnapshot(true);
         return;
       }
     }
 
     if (this.mode === "driving") {
+      // Check repair bay at Arewa Heavy Vehicle Repairs (-38, 0, -135)
+      const vehPos = this.getActiveVehiclePosition();
+      if (vehPos.distanceTo(new THREE.Vector3(-38, 0, -135)) <= 7.0) {
+        const quote = this.consequenceSystem.getRepairQuote(this.activeVehicle);
+        if (quote.needsRepair) {
+          if (this.cash >= quote.cost) {
+            const repairRes = this.consequenceSystem.repairVehicle(this.activeVehicle, this.cash);
+            if (repairRes.success) {
+              this.cash -= repairRes.cost;
+              this.audioSystem.playRepairWrench();
+              this.statusMessage = repairRes.message;
+              this.saveGame();
+              this.pushSnapshot(true);
+              return;
+            }
+          } else {
+            this.statusMessage = `Master Garba: 'Overhaul for ${this.activeVehicle} costs ₦${quote.cost.toLocaleString()}. You need ₦${(quote.cost - this.cash).toLocaleString()} more.'`;
+            this.pushSnapshot(true);
+            return;
+          }
+        }
+      }
+
       this.toggleVehicle();
       return;
     }
@@ -1065,8 +1178,12 @@ export class GameEngine {
 
     // Check outdoor 24/7 ATM Cash Point at Arewa Commercial Bank (86.2, 0, -13.9)
     if (this.playerPosition.distanceTo(new THREE.Vector3(86.2, 0, -13.9)) <= 2.4) {
-      this.cash += 20000;
-      this.statusMessage = "ATM: Dispensed ₦20,000 cash from Arewa Commercial Bank account. Balance updated.";
+      const atmRes = this.economy.withdrawFromAtm();
+      if (atmRes.success) {
+        this.cash += atmRes.dispensed;
+        this.saveGame();
+      }
+      this.statusMessage = atmRes.message;
       this.pushSnapshot(true);
       return;
     }
@@ -1249,9 +1366,15 @@ export class GameEngine {
     }
 
     // Check outdoor pedestrian talk interaction
-    const pedInter = this.pedestrianSystem.checkPedestrianInteraction(this.playerPosition);
+    const pedInter = this.pedestrianSystem.checkPedestrianInteraction(
+      this.playerPosition,
+      (npcName, dialogues) => this.consequenceSystem.getNpcGreetingAndDialogue(npcName, dialogues),
+    );
     if (pedInter) {
       this.statusMessage = pedInter.action();
+      if (pedInter.prompt.includes("Habiba") && this.consequenceSystem.getNpcMemory("Habiba Mai Shayi").trust >= 70) {
+        this.lifeSim.drinkBeverage("Habiba's Complimentary Ginger Tea", 25, 25);
+      }
       this.pushSnapshot(true);
       return;
     }
@@ -1311,6 +1434,9 @@ export class GameEngine {
         else if (chosen.type === "minibus") this.minibusSpeed = 0;
         else if (chosen.type === "truck") this.truckSpeed = 0;
 
+        this.cameraYaw = 0;
+        this.cameraPitch = 0.29;
+        this.drivingFollowYaw = this.getActiveVehicleYaw();
         this.player.playAction("drive", 0.1);
         this.player.root.visible = false;
         this.statusMessage = `You are driving the ${chosen.name}`;
@@ -1361,6 +1487,18 @@ export class GameEngine {
     this.player.playAction("idle", 0.2);
     this.player.root.visible = true;
     this.statusMessage = "Exited safely";
+    this.cameraYaw = 0;
+    this.cameraPitch = 0.29;
+    this.drivingFollowYaw = undefined;
+    if (this.cameraMode === "road-focused") {
+      this.cameraMode = "third-person";
+    }
+    this.vehicleChassisPitch = 0;
+    this.vehicleChassisRoll = 0;
+    if (this.car?.root) {
+      this.car.root.rotation.x = 0;
+      this.car.root.rotation.z = 0;
+    }
     this.updateTransform();
     this.pushSnapshot(true);
   }
@@ -1377,7 +1515,7 @@ export class GameEngine {
 
       const dayOutcome = this.economy.updateDayCycle(this.gameMinutes, this.cash);
       if (dayOutcome.cashDelta !== 0) {
-        this.cash += dayOutcome.cashDelta;
+        this.cash = Math.max(0, this.cash + dayOutcome.cashDelta);
         this.statusMessage = dayOutcome.message;
         this.saveGame();
       }
@@ -1443,6 +1581,7 @@ export class GameEngine {
         this.pedestrianSystem.pedestrians,
       );
       this.pedestrianSystem.update(dt, this.playerPosition, activeVehPos);
+      this.updateVisualConsequences(now);
     }
     this.updateLighting();
     this.updateCamera(dt);
@@ -1453,7 +1592,7 @@ export class GameEngine {
 
   private updatePlayer(dt: number, now = performance.now() / 1000) {
     const forward = (this.keys.has("w") ? 1 : 0) - (this.keys.has("s") ? 1 : 0);
-    const sideways = (this.keys.has("d") ? 1 : 0) - (this.keys.has("a") ? 1 : 0);
+    const sideways = (this.keys.has("a") ? 1 : 0) - (this.keys.has("d") ? 1 : 0);
     const movement = new THREE.Vector2(sideways, forward);
     if (movement.lengthSq() > 1) movement.normalize();
     const speedMultiplier = this.lifeSim.getSpeedMultiplier();
@@ -1625,9 +1764,11 @@ export class GameEngine {
     const braking = this.keys.has("s");
     const handbrake = this.keys.has(" ");
     const steer =
-      (this.keys.has("d") ? 1 : 0) - (this.keys.has("a") ? 1 : 0);
+      (this.keys.has("a") ? 1 : 0) - (this.keys.has("d") ? 1 : 0);
     const engineMultiplier = 1 + this.economy.vehicleUpgrade.engineStage * 0.22;
-    const accel = 7.8 * engineMultiplier;
+    const vehCond = this.consequenceSystem.getVehicleCondition("sedan").condition;
+    const condFactor = vehCond < 35 ? 0.68 : vehCond < 70 ? 0.88 : 1.0;
+    const accel = 7.8 * engineMultiplier * (vehCond < 35 ? 0.75 : 1.0);
     const brakeAccel = 15.5;
     const reverseAccel = 4.1;
 
@@ -1645,7 +1786,7 @@ export class GameEngine {
       if (Math.abs(this.carSpeed) < 0.12) this.carSpeed = 0;
     }
 
-    const topSpeed = 18.2 * engineMultiplier;
+    const topSpeed = 18.2 * engineMultiplier * condFactor;
     this.carSpeed = THREE.MathUtils.clamp(this.carSpeed, -6.5, topSpeed);
     const steeringFactor = THREE.MathUtils.clamp(Math.abs(this.carSpeed) / 3, 0, 1);
     this.carYaw +=
@@ -1656,9 +1797,10 @@ export class GameEngine {
     this.carPosition.x += Math.sin(this.carYaw) * this.carSpeed * dt;
     this.carPosition.z += Math.cos(this.carYaw) * this.carSpeed * dt;
     if (this.carCollidesAt(this.carPosition.x, this.carPosition.z, this.carYaw)) {
+      const impactSpeed = Math.abs(this.carSpeed);
       this.carPosition.copy(previous);
       this.carSpeed = -this.carSpeed * 0.12;
-      this.statusMessage = "The car contacted an obstacle";
+      this.handleVehicleObstacleCollision("sedan", impactSpeed);
     }
 
     this.wheelSpin += (this.carSpeed * dt) / 0.36;
@@ -1670,20 +1812,34 @@ export class GameEngine {
     this.car.frontWheels.forEach((wheel) => {
       wheel.rotation.y = steeringAngle;
     });
+    let targetPitch = 0;
+    if (throttle && this.carSpeed >= 0) {
+      targetPitch = -0.04;
+    } else if (braking && this.carSpeed > 0) {
+      targetPitch = 0.05;
+    }
+    const targetRoll = -0.05 * steer * (Math.abs(this.carSpeed) / 10);
+    this.vehicleChassisPitch = THREE.MathUtils.lerp(this.vehicleChassisPitch, targetPitch, 1 - Math.exp(-8 * dt));
+    this.vehicleChassisRoll = THREE.MathUtils.lerp(this.vehicleChassisRoll, targetRoll, 1 - Math.exp(-8 * dt));
+
     this.car.root.position.set(
       this.carPosition.x,
       this.surfaceHeight(this.carPosition.x, this.carPosition.z),
       this.carPosition.z,
     );
     this.car.root.rotation.y = this.carYaw;
+    this.car.root.rotation.x = this.vehicleChassisPitch;
+    this.car.root.rotation.z = this.vehicleChassisRoll;
   }
 
   private updateKeke(dt: number) {
     const throttle = this.keys.has("w");
     const braking = this.keys.has("s") || this.keys.has(" ");
     const steer =
-      (this.keys.has("d") ? 1 : 0) - (this.keys.has("a") ? 1 : 0);
-    const accel = 8.6;
+      (this.keys.has("a") ? 1 : 0) - (this.keys.has("d") ? 1 : 0);
+    const vehCond = this.consequenceSystem.getVehicleCondition("keke").condition;
+    const condFactor = vehCond < 35 ? 0.68 : vehCond < 70 ? 0.88 : 1.0;
+    const accel = 8.6 * (vehCond < 35 ? 0.75 : 1.0);
     const brakeAccel = 16.5;
     const reverseAccel = 4.2;
 
@@ -1697,7 +1853,7 @@ export class GameEngine {
     }
 
     // Kano commercial tricycle top speed: ~48 km/h
-    this.kekeSpeed = THREE.MathUtils.clamp(this.kekeSpeed, -4.5, 13.5);
+    this.kekeSpeed = THREE.MathUtils.clamp(this.kekeSpeed, -4.5, 13.5 * condFactor);
     const steeringFactor = THREE.MathUtils.clamp(Math.abs(this.kekeSpeed) / 2.5, 0, 1);
     this.kekeYaw +=
       steer * 1.35 * steeringFactor * dt * (this.kekeSpeed >= 0 ? 1 : -1);
@@ -1707,9 +1863,10 @@ export class GameEngine {
     this.kekePosition.x += Math.sin(this.kekeYaw) * this.kekeSpeed * dt;
     this.kekePosition.z += Math.cos(this.kekeYaw) * this.kekeSpeed * dt;
     if (this.kekeCollidesAt(this.kekePosition.x, this.kekePosition.z, this.kekeYaw)) {
+      const impactSpeed = Math.abs(this.kekeSpeed);
       this.kekePosition.copy(previous);
       this.kekeSpeed = -this.kekeSpeed * 0.15;
-      this.statusMessage = "The Keke Napep contacted an obstacle";
+      this.handleVehicleObstacleCollision("keke", impactSpeed);
     }
 
     this.kekeWheelSpin += (this.kekeSpeed * dt) / 0.28;
@@ -1766,10 +1923,11 @@ export class GameEngine {
     const sine = Math.sin(yaw);
     const absCosine = Math.abs(cosine);
     const absSine = Math.abs(sine);
-    const broadphaseRadius = Math.max(
-      halfWidth * absCosine + halfLength * absSine,
-      halfWidth * absSine + halfLength * absCosine,
-    );
+    const extentX = halfWidth * absCosine + halfLength * absSine;
+    const extentZ = halfWidth * absSine + halfLength * absCosine;
+    if (x > this.world.bounds - extentX || x < -this.world.bounds + extentX || z > this.world.bounds - extentZ || z < WORLD_BOUNDS_NORTH + extentZ) return true;
+
+    const broadphaseRadius = Math.max(extentX, extentZ);
 
     const corners = [
       [-halfWidth, -halfLength],
@@ -1803,9 +1961,11 @@ export class GameEngine {
     const throttle = this.keys.has("w");
     const braking = this.keys.has("s");
     const handbrake = this.keys.has(" ");
-    const steer = (this.keys.has("d") ? 1 : 0) - (this.keys.has("a") ? 1 : 0);
+    const steer = (this.keys.has("a") ? 1 : 0) - (this.keys.has("d") ? 1 : 0);
     const engineMultiplier = 1 + this.economy.vehicleUpgrade.engineStage * 0.22;
-    const accel = 7.2 * engineMultiplier;
+    const vehCond = this.consequenceSystem.getVehicleCondition("van").condition;
+    const condFactor = vehCond < 35 ? 0.68 : vehCond < 70 ? 0.88 : 1.0;
+    const accel = 7.2 * engineMultiplier * (vehCond < 35 ? 0.75 : 1.0);
     const brakeAccel = 14.5;
     const reverseAccel = 3.8;
 
@@ -1823,7 +1983,7 @@ export class GameEngine {
       if (Math.abs(this.vanSpeed) < 0.12) this.vanSpeed = 0;
     }
 
-    const topSpeed = 16.5 * engineMultiplier;
+    const topSpeed = 16.5 * engineMultiplier * condFactor;
     this.vanSpeed = THREE.MathUtils.clamp(this.vanSpeed, -5.5, topSpeed);
     const steeringFactor = THREE.MathUtils.clamp(Math.abs(this.vanSpeed) / 3, 0, 1);
     this.vanYaw += steer * 0.88 * steeringFactor * dt * (this.vanSpeed >= 0 ? 1 : -1);
@@ -1833,9 +1993,10 @@ export class GameEngine {
     this.vanPosition.x += Math.sin(this.vanYaw) * this.vanSpeed * dt;
     this.vanPosition.z += Math.cos(this.vanYaw) * this.vanSpeed * dt;
     if (this.boxCollidesAt(this.vanPosition.x, this.vanPosition.z, this.vanYaw, 1.05, 2.3)) {
+      const impactSpeed = Math.abs(this.vanSpeed);
       this.vanPosition.copy(previous);
       this.vanSpeed = -this.vanSpeed * 0.12;
-      this.statusMessage = "The Delivery Van contacted an obstacle";
+      this.handleVehicleObstacleCollision("van", impactSpeed);
     }
 
     this.vanWheelSpin += (this.vanSpeed * dt) / 0.36;
@@ -1858,9 +2019,11 @@ export class GameEngine {
     const throttle = this.keys.has("w");
     const braking = this.keys.has("s");
     const handbrake = this.keys.has(" ");
-    const steer = (this.keys.has("d") ? 1 : 0) - (this.keys.has("a") ? 1 : 0);
+    const steer = (this.keys.has("a") ? 1 : 0) - (this.keys.has("d") ? 1 : 0);
     const engineMultiplier = 1 + this.economy.vehicleUpgrade.engineStage * 0.22;
-    const accel = 8.5 * engineMultiplier;
+    const vehCond = this.consequenceSystem.getVehicleCondition("pickup").condition;
+    const condFactor = vehCond < 35 ? 0.68 : vehCond < 70 ? 0.88 : 1.0;
+    const accel = 8.5 * engineMultiplier * (vehCond < 35 ? 0.75 : 1.0);
     const brakeAccel = 16.0;
     const reverseAccel = 4.5;
 
@@ -1878,7 +2041,7 @@ export class GameEngine {
       if (Math.abs(this.pickupSpeed) < 0.12) this.pickupSpeed = 0;
     }
 
-    const topSpeed = 19.5 * engineMultiplier;
+    const topSpeed = 19.5 * engineMultiplier * condFactor;
     this.pickupSpeed = THREE.MathUtils.clamp(this.pickupSpeed, -6.5, topSpeed);
     const steeringFactor = THREE.MathUtils.clamp(Math.abs(this.pickupSpeed) / 3, 0, 1);
     this.pickupYaw += steer * 1.02 * steeringFactor * dt * (this.pickupSpeed >= 0 ? 1 : -1);
@@ -1888,9 +2051,10 @@ export class GameEngine {
     this.pickupPosition.x += Math.sin(this.pickupYaw) * this.pickupSpeed * dt;
     this.pickupPosition.z += Math.cos(this.pickupYaw) * this.pickupSpeed * dt;
     if (this.boxCollidesAt(this.pickupPosition.x, this.pickupPosition.z, this.pickupYaw, 1.05, 2.5)) {
+      const impactSpeed = Math.abs(this.pickupSpeed);
       this.pickupPosition.copy(previous);
       this.pickupSpeed = -this.pickupSpeed * 0.12;
-      this.statusMessage = "The Pickup Truck contacted an obstacle";
+      this.handleVehicleObstacleCollision("pickup", impactSpeed);
     }
 
     this.pickupWheelSpin += (this.pickupSpeed * dt) / 0.40;
@@ -1913,9 +2077,11 @@ export class GameEngine {
     const throttle = this.keys.has("w");
     const braking = this.keys.has("s");
     const handbrake = this.keys.has(" ");
-    const steer = (this.keys.has("d") ? 1 : 0) - (this.keys.has("a") ? 1 : 0);
+    const steer = (this.keys.has("a") ? 1 : 0) - (this.keys.has("d") ? 1 : 0);
     const engineMultiplier = 1 + this.economy.vehicleUpgrade.engineStage * 0.22;
-    const accel = 6.5 * engineMultiplier;
+    const vehCond = this.consequenceSystem.getVehicleCondition("minibus").condition;
+    const condFactor = vehCond < 35 ? 0.68 : vehCond < 70 ? 0.88 : 1.0;
+    const accel = 6.5 * engineMultiplier * (vehCond < 35 ? 0.75 : 1.0);
     const brakeAccel = 13.5;
     const reverseAccel = 3.5;
 
@@ -1933,7 +2099,7 @@ export class GameEngine {
       if (Math.abs(this.minibusSpeed) < 0.12) this.minibusSpeed = 0;
     }
 
-    const topSpeed = 15.2 * engineMultiplier;
+    const topSpeed = 15.2 * engineMultiplier * condFactor;
     this.minibusSpeed = THREE.MathUtils.clamp(this.minibusSpeed, -5.0, topSpeed);
     const steeringFactor = THREE.MathUtils.clamp(Math.abs(this.minibusSpeed) / 3, 0, 1);
     this.minibusYaw += steer * 0.80 * steeringFactor * dt * (this.minibusSpeed >= 0 ? 1 : -1);
@@ -1943,9 +2109,10 @@ export class GameEngine {
     this.minibusPosition.x += Math.sin(this.minibusYaw) * this.minibusSpeed * dt;
     this.minibusPosition.z += Math.cos(this.minibusYaw) * this.minibusSpeed * dt;
     if (this.boxCollidesAt(this.minibusPosition.x, this.minibusPosition.z, this.minibusYaw, 1.05, 2.6)) {
+      const impactSpeed = Math.abs(this.minibusSpeed);
       this.minibusPosition.copy(previous);
       this.minibusSpeed = -this.minibusSpeed * 0.12;
-      this.statusMessage = "The Minibus contacted an obstacle";
+      this.handleVehicleObstacleCollision("minibus", impactSpeed);
     }
 
     this.minibusWheelSpin += (this.minibusSpeed * dt) / 0.37;
@@ -1968,9 +2135,11 @@ export class GameEngine {
     const throttle = this.keys.has("w");
     const braking = this.keys.has("s");
     const handbrake = this.keys.has(" ");
-    const steer = (this.keys.has("d") ? 1 : 0) - (this.keys.has("a") ? 1 : 0);
+    const steer = (this.keys.has("a") ? 1 : 0) - (this.keys.has("d") ? 1 : 0);
     const engineMultiplier = 1 + this.economy.vehicleUpgrade.engineStage * 0.22;
-    const accel = 5.2 * engineMultiplier;
+    const vehCond = this.consequenceSystem.getVehicleCondition("truck").condition;
+    const condFactor = vehCond < 35 ? 0.68 : vehCond < 70 ? 0.88 : 1.0;
+    const accel = 5.2 * engineMultiplier * (vehCond < 35 ? 0.75 : 1.0);
     const brakeAccel = 12.5;
     const reverseAccel = 3.0;
 
@@ -1988,7 +2157,7 @@ export class GameEngine {
       if (Math.abs(this.truckSpeed) < 0.12) this.truckSpeed = 0;
     }
 
-    const topSpeed = 13.8 * engineMultiplier;
+    const topSpeed = 13.8 * engineMultiplier * condFactor;
     this.truckSpeed = THREE.MathUtils.clamp(this.truckSpeed, -4.5, topSpeed);
     const steeringFactor = THREE.MathUtils.clamp(Math.abs(this.truckSpeed) / 3, 0, 1);
     this.truckYaw += steer * 0.68 * steeringFactor * dt * (this.truckSpeed >= 0 ? 1 : -1);
@@ -1998,9 +2167,10 @@ export class GameEngine {
     this.truckPosition.x += Math.sin(this.truckYaw) * this.truckSpeed * dt;
     this.truckPosition.z += Math.cos(this.truckYaw) * this.truckSpeed * dt;
     if (this.boxCollidesAt(this.truckPosition.x, this.truckPosition.z, this.truckYaw, 1.15, 3.2)) {
+      const impactSpeed = Math.abs(this.truckSpeed);
       this.truckPosition.copy(previous);
       this.truckSpeed = -this.truckSpeed * 0.12;
-      this.statusMessage = "The Freight Truck contacted an obstacle";
+      this.handleVehicleObstacleCollision("truck", impactSpeed);
     }
 
     this.truckWheelSpin += (this.truckSpeed * dt) / 0.42;
@@ -2065,7 +2235,7 @@ export class GameEngine {
     }
 
     const bounds = this.world.bounds;
-    if (Math.abs(x) > bounds - radius || Math.abs(z) > bounds - radius) return true;
+    if (x > bounds - radius || x < -bounds + radius || z > bounds - radius || z < WORLD_BOUNDS_NORTH + radius) return true;
 
     if (this.mode === "on-foot" && !skipVehicle) {
       if (this.overlapsCar(x, z, radius) || this.overlapsKeke(x, z, radius)) return true;
@@ -2086,6 +2256,118 @@ export class GameEngine {
       const dz = z - closestZ;
       return dx * dx + dz * dz < radius * radius;
     });
+  }
+
+  private initSuyaVisuals() {
+    this.suyaLanternLight = new THREE.PointLight(0xff7722, 0.4, 25);
+    this.suyaLanternLight.position.set(16, 2.4, -42);
+    this.suyaSmokeGroup.add(this.suyaLanternLight);
+
+    const smokeMat = new THREE.MeshBasicMaterial({
+      color: 0xdcd8d0,
+      transparent: true,
+      opacity: 0.25,
+    });
+    for (let i = 0; i < 4; i++) {
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(0.35 + i * 0.12, 6, 6), smokeMat);
+      puff.position.set(16 + (i - 1.5) * 0.4, 1.2 + i * 0.5, -42 + (i % 2 === 0 ? 0.3 : -0.3));
+      this.suyaSmokeGroup.add(puff);
+      this.suyaSmokeMeshes.push(puff);
+    }
+
+    const steamMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.35,
+    });
+    for (let i = 0; i < 4; i++) {
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(0.22 + i * 0.08, 6, 6), steamMat);
+      this.radiatorSteamGroup.add(puff);
+      this.radiatorSteamMeshes.push(puff);
+    }
+  }
+
+  private updateVisualConsequences(time: number) {
+    if (this.mode === "driving") {
+      const activeCond = this.consequenceSystem.getVehicleCondition(this.activeVehicle).condition;
+      if (activeCond < 35) {
+        const activePos = this.getActiveVehiclePosition();
+        const activeYaw = this.getActiveVehicleYaw();
+        const forwardOffset = 1.4;
+        const steamX = activePos.x + Math.sin(activeYaw) * forwardOffset;
+        const steamY = this.surfaceHeight(activePos.x, activePos.z) + 0.95;
+        const steamZ = activePos.z + Math.cos(activeYaw) * forwardOffset;
+        this.radiatorSteamGroup.position.set(steamX, steamY, steamZ);
+        this.radiatorSteamGroup.visible = true;
+        this.radiatorSteamMeshes.forEach((mesh, idx) => {
+          mesh.visible = true;
+          const wobble = Math.sin(time * 6 + idx * 1.5) * 0.12;
+          mesh.position.set(wobble, (idx * 0.22) + ((time * 2 + idx) % 0.8), (idx % 2 === 0 ? 1 : -1) * wobble);
+          const s = 0.8 + ((time * 1.5 + idx * 0.3) % 0.5);
+          mesh.scale.set(s, s, s);
+        });
+      } else {
+        this.radiatorSteamGroup.visible = false;
+      }
+    } else {
+      this.radiatorSteamGroup.visible = false;
+    }
+
+    this.updateBusinessResponsivenessVisuals(time);
+  }
+
+  private updateBusinessResponsivenessVisuals(time: number) {
+    const isSuyaOwned = this.economy.getOwnedBusinessesList().includes("arewa-suya-franchise");
+    const suyaLevel = this.economy.businessLevels.get("arewa-suya-franchise") ?? 1;
+
+    if (isSuyaOwned && suyaLevel >= 2) {
+      if (this.suyaLanternLight) {
+        this.suyaLanternLight.intensity = 2.4 + Math.sin(time * 3) * 0.3;
+      }
+      this.suyaSmokeMeshes.forEach((mesh, idx) => {
+        mesh.visible = true;
+        mesh.position.y = 1.2 + ((time * 0.8 + idx * 0.6) % 2.5);
+        const scale = 1.0 + ((time * 0.8 + idx * 0.6) % 2.5) * 0.6;
+        mesh.scale.set(scale, scale, scale);
+      });
+    } else {
+      if (this.suyaLanternLight) this.suyaLanternLight.intensity = 0.4;
+      this.suyaSmokeMeshes.forEach((mesh) => (mesh.visible = false));
+    }
+  }
+
+  private handleVehicleObstacleCollision(type: VehicleType, impactSpeed: number) {
+    if (impactSpeed > 1.8) {
+      const activeMission = this.missionSystem.getActiveMission();
+      const isCarryingCargo = Boolean(
+        activeMission &&
+        (activeMission.category === "local_delivery" ||
+          activeMission.category === "freight" ||
+          activeMission.category === "business_supply" ||
+          activeMission.category === "workshop") &&
+        activeMission.currentStageIndex > 0,
+      );
+      const res = this.consequenceSystem.onVehicleCollision(type, impactSpeed, isCarryingCargo);
+      this.audioSystem.playCollisionImpact(impactSpeed);
+      this.statusMessage = res.message;
+      if (res.newCondition < 35) {
+        this.audioSystem.playEngineSputter();
+      }
+    } else {
+      const label =
+        type === "keke"
+          ? "Keke Napep"
+          : type === "van"
+            ? "Delivery Van"
+            : type === "pickup"
+              ? "Pickup Truck"
+              : type === "minibus"
+                ? "Minibus"
+                : type === "truck"
+                  ? "Freight Truck"
+                  : "car";
+      this.statusMessage = `The ${label} contacted an obstacle`;
+    }
   }
 
   private overlapsCar(x: number, z: number, radius: number) {
@@ -2117,7 +2399,7 @@ export class GameEngine {
     const absSine = Math.abs(sine);
     const extentX = halfWidth * absCosine + halfLength * absSine;
     const extentZ = halfWidth * absSine + halfLength * absCosine;
-    if (Math.abs(x) > this.world.bounds - extentX || Math.abs(z) > this.world.bounds - extentZ) return true;
+    if (x > this.world.bounds - extentX || x < -this.world.bounds + extentX || z > this.world.bounds - extentZ || z < WORLD_BOUNDS_NORTH + extentZ) return true;
 
     if (this.overlapsCar(x, z, 0.45)) return true;
 
@@ -2145,7 +2427,7 @@ export class GameEngine {
     const absSine = Math.abs(sine);
     const extentX = halfWidth * absCosine + halfLength * absSine;
     const extentZ = halfWidth * absSine + halfLength * absCosine;
-    if (Math.abs(x) > this.world.bounds - extentX || Math.abs(z) > this.world.bounds - extentZ) return true;
+    if (x > this.world.bounds - extentX || x < -this.world.bounds + extentX || z > this.world.bounds - extentZ || z < WORLD_BOUNDS_NORTH + extentZ) return true;
 
     if (this.overlapsKeke(x, z, 0.45)) return true;
 
@@ -2194,9 +2476,43 @@ export class GameEngine {
     const vehiclePos = this.getActiveVehiclePosition();
     const vehicleYaw = this.getActiveVehicleYaw();
 
+    const modeChanged =
+      this.lastCameraMode !== this.cameraMode ||
+      (isDriving && this.lastActiveVehicle !== this.activeVehicle);
+    this.lastCameraMode = this.cameraMode;
+    if (isDriving) {
+      this.lastActiveVehicle = this.activeVehicle;
+    }
+
+    let desiredFov = 57;
+    if (isDriving) {
+      if (this.cameraMode === "road-focused") {
+        desiredFov = 70;
+      } else if (this.cameraMode === "third-person") {
+        const speedRatio = Math.min(Math.abs(this.getActiveVehicleSpeed()) / 20.0, 1.0);
+        desiredFov = 68 + speedRatio * 8.0;
+      } else {
+        desiredFov = 72;
+      }
+    }
+    if (this.camera.fov !== desiredFov) {
+      this.camera.fov = desiredFov;
+      this.camera.updateProjectionMatrix();
+    }
+
+    if (isDriving) {
+      if (this.drivingFollowYaw === undefined) {
+        this.drivingFollowYaw = vehicleYaw;
+      } else {
+        let diff = vehicleYaw - this.drivingFollowYaw;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        this.drivingFollowYaw += diff * (1 - Math.exp(-6.0 * dt));
+      }
+    }
+
     if (this.cameraMode === "first-person") {
       if (isDriving) {
-        // First-person vehicle cockpit / interior view
         this.player.root.visible = false;
         let driverOffsetX = -0.38;
         let driverOffsetY = 1.15;
@@ -2249,13 +2565,16 @@ export class GameEngine {
         );
         const lookTarget = driverEye.clone().add(lookDir);
 
-        this.camera.position.lerp(driverEye, 1 - Math.exp(-22 * dt));
-        this.camera.lookAt(lookTarget);
+        if (modeChanged) {
+          this.camera.position.copy(driverEye);
+          this.camera.lookAt(lookTarget);
+        } else {
+          this.camera.position.lerp(driverEye, 1 - Math.exp(-22 * dt));
+          this.camera.lookAt(lookTarget);
+        }
         return;
       }
 
-      // First-person pedestrian view on-foot:
-      // Hide avatar mesh to prevent seeing inside head / clipping
       this.player.root.visible = false;
       const eyeHeight = this.isSeated ? 1.08 : 1.68;
       const eyePos = new THREE.Vector3(
@@ -2277,6 +2596,103 @@ export class GameEngine {
       return;
     }
 
+    if (isDriving && this.cameraMode === "road-focused") {
+      this.player.root.visible = false;
+      const followYaw = (this.drivingFollowYaw ?? vehicleYaw) + this.cameraYaw;
+      const fwdX = Math.sin(followYaw);
+      const fwdZ = Math.cos(followYaw);
+
+      let roadDistance = 8.6;
+      let roadHeight = 5.0;
+      let lookAhead = 16.0;
+      let lookHeight = 0.9;
+
+      switch (this.activeVehicle) {
+        case "truck":
+          roadDistance = 11.5;
+          roadHeight = 6.0;
+          lookAhead = 20.0;
+          lookHeight = 1.2;
+          break;
+        case "minibus":
+          roadDistance = 10.2;
+          roadHeight = 5.5;
+          lookAhead = 18.0;
+          lookHeight = 1.1;
+          break;
+        case "van":
+          roadDistance = 9.6;
+          roadHeight = 5.3;
+          lookAhead = 17.0;
+          lookHeight = 1.0;
+          break;
+        case "pickup":
+          roadDistance = 9.2;
+          roadHeight = 5.2;
+          lookAhead = 17.0;
+          lookHeight = 1.0;
+          break;
+        case "keke":
+          roadDistance = 7.6;
+          roadHeight = 4.6;
+          lookAhead = 14.0;
+          lookHeight = 0.8;
+          break;
+        default:
+          roadDistance = 8.6;
+          roadHeight = 5.0;
+          lookAhead = 16.0;
+          lookHeight = 0.9;
+          break;
+      }
+
+      const desired = new THREE.Vector3(
+        vehiclePos.x - fwdX * roadDistance,
+        vehiclePos.y + roadHeight,
+        vehiclePos.z - fwdZ * roadDistance,
+      );
+      const lookTarget = new THREE.Vector3(
+        vehiclePos.x + fwdX * lookAhead,
+        vehiclePos.y + lookHeight,
+        vehiclePos.z + fwdZ * lookAhead,
+      );
+
+      const rayOrigin = new THREE.Vector3(vehiclePos.x, vehiclePos.y + 1.2, vehiclePos.z);
+      const path = desired.clone().sub(rayOrigin);
+      const pathLength = path.length();
+      const samples = Math.ceil(pathLength / 0.4);
+      let safeDistance = pathLength;
+      for (let step = 2; step <= samples; step += 1) {
+        const d = Math.min(step * 0.4, pathLength);
+        const pt = rayOrigin.clone().addScaledVector(path, d / pathLength);
+        const blocked = this.colliderIndex.query(pt.x, pt.z, 1.4).some((collider: Collider) => {
+          if (pt.y > (collider.height ?? 3.5) - 0.2) return false;
+          const dx = Math.max(Math.abs(pt.x - collider.x) - collider.halfX, 0);
+          const dz = Math.max(Math.abs(pt.z - collider.z) - collider.halfZ, 0);
+          return dx * dx + dz * dz < 0.36 * 0.36;
+        });
+        if (blocked) {
+          safeDistance = Math.max(2.0, d - 0.45);
+          break;
+        }
+      }
+      if (pathLength > 0 && safeDistance < pathLength) {
+        desired.copy(rayOrigin).addScaledVector(path.multiplyScalar(1 / pathLength), safeDistance);
+      }
+
+      if (modeChanged) {
+        this.camera.position.copy(desired);
+        this.camera.lookAt(lookTarget);
+      } else {
+        const smoothing = 1 - Math.exp(-9.5 * dt);
+        this.camera.position.lerp(desired, smoothing);
+        this.lookMatrix.lookAt(this.camera.position, lookTarget, this.camera.up);
+        this.desiredCameraQuaternion.setFromRotationMatrix(this.lookMatrix);
+        this.camera.quaternion.slerp(this.desiredCameraQuaternion, 1 - Math.exp(-14 * dt));
+      }
+      return;
+    }
+
     // Third-person mode: restore player visibility when on-foot
     this.player.root.visible = this.mode === "on-foot";
 
@@ -2285,29 +2701,33 @@ export class GameEngine {
     if (isDriving) {
       switch (this.activeVehicle) {
         case "truck":
-          distance = 11.2;
-          targetY = 1.55;
+          distance = 8.8;
+          targetY = 1.4;
           break;
         case "minibus":
-          distance = 9.6;
-          targetY = 1.35;
+          distance = 7.8;
+          targetY = 1.3;
           break;
         case "van":
-          distance = 9.0;
+          distance = 7.2;
           targetY = 1.25;
           break;
         case "pickup":
-          distance = 8.8;
-          targetY = 1.15;
+          distance = 6.8;
+          targetY = 1.2;
           break;
         case "keke":
-          distance = 5.8;
-          targetY = 0.95;
-          break;
-        default:
-          distance = 8.3;
+          distance = 5.2;
           targetY = 1.0;
           break;
+        default:
+          distance = 6.2;
+          targetY = 1.0;
+          break;
+      }
+      if (this.cameraMode === "third-person") {
+        const speedRatio = Math.min(Math.abs(this.getActiveVehicleSpeed()) / 20.0, 1.0);
+        distance += speedRatio * 1.5;
       }
     } else if (isIndoors) {
       distance = 3.0;
@@ -2316,13 +2736,10 @@ export class GameEngine {
     const target = isDriving
       ? new THREE.Vector3(vehiclePos.x, targetY, vehiclePos.z)
       : new THREE.Vector3(this.playerPosition.x, targetY, this.playerPosition.z);
-    let followYaw = isDriving ? vehicleYaw + this.cameraYaw : this.cameraYaw;
-    if (isDriving) {
-      const activeSpeed = this.getActiveVehicleSpeed();
-      if (activeSpeed < -0.8) {
-        followYaw += Math.PI;
-      }
-    }
+    const followYaw = isDriving
+      ? (this.drivingFollowYaw ?? vehicleYaw) + this.cameraYaw
+      : this.cameraYaw;
+
     const heightPitch = isIndoors ? Math.min(this.cameraPitch, 0.45) : this.cameraPitch;
     const direction = new THREE.Vector3(
       -Math.sin(followYaw) * Math.cos(heightPitch),
@@ -2362,11 +2779,16 @@ export class GameEngine {
     if (pathLength > 0) {
       desired.copy(target).addScaledVector(path.multiplyScalar(1 / pathLength), safeDistance);
     }
-    const smoothing = 1 - Math.exp(-9.5 * dt);
-    this.camera.position.lerp(desired, smoothing);
-    this.lookMatrix.lookAt(this.camera.position, target, this.camera.up);
-    this.desiredCameraQuaternion.setFromRotationMatrix(this.lookMatrix);
-    this.camera.quaternion.slerp(this.desiredCameraQuaternion, 1 - Math.exp(-14 * dt));
+    if (modeChanged) {
+      this.camera.position.copy(desired);
+      this.camera.lookAt(target);
+    } else {
+      const smoothing = 1 - Math.exp(-9.5 * dt);
+      this.camera.position.lerp(desired, smoothing);
+      this.lookMatrix.lookAt(this.camera.position, target, this.camera.up);
+      this.desiredCameraQuaternion.setFromRotationMatrix(this.lookMatrix);
+      this.camera.quaternion.slerp(this.desiredCameraQuaternion, 1 - Math.exp(-14 * dt));
+    }
   }
 
   private updateTransform() {
@@ -2421,6 +2843,13 @@ export class GameEngine {
       const missionInter = this.missionSystem.checkMissionInteraction(activeVehPos);
       if (missionInter) {
         interactionPrompt = missionInter.prompt;
+      } else if (activeVehPos.distanceTo(new THREE.Vector3(-38, 0, -135)) <= 7.0) {
+        const quote = this.consequenceSystem.getRepairQuote(this.activeVehicle);
+        if (quote.needsRepair) {
+          interactionPrompt = `Repair ${this.activeVehicle} at Master Garba's (₦${quote.cost.toLocaleString()}${quote.discount > 0 ? " - 20% Trade Disc." : ""})`;
+        } else {
+          interactionPrompt = "Arewa Heavy Repairs (Pristine Condition) - Press [E] to Exit";
+        }
       } else {
         const exitLabels: Record<VehicleType, string> = {
           sedan: "Exit Sedan",
@@ -2645,6 +3074,8 @@ export class GameEngine {
       activeInterior: this.interiorManager.activeInterior,
       timeString,
       gameScore: this.gameScore,
+      vehicleCondition: this.mode === "driving" ? this.consequenceSystem.getVehicleCondition(this.activeVehicle).condition : undefined,
+      activeConsequence: this.consequenceSystem.getConsequencesHistory()[0]?.stateChanges.incidentTitle ?? null,
       featuredContact,
       ownedProperties: this.economy.getOwnedPropertiesList(),
       ownedBusinesses: this.economy.getOwnedBusinessesList(),
@@ -2677,24 +3108,62 @@ export class GameEngine {
       cameraMode: this.cameraMode,
       premiumCoins: this.economy.premiumCoins,
       isEmpireModalOpen: this.isEmpireModalOpen,
+      isSmartphoneOpen: this.isSmartphoneOpen,
+      dailyAtmWithdrawn: this.economy.dailyAtmWithdrawn,
+      atmDailyLimit: ATM_DAILY_LIMIT,
+      socialContacts: Array.from(this.socialSystem.contacts.values()),
       empireOverview: this.economy.getEmpireOverview(this.cash),
     });
   }
 
-  public getCameraMode(): "third-person" | "first-person" {
+  public getCameraDebugInfo(): any {
+    const isIndoors = Boolean(this.interiorManager.activeInterior);
+    return {
+      cameraMode: this.cameraMode,
+      isIndoors,
+      cameraWorldPos: { x: this.camera.position.x, y: this.camera.position.y, z: this.camera.position.z },
+      cameraLookDir: (() => { const d = new THREE.Vector3(); this.camera.getWorldDirection(d); return { x: d.x, y: d.y, z: d.z }; })(),
+      playerVehicleWorldPos: { x: this.playerPosition.x, y: this.playerPosition.y, z: this.playerPosition.z },
+    };
+  }
+
+  public getCameraMode(): CameraMode {
     return this.cameraMode;
   }
 
-  public setCameraMode(mode: "third-person" | "first-person") {
+  public setCameraMode(mode: CameraMode) {
     if (this.cameraMode !== mode) {
       this.cameraMode = mode;
       this.pushSnapshot(true);
     }
   }
 
-  public toggleCameraMode(): "third-person" | "first-person" {
-    this.cameraMode = this.cameraMode === "third-person" ? "first-person" : "third-person";
-    this.statusMessage = `Camera mode: ${this.cameraMode === "first-person" ? "First-Person (Immersive)" : "Third-Person (Follow)"}`;
+  public dismissOnboarding() {
+    this.economy.dismissOnboarding();
+    this.saveGame();
+    this.pushSnapshot(true);
+  }
+
+  public toggleCameraMode(): CameraMode {
+    if (this.mode === "driving") {
+      if (this.cameraMode === "third-person") {
+        this.cameraMode = "road-focused";
+      } else if (this.cameraMode === "road-focused") {
+        this.cameraMode = "first-person";
+      } else {
+        this.cameraMode = "third-person";
+      }
+      const label =
+        this.cameraMode === "road-focused"
+          ? "Road-Focused (Elevated)"
+          : this.cameraMode === "first-person"
+            ? "First-Person (Cockpit)"
+            : "Third-Person (Chase Camera)";
+      this.statusMessage = `Camera mode: ${label}`;
+    } else {
+      this.cameraMode = this.cameraMode === "third-person" ? "first-person" : "third-person";
+      this.statusMessage = `Camera mode: ${this.cameraMode === "first-person" ? "First-Person (Immersive)" : "Third-Person (Follow)"}`;
+    }
     this.pushSnapshot(true);
     return this.cameraMode;
   }
@@ -2972,6 +3441,7 @@ export class GameEngine {
       this.lifeSim.getSnapshot(),
       this.freelanceSystem.getCompletedIds(),
       this.freelanceSystem.totalEarnings,
+      this.consequenceSystem.serialize(),
     );
   }
 
@@ -3223,6 +3693,23 @@ export class GameEngine {
   // Milestone 15: Persistent Empire Economy & Live Content Foundation
   // =========================================================================
 
+    public captureScreenshot(): string | null {
+    try {
+      if (!this.renderer || !this.scene || !this.camera) return null;
+      this.renderer.render(this.scene, this.camera);
+      return this.canvas.toDataURL("image/jpeg", 0.85);
+    } catch (e) {
+      console.warn("Screenshot capture failed:", e);
+      return null;
+    }
+  }
+
+  public toggleSmartphone(force?: boolean): boolean {
+    this.isSmartphoneOpen = typeof force === "boolean" ? force : !this.isSmartphoneOpen;
+    this.pushSnapshot(true);
+    return this.isSmartphoneOpen;
+  }
+
   public toggleEmpireModal(force?: boolean): boolean {
     this.isEmpireModalOpen = typeof force === "boolean" ? force : !this.isEmpireModalOpen;
     this.pushSnapshot(true);
@@ -3231,6 +3718,17 @@ export class GameEngine {
 
   public upgradeBusiness(id: BusinessId) {
     const res = this.economy.upgradeBusiness(id, this.cash);
+    if (res.success && res.cost) {
+      this.cash -= res.cost;
+      this.saveGame();
+      this.statusMessage = res.message;
+      this.pushSnapshot(true);
+    }
+    return res;
+  }
+
+  public maintainBusiness(id: BusinessId) {
+    const res = this.economy.maintainBusiness(id, this.cash);
     if (res.success && res.cost) {
       this.cash -= res.cost;
       this.saveGame();

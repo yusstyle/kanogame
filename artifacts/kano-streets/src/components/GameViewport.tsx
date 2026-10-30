@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import type { GameEngine } from "../game/GameEngine";
-import type { CareerPathChoice, GameScreen, GameSnapshot, GraphicsQuality, FurnitureInstance, PropertyId, PlayerHomeEntry, BusinessId, CurrencyType } from "../game/types";
+import type { CareerPathChoice, GameScreen, GameSnapshot, GraphicsQuality, FurnitureInstance, PropertyId, PlayerHomeEntry, BusinessId, CurrencyType, CameraMode } from "../game/types";
 
 export type GameViewportHandle = {
   requestPointerLock: () => void;
@@ -48,16 +48,21 @@ export type GameViewportHandle = {
   purchaseProperty: (propertyId: PropertyId) => { success: boolean; message: string };
   getPlayerHomes: () => PlayerHomeEntry[];
   executeFreelanceContract: (contractId?: string) => { success: boolean; message: string };
-  toggleCameraMode: () => "third-person" | "first-person" | undefined;
-  setCameraMode: (mode: "third-person" | "first-person") => void;
+  toggleCameraMode: () => CameraMode | undefined;
+  setCameraMode: (mode: CameraMode) => void;
+  toggleSmartphone: (force?: boolean) => boolean | undefined;
+  captureScreenshot: () => string | null;
+  interactSocial: (contactId: string, choiceId: string) => any;
   toggleEmpireModal: (force?: boolean) => boolean | undefined;
   upgradeBusiness: (id: BusinessId) => { success: boolean; cost?: number; newLevel?: number; message: string };
+  maintainBusiness: (id: BusinessId) => { success: boolean; cost?: number; message: string; newCondition?: number };
   renovateProperty: (id: PropertyId, useCoins?: boolean) => { success: boolean; costCash: number; costCoins: number; newLevel: number; message: string };
   purchaseVehicle: (vehicleId: string, currency?: CurrencyType) => { success: boolean; message: string; costCash?: number; costCoins?: number };
   purchaseVehicleSkin: (skinId: string, vehicleId: string, currency?: CurrencyType) => { success: boolean; message: string; costCash?: number; costCoins?: number };
   claimAchievement: (achievementId: string) => { success: boolean; rewardCash: number; rewardCoins: number; message: string };
   claimSeasonalChallenge: (challengeId: string) => { success: boolean; rewardCash: number; rewardCoins: number; message: string };
   claimSeasonalMilestone: () => { success: boolean; rewardCoins: number; rewardTitle?: string; message: string };
+  dismissOnboarding: () => void;
 };
 
 type GameViewportProps = {
@@ -119,14 +124,19 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
         executeFreelanceContract: (contractId) => engineRef.current?.executeFreelanceContract(contractId) ?? { success: false, message: "Engine not ready" },
         toggleCameraMode: () => engineRef.current?.toggleCameraMode(),
         setCameraMode: (mode) => engineRef.current?.setCameraMode(mode),
+        toggleSmartphone: (force) => engineRef.current?.toggleSmartphone(force),
+        captureScreenshot: () => engineRef.current?.captureScreenshot() ?? null,
+        interactSocial: (contactId, choiceId) => engineRef.current?.interactSocial(contactId, choiceId) ?? null,
         toggleEmpireModal: (force) => engineRef.current?.toggleEmpireModal(force),
         upgradeBusiness: (id) => engineRef.current?.upgradeBusiness(id) ?? { success: false, message: "Engine not ready" },
+        maintainBusiness: (id) => engineRef.current?.maintainBusiness(id) ?? { success: false, cost: 0, message: "Engine not ready", newCondition: 0 },
         renovateProperty: (id, useCoins) => engineRef.current?.renovateProperty(id, useCoins) ?? { success: false, costCash: 0, costCoins: 0, newLevel: 0, message: "Engine not ready" },
         purchaseVehicle: (vehId, curr) => engineRef.current?.purchaseVehicle(vehId, curr) ?? { success: false, message: "Engine not ready" },
         purchaseVehicleSkin: (sId, vId, curr) => engineRef.current?.purchaseVehicleSkin(sId, vId, curr) ?? { success: false, message: "Engine not ready" },
         claimAchievement: (achId) => engineRef.current?.claimAchievement(achId) ?? { success: false, rewardCash: 0, rewardCoins: 0, message: "Engine not ready" },
         claimSeasonalChallenge: (cId) => engineRef.current?.claimSeasonalChallenge(cId) ?? { success: false, rewardCash: 0, rewardCoins: 0, message: "Engine not ready" },
         claimSeasonalMilestone: () => engineRef.current?.claimSeasonalMilestone() ?? { success: false, rewardCoins: 0, message: "Engine not ready" },
+        dismissOnboarding: () => engineRef.current?.dismissOnboarding(),
       }),
       [],
     );

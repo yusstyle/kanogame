@@ -1,0 +1,1911 @@
+/* Kano Streets — Unified Smartphone Handset Styling */
+
+.ks-smartphone-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 1.5rem 2.5rem;
+  pointer-events: auto;
+  animation: ksPhoneFadeIn 0.22s ease-out;
+}
+
+@keyframes ksPhoneFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Smartphone Hardware Frame */
+.ks-smartphone-frame {
+  position: relative;
+  width: 380px;
+  height: 720px;
+  max-height: 94vh;
+  background: linear-gradient(145deg, #1e293b, #0f172a);
+  border: 4px solid #334155;
+  border-radius: 46px;
+  box-shadow:
+    0 25px 60px -15px rgba(0, 0, 0, 0.75),
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 0 0 2px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: ksPhoneSlideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+@keyframes ksPhoneSlideUp {
+  from {
+    transform: translateY(40px) scale(0.96);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Hardware Side Buttons */
+.ks-phone-hw-btn {
+  position: absolute;
+  background: #334155;
+  border-radius: 2px;
+  box-shadow: -1px 0 2px rgba(0, 0, 0, 0.5);
+}
+
+.ks-hw-vol-up {
+  left: -7px;
+  top: 130px;
+  width: 4px;
+  height: 44px;
+}
+
+.ks-hw-vol-down {
+  left: -7px;
+  top: 185px;
+  width: 4px;
+  height: 44px;
+}
+
+.ks-hw-power {
+  right: -7px;
+  top: 150px;
+  width: 4px;
+  height: 58px;
+}
+
+/* Screen Display Area */
+.ks-phone-screen {
+  flex: 1;
+  background: #090d16;
+  border-radius: 40px;
+  margin: 6px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  color: #f8fafc;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.ks-phone-screen.flashlight-active {
+  box-shadow: 0 0 80px 25px rgba(255, 250, 220, 0.25);
+}
+
+/* Top Status Bar */
+.ks-phone-status-bar {
+  height: 38px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(9, 13, 22, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  z-index: 10;
+}
+
+.ks-status-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ks-phone-time {
+  letter-spacing: 0.5px;
+}
+
+.ks-phone-carrier {
+  color: #94a3b8;
+  font-size: 0.65rem;
+}
+
+/* Dynamic Island (Selfie Camera) */
+.ks-dynamic-island {
+  width: 82px;
+  height: 20px;
+  background: #000;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.ks-island-camera {
+  width: 8px;
+  height: 8px;
+  background: #0d1b2a;
+  border: 1px solid #1e3a8a;
+  border-radius: 50%;
+}
+
+.ks-status-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ks-signal-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.5px;
+  height: 10px;
+}
+
+.ks-signal-bars span {
+  width: 2.5px;
+  background: #10b981;
+  border-radius: 1px;
+}
+
+.ks-signal-bars span:nth-child(1) { height: 3px; }
+.ks-signal-bars span:nth-child(2) { height: 5px; }
+.ks-signal-bars span:nth-child(3) { height: 7px; }
+.ks-signal-bars span:nth-child(4) { height: 10px; }
+
+.ks-battery-text {
+  font-size: 0.65rem;
+  color: #94a3b8;
+}
+
+.ks-battery-icon {
+  width: 18px;
+  height: 9px;
+  border: 1.5px solid #94a3b8;
+  border-radius: 2px;
+  padding: 1px;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.ks-battery-icon::after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  top: 2px;
+  width: 1.5px;
+  height: 3px;
+  background: #94a3b8;
+  border-radius: 0 1px 1px 0;
+}
+
+.ks-battery-level {
+  height: 100%;
+  background: #10b981;
+  border-radius: 1px;
+}
+
+/* Nav Header inside screen */
+.ks-phone-nav-header {
+  height: 42px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(15, 23, 42, 0.7);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  z-index: 8;
+}
+
+.ks-phone-back-btn {
+  background: none;
+  border: none;
+  color: #f59e0b;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.ks-phone-back-btn:hover {
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.ks-phone-home-header {
+  display: flex;
+  align-items: center;
+}
+
+.ks-phone-brand-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: #f59e0b;
+}
+
+.ks-phone-app-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #f8fafc;
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ks-phone-close-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  color: #94a3b8;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: all 0.15s;
+}
+
+.ks-phone-close-btn:hover {
+  background: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+/* Phone Toast */
+.ks-phone-toast {
+  position: absolute;
+  top: 48px;
+  left: 12px;
+  right: 12px;
+  background: rgba(30, 41, 59, 0.95);
+  border: 1px solid #f59e0b;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  color: #f8fafc;
+  font-size: 0.74rem;
+  padding: 8px 12px;
+  border-radius: 8px;
+  z-index: 20;
+  text-align: center;
+  font-weight: 500;
+  animation: ksToastPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes ksToastPop {
+  from {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Phone Body */
+.ks-phone-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.ks-phone-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.ks-phone-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+
+/* ---------------- HOME SCREEN ---------------- */
+.ks-phone-home-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ks-home-widget-clock {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.8));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 14px 16px;
+  text-align: center;
+}
+
+.ks-widget-time {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -1px;
+  line-height: 1.1;
+}
+
+.ks-widget-date {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.ks-widget-weather {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.74rem;
+  color: #cbd5e1;
+}
+
+.ks-weather-temp {
+  color: #f59e0b;
+  font-weight: 700;
+}
+
+/* Quick Glance Card */
+.ks-home-glance-card {
+  background: linear-gradient(135deg, #1e3a8a, #0f172a);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 16px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.ks-home-glance-card:hover {
+  transform: translateY(-2px);
+  border-color: #60a5fa;
+}
+
+.ks-glance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.65rem;
+  color: #93c5fd;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.ks-glance-badge {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.6rem;
+}
+
+.ks-glance-balance {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: #f8fafc;
+  margin: 4px 0;
+}
+
+.ks-glance-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.72rem;
+  color: #cbd5e1;
+}
+
+.ks-glance-arrow {
+  color: #f59e0b;
+  font-weight: 700;
+}
+
+/* Home Mission Card */
+.ks-home-mission-card {
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.15), rgba(15, 23, 42, 0.85));
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 14px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.ks-mission-pill {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #fbbf24;
+  letter-spacing: 0.5px;
+}
+
+.ks-mission-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #f8fafc;
+  margin: 2px 0;
+}
+
+.ks-mission-step {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  line-height: 1.3;
+}
+
+.ks-mission-reward {
+  font-size: 0.72rem;
+  color: #10b981;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+/* App Grid (6 launcher icons) */
+.ks-app-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px 10px;
+  padding: 4px 0;
+}
+
+.ks-app-icon-item {
+  background: none;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 4px;
+  transition: transform 0.15s;
+}
+
+.ks-app-icon-item:hover {
+  transform: translateY(-3px);
+}
+
+.ks-app-icon {
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.45rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.icon-bank { background: linear-gradient(135deg, #0284c7, #0369a1); color: #fbbf24; font-weight: 700; }
+.icon-contacts { background: linear-gradient(135deg, #10b981, #047857); }
+.icon-maps { background: linear-gradient(135deg, #d97706, #b45309); }
+.icon-missions { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
+.icon-empire { background: linear-gradient(135deg, #ec4899, #be185d); }
+.icon-camera { background: linear-gradient(135deg, #475569, #1e293b); }
+
+.ks-app-label {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #cbd5e1;
+  text-align: center;
+}
+
+/* Home Quick Tools */
+.ks-home-quick-tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.ks-tool-chip {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+
+.ks-tool-chip:hover {
+  background: rgba(51, 65, 85, 0.9);
+  color: #f8fafc;
+}
+
+.ks-tool-chip.muted {
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.ks-tool-chip.active {
+  border-color: rgba(245, 158, 11, 0.6);
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+/* Bottom Phone Dock */
+.ks-phone-dock {
+  height: 64px;
+  margin: 0 10px 10px 10px;
+  background: rgba(30, 41, 59, 0.75);
+  backdrop-filter: blur(12px);
+  border-radius: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 8px;
+}
+
+.ks-dock-btn {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 12px;
+  transition: transform 0.15s;
+}
+
+.ks-dock-btn:hover {
+  transform: scale(1.18);
+}
+
+/* Home Indicator Bar */
+.ks-phone-home-bar-area {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.ks-phone-home-indicator {
+  width: 120px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+
+.ks-phone-home-bar-area:hover .ks-phone-home-indicator {
+  background: rgba(245, 158, 11, 0.8);
+}
+
+/* Generic App View */
+.ks-phone-app-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: ksAppViewIn 0.2s ease-out;
+}
+
+@keyframes ksAppViewIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ks-card-subhead {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.6px;
+  margin-bottom: 8px;
+}
+
+/* Common Action Buttons */
+.ks-btn-action {
+  width: 100%;
+  background: linear-gradient(135deg, #d97706, #b45309);
+  border: none;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.ks-btn-action:hover {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.ks-btn-action.small {
+  padding: 6px 10px;
+  font-size: 0.72rem;
+}
+
+.ks-btn-action.tiny {
+  width: auto;
+  padding: 4px 8px;
+  font-size: 0.68rem;
+}
+
+.ks-btn-action.secondary {
+  background: rgba(51, 65, 85, 0.8);
+  color: #cbd5e1;
+}
+
+.ks-btn-action.secondary:hover {
+  background: rgba(71, 85, 105, 0.9);
+  color: #f8fafc;
+}
+
+.ks-btn-action.outline {
+  background: none;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  color: #fbbf24;
+}
+
+.ks-btn-action.outline:hover {
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.ks-btn-action.danger {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+}
+
+/* ---------------- BANK APP ---------------- */
+.ks-bank-card {
+  background: linear-gradient(135deg, #0f172a, #1e3a8a, #0369a1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.ks-bank-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ks-bank-brand {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #fbbf24;
+  letter-spacing: 0.5px;
+}
+
+.ks-bank-chip {
+  font-size: 1.2rem;
+  color: #fbbf24;
+}
+
+.ks-bank-card-number {
+  font-size: 0.95rem;
+  letter-spacing: 2px;
+  margin: 12px 0;
+  color: #94a3b8;
+  font-family: monospace;
+}
+
+.ks-bank-card-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.ks-bank-label {
+  font-size: 0.58rem;
+  color: #93c5fd;
+  font-weight: 600;
+}
+
+.ks-bank-amount {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.ks-bank-holder {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.ks-bank-section-card {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.ks-atm-limit-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.ks-atm-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.ks-atm-sub {
+  font-size: 0.68rem;
+  color: #94a3b8;
+}
+
+.ks-atm-remaining {
+  text-align: right;
+  font-size: 0.68rem;
+  color: #94a3b8;
+}
+
+.ks-atm-remaining strong {
+  display: block;
+  font-size: 0.85rem;
+  color: #10b981;
+}
+
+.ks-progress-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 6px 0;
+}
+
+.ks-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #f59e0b);
+  border-radius: 3px;
+}
+
+.ks-atm-hint {
+  font-size: 0.68rem;
+  color: #94a3b8;
+  line-height: 1.3;
+  margin-bottom: 10px;
+}
+
+.ks-flow-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.74rem;
+  padding: 3px 0;
+  color: #cbd5e1;
+}
+
+.ks-flow-pos { color: #34d399; font-weight: 600; }
+.ks-flow-neg { color: #f87171; font-weight: 600; }
+
+.ks-flow-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 6px 0;
+}
+
+.ks-flow-row.total {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.ks-statement-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ks-statement-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 8px;
+  font-size: 0.72rem;
+}
+
+.ks-statement-desc {
+  font-weight: 500;
+  color: #f8fafc;
+}
+
+.ks-statement-type {
+  font-size: 0.6rem;
+  color: #94a3b8;
+}
+
+.ks-statement-amount.pos { color: #34d399; font-weight: 600; }
+.ks-statement-amount.neg { color: #f87171; font-weight: 600; }
+
+.ks-empty-msg {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-style: italic;
+  text-align: center;
+  padding: 8px;
+}
+
+/* ---------------- CONTACTS & CHAT ---------------- */
+.ks-contact-search-banner {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #f59e0b;
+  letter-spacing: 0.6px;
+  padding: 4px 6px;
+}
+
+.ks-contact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ks-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.ks-contact-row:hover {
+  background: rgba(51, 65, 85, 0.8);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.ks-contact-avatar, .ks-chat-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #d97706, #4f46e5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.ks-contact-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.ks-contact-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ks-contact-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.ks-contact-stage-badge {
+  font-size: 0.55rem;
+  font-weight: 700;
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.ks-contact-prof {
+  font-size: 0.66rem;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ks-contact-preview {
+  font-size: 0.66rem;
+  color: #cbd5e1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.ks-affection-score {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #10b981;
+}
+
+/* Chat Thread */
+.ks-chat-thread-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.ks-chat-thread-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(30, 41, 59, 0.7);
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+
+.ks-chat-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.ks-chat-sub {
+  font-size: 0.65rem;
+  color: #94a3b8;
+}
+
+.ks-chat-bubbles-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px;
+}
+
+.ks-chat-bubble {
+  max-width: 82%;
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.ks-chat-bubble.npc {
+  align-self: flex-start;
+  background: #1e293b;
+  border-bottom-left-radius: 2px;
+  color: #f8fafc;
+}
+
+.ks-chat-bubble.player {
+  align-self: flex-end;
+  background: #d97706;
+  border-bottom-right-radius: 2px;
+  color: #fff;
+}
+
+.ks-bubble-time {
+  font-size: 0.58rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: right;
+  margin-top: 2px;
+}
+
+.ks-chat-actions-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+}
+
+/* ---------------- MAPS & GPS ---------------- */
+.ks-gps-active-card {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+
+.ks-gps-target-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.ks-gps-target-district {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+
+.ks-gps-inactive {
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+
+.ks-map-filter-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.ks-filter-tab {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  font-size: 0.68rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ks-filter-tab.active {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.ks-landmark-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.ks-landmark-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.ks-landmark-entry:hover {
+  background: rgba(51, 65, 85, 0.7);
+}
+
+.ks-landmark-entry.primary-home {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(30, 41, 59, 0.7));
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.ks-landmark-entry.active-dest {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.ks-landmark-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.ks-landmark-desc {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------------- MISSIONS / LOGISTICS ---------------- */
+.ks-mission-section-card {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.ks-manifest-badge {
+  display: inline-block;
+  background: #8b5cf6;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+
+.ks-manifest-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.ks-manifest-step-box {
+  background: rgba(15, 23, 42, 0.6);
+  border-left: 3px solid #f59e0b;
+  padding: 6px 8px;
+  font-size: 0.72rem;
+  margin: 6px 0;
+  color: #cbd5e1;
+}
+
+.ks-manifest-progress, .ks-manifest-target, .ks-manifest-payout {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  margin: 2px 0;
+}
+
+.ks-manifest-payout strong {
+  color: #10b981;
+}
+
+.ks-no-mission {
+  font-size: 0.74rem;
+  color: #94a3b8;
+}
+
+.ks-no-mission p {
+  margin-top: 4px;
+  color: #cbd5e1;
+}
+
+.ks-available-contracts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ks-contract-card {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.ks-contract-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.62rem;
+}
+
+.ks-contract-cat {
+  color: #a78bfa;
+  font-weight: 700;
+}
+
+.ks-contract-reward {
+  color: #34d399;
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
+.ks-contract-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #f8fafc;
+  margin: 2px 0;
+}
+
+.ks-contract-desc {
+  font-size: 0.68rem;
+  color: #94a3b8;
+  line-height: 1.3;
+}
+
+.ks-contract-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+  font-size: 0.68rem;
+  color: #cbd5e1;
+}
+
+/* ---------------- EMPIRE PORTFOLIO ---------------- */
+.ks-empire-worth-banner {
+  background: linear-gradient(135deg, #831843, #500724);
+  border: 1px solid rgba(236, 72, 153, 0.3);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.ks-worth-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #fbcfe8;
+  letter-spacing: 0.6px;
+}
+
+.ks-worth-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.ks-worth-sub {
+  font-size: 0.68rem;
+  color: #f472b6;
+  margin-top: 2px;
+}
+
+.ks-property-tile-list, .ks-biz-tile-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ks-property-tile, .ks-biz-tile {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.ks-tile-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ks-tile-name {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.ks-tile-status {
+  font-size: 0.58rem;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.ks-tile-status.owned { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+.ks-tile-status.leased { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+.ks-tile-status.sale { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+
+.ks-tile-sub {
+  font-size: 0.65rem;
+  color: #94a3b8;
+}
+
+.ks-tile-finances {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.66rem;
+  color: #cbd5e1;
+  margin: 4px 0 6px 0;
+}
+
+/* Phase A Smartphone Empire Management */
+.ks-empire-subtabs {
+  display: flex;
+  overflow-x: auto;
+  gap: 4px;
+  padding: 4px 0 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 8px;
+}
+
+.ks-subtab-btn {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 5px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.ks-subtab-btn.active {
+  background: rgba(217, 119, 6, 0.25);
+  border-color: #f59e0b;
+  color: #fef3c7;
+}
+
+.ks-empire-balance-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.ks-bal-pill {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ks-bal-pill small {
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.5px;
+}
+
+.ks-bal-pill strong {
+  font-size: 0.75rem;
+  color: #f8fafc;
+}
+
+.ks-cashflow-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ks-biz-mgmt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ks-biz-mgmt-card {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ks-biz-mgmt-card.owned {
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.ks-biz-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.ks-biz-title-area {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ks-biz-cat-badge {
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 1px 5px;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.ks-biz-title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.ks-biz-location {
+  font-size: 0.62rem;
+  color: #94a3b8;
+}
+
+.ks-biz-desc {
+  margin: 0;
+  font-size: 0.65rem;
+  color: #cbd5e1;
+  line-height: 1.3;
+}
+
+.ks-biz-condition-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 5px 8px;
+  border-radius: 6px;
+}
+
+.ks-cond-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6rem;
+}
+
+.ks-cond-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.ks-cond-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+.ks-biz-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.ks-stat-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ks-stat-cell small {
+  font-size: 0.54rem;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.ks-stat-cell strong {
+  font-size: 0.68rem;
+  color: #f8fafc;
+}
+
+.ks-stat-cell.highlight {
+  grid-column: span 2;
+  background: rgba(16, 185, 129, 0.08);
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.ks-biz-inventory-line {
+  font-size: 0.65rem;
+  color: #cbd5e1;
+}
+
+.ks-biz-actions-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.ks-statement-head-banner {
+  background: linear-gradient(135deg, #1e293b, #0f172a);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.ks-stmt-period {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #34d399;
+}
+
+.ks-statement-head-banner h3 {
+  margin: 2px 0 0 0;
+  font-size: 0.9rem;
+  color: #f8fafc;
+}
+
+.ks-statement-table-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.ks-stmt-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.68rem;
+  padding: 3px 0;
+}
+
+.ks-stmt-subtext {
+  font-size: 0.6rem;
+  color: #94a3b8;
+}
+
+.ks-stmt-row.total-expenses {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 5px;
+  font-weight: 700;
+}
+
+.ks-stmt-row.net-profit-row {
+  border-top: 1px dashed rgba(16, 185, 129, 0.4);
+  padding-top: 6px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #34d399;
+}
+
+.ks-monthly-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.ks-month-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 6px;
+  border-radius: 6px;
+}
+
+.ks-month-col small {
+  font-size: 0.52rem;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.ks-month-col strong {
+  font-size: 0.68rem;
+}
+
+.ks-month-col.highlight {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.ks-notifs-section {
+  margin-bottom: 8px;
+}
+
+.ks-notifs-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ks-notif-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 6px;
+  font-size: 0.66rem;
+  color: #fef3c7;
+}
+
+.ks-ledger-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ks-ledger-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.ks-ledger-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 65%;
+}
+
+.ks-ledger-type-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ks-ledger-type-badge {
+  font-size: 0.52rem;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+
+.ks-ledger-time {
+  font-size: 0.58rem;
+  color: #94a3b8;
+}
+
+.ks-ledger-desc {
+  font-size: 0.66rem;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ks-ledger-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.ks-ledger-amt {
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.ks-ledger-amt.positive { color: #34d399; }
+.ks-ledger-amt.negative { color: #f87171; }
+
+.ks-ledger-bal {
+  font-size: 0.58rem;
+  color: #94a3b8;
+}
+
+/* ---------------- CAMERA APP ---------------- */
+.ks-camera-app {
+  height: 100%;
+}
+
+.ks-viewfinder {
+  position: relative;
+  height: 320px;
+  background: #000;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px;
+}
+
+.ks-viewfinder-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+  background-size: 33.3% 33.3%;
+  pointer-events: none;
+}
+
+.ks-viewfinder-crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(245, 158, 11, 0.6);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.ks-viewfinder-top, .ks-viewfinder-bottom {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  z-index: 2;
+  font-family: monospace;
+}
+
+.ks-camera-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 14px 0;
+}
+
+.ks-photo-count {
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+
+.ks-shutter-btn {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #fff;
+  border: 4px solid #334155;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s;
+}
+
+.ks-shutter-btn:active {
+  transform: scale(0.92);
+}
+
+.ks-shutter-inner {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #000;
+}
+
+.ks-camera-dummy-btn {
+  width: 40px;
+}
+
+.ks-phone-camera-flash {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  z-index: 99999;
+  animation: ksFlashAnim 0.25s ease-out forwards;
+}
+
+@keyframes ksFlashAnim {
+  0% { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+
+.ks-photo-gallery-list {
+  background: rgba(30, 41, 59, 0.6);
+  border-radius: 12px;
+  padding: 8px 10px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.ks-photo-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  padding: 3px 0;
+  color: #cbd5e1;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* ---------------- SETTINGS APP ---------------- */
+.ks-settings-card {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ks-setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.ks-setting-label {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.ks-setting-sub {
+  font-size: 0.65rem;
+  color: #94a3b8;
+}
+
+.ks-setting-select {
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #f8fafc;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+}
+
+.ks-spec-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+
+.ks-spec-row strong {
+  color: #f8fafc;
+}
+
+.ks-gallery-thumb {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+}
+
+.ks-photo-row-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  margin-right: 8px;
+}
+
+.ks-photo-meta {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.ks-photo-loc {
+  font-weight: 600;
+  color: #f8fafc;
+  font-size: 0.75rem;
+}
+
+.ks-photo-sub {
+  color: #94a3b8;
+  font-size: 0.68rem;
+}
+
+.ks-photo-dl {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .ks-smartphone-backdrop {
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+  }
+  .ks-smartphone-frame {
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    border: none;
+  }
+  .ks-phone-screen {
+    border-radius: 0;
+    margin: 0;
+  }
+}
+

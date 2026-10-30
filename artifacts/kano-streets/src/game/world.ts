@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createMotorcycleModel } from "./actors";
-import { createMarketStall, createPlot } from "./buildings";
+import { createMarketStall, createPlot, createRoadsideKiosk } from "./buildings";
 import { getDistrict, ROAD_LAYOUT, ROAD_CENTERS, WORLD_BOUNDS, WORLD_EXTENT, type RoadSpec } from "./layout";
 import { makeSignMaterial } from "./materials";
 import {
@@ -193,30 +193,100 @@ function makeStreetlight(
   pole.rotation.y = yaw;
   root.add(pole);
 
-  // Tapered structural steel pole with flanged ground mounting base
+  // 1. Tapered structural steel pole with flanged ground mounting base
+  addCylinder(pole, materials.metal, 0, 0.05, 0, 0.32, 0.34, 0.1);
   addCylinder(pole, materials.metal, 0, 0.22, 0, 0.22, 0.24, 0.44);
   addCylinder(pole, materials.metal, 0, 3.2, 0, 0.11, 0.14, 6.4);
 
-  // Lower battery / solar charge controller housing box
+  // 2. Lower battery / solar charge controller housing box with hazard caution badge
   addBox(pole, materials.metal, 0, 1.75, 0.2, 0.35, 0.52, 0.24);
+  addBox(pole, materials.hazardBarrier || materials.karotaYellow || materials.trim, 0, 1.75, 0.325, 0.22, 0.16, 0.02, false);
 
-  // Cantilever curved luminaire mast arm projecting over the road
+  // 3. Cantilever curved luminaire mast arm with diagonal tension support strut
   addBox(pole, materials.metal, 0, 6.12, 0.65, 0.1, 0.1, 1.35);
+  const strut = addBox(pole, materials.metal, 0, 5.68, 0.45, 0.055, 0.68, 0.055);
+  strut.rotation.x = -0.68;
 
-  // Modern LED luminaire housing
+  // 4. Modern LED luminaire housing with heat fins & photocell daylight sensor
   addBox(pole, materials.metal, 0, 6.06, 1.3, 0.38, 0.12, 0.58);
+  addCylinder(pole, materials.metal, 0, 6.18, 1.25, 0.035, 0.035, 0.08);
   // Emissive luminaire lens that illuminates at dusk and night
   addBox(pole, materials.lampGlow || materials.glassLit, 0, 5.98, 1.3, 0.28, 0.04, 0.46, false);
 
-  // Rooftop photovoltaic monocrystalline solar panel tilted 24 degrees toward the sun
+  // 5. Rooftop photovoltaic monocrystalline solar panel tilted 24 degrees toward the sun
   const solarGroup = new THREE.Group();
   solarGroup.position.set(0, 6.55, 0);
   solarGroup.rotation.x = 0.42;
   pole.add(solarGroup);
   addBox(solarGroup, materials.metal, 0, 0, 0, 1.15, 0.04, 0.82);
   addBox(solarGroup, materials.solarPanel || materials.metal, 0, 0.025, 0, 1.1, 0.02, 0.76);
+  addBox(pole, materials.black, 0.12, 4.2, 0, 0.025, 4.2, 0.025);
 
   return { x, z, halfX: 0.34, halfZ: 0.34, height: 6.6 };
+}
+
+function makeNewJerseyBarrier(
+  group: THREE.Group,
+  materials: GameMaterials,
+  x: number,
+  y: number,
+  z: number,
+  yaw = 0,
+  length = 3.2,
+) {
+  const root = new THREE.Group();
+  root.position.set(x, y, z);
+  root.rotation.y = yaw;
+  group.add(root);
+
+  const concrete = materials.concrete;
+  const hazard = materials.hazardBarrier || materials.karotaYellow || materials.clay;
+
+  // 1. Wide flared concrete base (standard Jersey profile redirects vehicle tires)
+  addBox(root, concrete, 0, 0.12, 0, length, 0.24, 0.58);
+  // 2. Sloped chamfer transition
+  addBox(root, concrete, 0, 0.34, 0, length, 0.22, 0.44);
+  // 3. Vertical stem with high-visibility hazard chevrons
+  addBox(root, hazard, 0, 0.65, 0, length, 0.42, 0.28);
+  // 4. Rounded/beveled top cap
+  addBox(root, concrete, 0, 0.88, 0, length, 0.08, 0.24);
+  // 5. Interlocking connection lugs at both ends
+  for (const end of [-length / 2 + 0.1, length / 2 - 0.1]) {
+    addCylinder(root, materials.metal, end, 0.45, 0, 0.035, 0.035, 0.55);
+  }
+}
+
+function addHighwayDirectionalSign(
+  root: THREE.Group,
+  materials: GameMaterials,
+  colliders: Collider[],
+  x: number,
+  z: number,
+  dest1: string,
+  dest2: string,
+  yaw: number,
+) {
+  const pole = new THREE.Group();
+  pole.position.set(x, 0, z);
+  pole.rotation.y = yaw;
+  root.add(pole);
+
+  const metal = materials.metal;
+  // Dual structural steel posts
+  for (const px of [-1.8, 1.8]) {
+    addCylinder(pole, metal, px, 2.8, 0, 0.08, 0.08, 5.6);
+    addCylinder(pole, metal, px, 0.15, 0, 0.2, 0.22, 0.3);
+  }
+  // Overhead horizontal truss beams
+  addBox(pole, metal, 0, 5.3, 0, 4.2, 0.14, 0.14);
+  addBox(pole, metal, 0, 4.0, 0, 4.2, 0.14, 0.14);
+
+  // Large Federal highway directional sign
+  const signText = `⬆ ${dest1}\n➔ ${dest2}`;
+  const signMat = makeSignMaterial(signText, "#165b32");
+  addBox(pole, signMat, 0, 4.65, 0.09, 3.9, 1.45, 0.08);
+
+  colliders.push({ x, z, halfX: 2.1, halfZ: 0.25, height: 5.6 });
 }
 
 function addStreetSign(root: THREE.Group, colliders: Collider[], x: number, z: number, label: string, yaw: number) {
@@ -442,6 +512,19 @@ function addMarketPlaza(
     root.add(stall.root);
     colliders.push(...stall.colliders.map((item) => ({ ...item, x: item.x + x, z: item.z + z })));
   }
+
+  // Roadside kiosks flanking the market plaza (Mai Shayi Tea & POS Agent Kiosks)
+  const maiShayi = createRoadsideKiosk(materials, 0);
+  maiShayi.root.position.set(centerX - 8.2, 0.08, centerZ);
+  maiShayi.root.rotation.y = Math.PI / 2;
+  root.add(maiShayi.root);
+  colliders.push(...maiShayi.colliders.map((item) => ({ ...item, x: item.x + centerX - 8.2, z: item.z + centerZ })));
+
+  const posKiosk = createRoadsideKiosk(materials, 1);
+  posKiosk.root.position.set(centerX + 8.2, 0.08, centerZ);
+  posKiosk.root.rotation.y = -Math.PI / 2;
+  root.add(posKiosk.root);
+  colliders.push(...posKiosk.colliders.map((item) => ({ ...item, x: item.x + centerX + 8.2, z: item.z + centerZ })));
 
   addBox(root, materials.wood, centerX, 0.62, centerZ, 3.4, 1.1, 0.95);
   addBox(root, materials.cloth, centerX, 1.25, centerZ, 3.65, 0.15, 1.2);
@@ -805,13 +888,14 @@ function addNorthernExpansionGateway(root: THREE.Group, materials: GameMaterials
     addBox(group, materials.clay, bx, 8.4, 0.45, 0.35, 0.35, 0.2);
   }
 
-  const barrierMat = materials.karotaYellow || materials.clay;
-  // Position safety barriers on the sidewalk sides to allow clear roadway access to Kawu Industrial Park
+  // Position authentic New Jersey highway barriers on the sidewalk sides
   for (const bx of [-10.5, 10.5]) {
-    addBox(group, barrierMat, bx, 0.5, 3.0, 3.2, 0.9, 0.3);
-    addBox(group, materials.black, bx, 0.5, 3.16, 2.8, 0.3, 0.05);
+    makeNewJerseyBarrier(group, materials, bx, 0, 3.0, 0, 3.2);
     colliders.push({ x: bx, z: gateZ + 3.0, halfX: 1.6, halfZ: 0.3, height: 1.1 });
   }
+
+  // Federal highway directional sign before the gateway
+  addHighwayDirectionalSign(root, materials, colliders, -13.5, gateZ + 16, "KAWU LOGISTICS & FREIGHT TERMINAL", "CHAD BASIN ARTERY / BYPASS", 0);
 }
 
 function addAutoTuningWorkshop(root: THREE.Group, materials: GameMaterials, colliders: Collider[]) {
@@ -918,6 +1002,7 @@ export type WorldResult = {
   colliders: Collider[];
   bounds: number;
   gateSlots: THREE.Group[];
+  skyMesh?: THREE.Mesh;
 };
 
 export function createWorld(materials: GameMaterials): WorldResult {
@@ -927,10 +1012,12 @@ export function createWorld(materials: GameMaterials): WorldResult {
   const bounds = WORLD_BOUNDS;
   const cityExtent = WORLD_EXTENT;
 
+  const skyMat = new THREE.MeshBasicMaterial({ map: makeSkyTexture(), side: THREE.BackSide, fog: false });
   const sky = new THREE.Mesh(
     new THREE.SphereGeometry(260, 32, 20),
-    new THREE.MeshBasicMaterial({ map: makeSkyTexture(), side: THREE.BackSide, fog: false }),
+    skyMat,
   );
+  sky.name = "SkyDomeMesh";
   sky.frustumCulled = false;
   root.add(sky);
 
@@ -1185,6 +1272,48 @@ export function createWorld(materials: GameMaterials): WorldResult {
   makeBusStopShelter(root, materials, colliders, 65.2, -22, Math.PI / 2, "AIRPORT ROAD · CENTRAL BUS & KEKE STOP");
   makeBusStopShelter(root, materials, colliders, -46, 18.8, 0, "SABON GARI KASUWA · TRICYCLE TERMINAL");
 
+  // Phase 6.7: Reinforced Concrete Storm Drainage Culvert Slabs (Gadar Magudana)
+  // Precast slabs bridging over roadside open drainage channels at bus stands and market entrances
+  const culvertSlabs = [
+    { x: 14, z: -10.35, w: 3.8, d: 0.62 }, // Murtala Mohammed Way Bus Stand
+    { x: 63.65, z: -22, w: 0.62, d: 3.8 }, // Airport Road Central Bus Stop
+    { x: -46, z: 17.35, w: 3.8, d: 0.62 }, // Sabon Gari Kasuwa Tricycle Terminal
+    { x: -31, z: 19.35, w: 4.2, d: 0.62 }, // Sabon Gari Kasuwa South Gateway
+    { x: -31, z: 42.65, w: 4.2, d: 0.62 }, // Sabon Gari Kasuwa North Gateway
+  ];
+  culvertSlabs.forEach((slab) => {
+    const box = addBox(root, materials.concrete, slab.x, 0.088, slab.z, slab.w, 0.07, slab.d, false);
+    box.userData.noMerge = true;
+  });
+
+  // Phase 6.7: Roadside Standpipe Public Water Points (Famfo / Public Borehole tap points)
+  const waterPoints = [
+    { x: -42.2, z: 27.5 },
+    { x: 34.2, z: -34.0 },
+  ];
+  waterPoints.forEach((wp) => {
+    const pt = new THREE.Group();
+    pt.position.set(wp.x, 0, wp.z);
+    root.add(pt);
+    // Blue community water drum
+    addCylinder(pt, materials.bankBlue || materials.metal, 0, 0.52, 0, 0.38, 0.38, 1.04);
+    // Steel vertical standpipe
+    addCylinder(pt, materials.metal, 0.42, 0.48, 0, 0.035, 0.035, 0.96);
+    // Brass bib-cock tap
+    addBox(pt, materials.metal, 0.42, 0.92, 0.08, 0.06, 0.06, 0.12, false);
+    // Concrete splash pad base
+    addBox(pt, materials.concrete, 0.2, 0.04, 0, 1.15, 0.08, 0.85, false);
+    pt.userData.noMerge = true;
+    pt.traverse((c) => { c.userData.noMerge = true; });
+    colliders.push({
+      x: wp.x + 0.2,
+      z: wp.z,
+      halfX: 0.58,
+      halfZ: 0.44,
+      height: 1.15,
+    });
+  });
+
   // Milestone 13: Kano Road Safety, Speed Limit & Warning Regulatory Signs
   addStreetSign(root, colliders, 18, -11.5, "SPEED LIMIT 50 KM/H · KAROTA MONITORED", 0);
   addStreetSign(root, colliders, 64.5, 12, "SPEED LIMIT 50 KM/H · RADAR ACTIVE", Math.PI / 2);
@@ -1237,5 +1366,5 @@ export function createWorld(materials: GameMaterials): WorldResult {
 
   mergeStaticMeshesByCell(root);
 
-  return { root, colliders, bounds, gateSlots };
+  return { root, colliders, bounds, gateSlots, skyMesh: sky };
 }

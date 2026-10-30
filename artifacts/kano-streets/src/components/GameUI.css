@@ -1427,3 +1427,225 @@
   color: #eeddbb;
   margin: 0 0 10px;
 }
+
+/* ==========================================================================
+   MILESTONE 16: FIRST-TIME PLAYER ONBOARDING TOAST
+   ========================================================================== */
+
+.ks-onboarding-toast {
+  position: absolute;
+  top: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(480px, calc(100vw - 32px));
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 14px 18px;
+  z-index: 1000;
+  pointer-events: auto;
+  animation: ks-fade-in 0.3s ease-out;
+}
+
+.ks-onboarding-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.ks-onboarding-title-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ks-onboarding-title-badge strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fef3c7;
+  letter-spacing: 0.02em;
+}
+
+.ks-onboarding-icon {
+  font-size: 15px;
+}
+
+.ks-onboarding-close-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.ks-onboarding-close-btn:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.ks-onboarding-body {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #cbd5e1;
+  margin: 0 0 12px 0;
+}
+
+.ks-onboarding-body .ks-key {
+  margin: 0 2px;
+}
+
+.ks-onboarding-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.ks-onboarding-action-btn {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.ks-onboarding-primary {
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.6);
+  color: #fef3c7;
+}
+
+.ks-onboarding-primary:hover {
+  background: rgba(245, 158, 11, 0.35);
+  border-color: rgba(245, 158, 11, 0.85);
+  color: #ffffff;
+}
+
+.ks-onboarding-secondary {
+  background: rgba(51, 65, 85, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #e2e8f0;
+}
+
+.ks-onboarding-secondary:hover {
+  background: rgba(71, 85, 105, 0.8);
+  border-color: rgba(148, 163, 184, 0.6);
+  color: #ffffff;
+}
+
+/* ==========================================================================
+   DEVELOPMENT CAMERA & OCCLUSION DIAGNOSTICS OVERLAY
+   ========================================================================== */
+
+.camera-debug-overlay {
+  position: absolute;
+  top: 76px;
+  right: 18px;
+  width: 320px;
+  max-width: calc(100vw - 36px);
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(16, 185, 129, 0.5);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6), 0 0 12px rgba(16, 185, 129, 0.2);
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  z-index: 1200;
+  pointer-events: auto;
+  overflow: hidden;
+  animation: ks-fade-in 0.2s ease-out;
+}
+
+.camera-debug-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(16, 185, 129, 0.18);
+  border-bottom: 1px solid rgba(16, 185, 129, 0.35);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #6ee7b7;
+}
+
+.camera-debug-close {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.camera-debug-close:hover {
+  color: #f8fafc;
+}
+
+.camera-debug-body {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.camera-debug-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.camera-debug-label {
+  color: #94a3b8;
+  font-size: 10.5px;
+}
+
+.camera-debug-val {
+  color: #f8fafc;
+  font-weight: 600;
+  text-align: right;
+  word-break: break-all;
+}
+
+.camera-debug-val.highlight {
+  color: #fde047;
+}
+
+.camera-debug-val.badge {
+  background: rgba(56, 189, 248, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+
+.camera-debug-val.warn {
+  color: #ef4444;
+  font-weight: 700;
+}
+
+.camera-debug-val.ok {
+  color: #22c55e;
+  font-weight: 700;
+}
+
+.camera-debug-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 4px 0;
+}

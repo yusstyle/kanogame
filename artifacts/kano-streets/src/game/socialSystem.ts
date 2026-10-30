@@ -71,6 +71,33 @@ export class SocialSystem {
         affection: 25,
         description: "Vigilant police patrol sergeant dedicated to keeping Kano streets safe and curbing reckless speeding.",
       },
+      {
+        id: "garba",
+        name: "Master Garba",
+        profession: "Chief Mechanic & Fleet Fabricator",
+        district: "KAWU INDUSTRIAL · REPAIR BAY",
+        stage: "acquaintance",
+        affection: 35,
+        description: "Master mechanic and proprietor of Arewa Heavy Vehicle Repairs. Expert on diesel engines, transmissions, and heavy haulage maintenance.",
+      },
+      {
+        id: "habiba",
+        name: "Habiba Mai Shayi",
+        profession: "Tea Master & Proprietress",
+        district: "KAWU INDUSTRIAL · CANTEEN",
+        stage: "acquaintance",
+        affection: 40,
+        description: "Beloved tea master whose steaming cloves, ginger brew, and fried egg toast keep the workers and drivers of Kano powered.",
+      },
+      {
+        id: "kabiru",
+        name: "Malam Kabiru Dan-Kano",
+        profession: "Clan Elder & Ancestral Custodian",
+        district: "DALA · ANCESTRAL ZAURE",
+        stage: "acquaintance",
+        affection: 30,
+        description: "Dan-Kano family elder and keeper of the 1968 Sahel Vault Key. Wise, honorable, and steadfast in northern heritage.",
+      },
     ];
 
     list.forEach((c) => this.contacts.set(c.id, c));
@@ -107,6 +134,15 @@ export class SocialSystem {
     }
     if (id === "danladi" && c.affection >= 20) {
       choices.push({ id: "ask_security_tips", label: "Ask for highway security tips & traffic regulations" });
+    }
+    if (id === "garba" && c.affection >= 20) {
+      choices.push({ id: "inspect_engine", label: "Ask Garba for fleet maintenance & overhaul advice" });
+    }
+    if (id === "habiba" && c.affection >= 20) {
+      choices.push({ id: "ginger_recipe", label: "Compliment Habiba's spiced ginger and clove tea brew" });
+    }
+    if (id === "kabiru" && c.affection >= 20) {
+      choices.push({ id: "sahel_history", label: "Discuss Dan-Kano family legacy & 1968 Sahel Vault" });
     }
 
     // Hangout choices
@@ -157,14 +193,36 @@ export class SocialSystem {
 
     switch (choiceId) {
       case "greet": {
-        c.affection = Math.min(100, c.affection + 5);
+        c.dailyGreetingCount = (c.dailyGreetingCount ?? 0) + 1;
+        let delta = 0;
+        if (c.dailyGreetingCount === 1) {
+          delta = 5;
+        } else if (c.dailyGreetingCount === 2) {
+          delta = 3;
+        } else if (c.dailyGreetingCount === 3) {
+          delta = 2;
+        } else {
+          // Diminishing returns anti-exploit cap: max 3 greetings per cycle
+          delta = 0;
+        }
+
+        if (delta === 0) {
+          return {
+            speaker: c.name,
+            response: `${firstName}: 'Good to see you again! We already caught up plenty today. Let us talk about other things.'`,
+            affectionDelta: 0,
+            statusMessage: `${firstName} acknowledged your greeting. (Daily greeting limit reached — no extra affection gained).`,
+          };
+        }
+
+        c.affection = Math.min(100, c.affection + delta);
         if (c.stage === "stranger" && c.affection >= 20) {
           c.stage = "acquaintance";
         }
         return {
           speaker: c.name,
           response: `${firstName}: 'Sannu! Hello! It is wonderful seeing you around Kano today.'`,
-          affectionDelta: 5,
+          affectionDelta: delta,
           statusMessage: `Friendly conversation with ${firstName}. Relationship: ${c.stage.toUpperCase()}`,
         };
       }
@@ -248,6 +306,39 @@ export class SocialSystem {
           response: `${firstName}: 'Always verify your vehicle particulars and drive cautiously near junctions. Our goal is ensuring every resident returns home safely.'`,
           affectionDelta: 12,
           statusMessage: `Learned highway safety and traffic rules from Sgt. Danladi. Affection +12!`,
+        };
+      }
+
+      case "inspect_engine": {
+        c.affection = Math.min(100, c.affection + 12);
+        if (c.stage === "acquaintance" && c.affection >= 50) c.stage = "friend";
+        return {
+          speaker: c.name,
+          response: `${firstName}: 'Regular oil checks and proper gear shifting will make that gearbox last a million kilometers in Kano heat.'`,
+          affectionDelta: 12,
+          statusMessage: `Master Garba shared fleet maintenance advice. Affection +12!`,
+        };
+      }
+
+      case "ginger_recipe": {
+        c.affection = Math.min(100, c.affection + 14);
+        if (c.stage === "acquaintance" && c.affection >= 50) c.stage = "friend";
+        return {
+          speaker: c.name,
+          response: `${firstName}: 'The secret is fresh crushed ginger root, whole cloves, and boiling it slow with local wild honey. Keeps the spirit strong!'`,
+          affectionDelta: 14,
+          statusMessage: `Habiba shared her secret spiced tea brewing recipe. Affection +14!`,
+        };
+      }
+
+      case "sahel_history": {
+        c.affection = Math.min(100, c.affection + 15);
+        if (c.stage === "acquaintance" && c.affection >= 50) c.stage = "friend";
+        return {
+          speaker: c.name,
+          response: `${firstName}: 'In 1968, the groundnut pyramids touched the sky. Our compound preserved the deeds with pride and vigilance.'`,
+          affectionDelta: 15,
+          statusMessage: `Discussed Dan-Kano ancestral heritage with Malam Kabiru. Affection +15!`,
         };
       }
 

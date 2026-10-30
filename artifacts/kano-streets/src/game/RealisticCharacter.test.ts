@@ -1426,11 +1426,11 @@ test("Milestone 7: Environmental & Harmattan Weather System", () => {
   assert.equal((scene.fog as THREE.Fog).far, WEATHER_CONFIGS.harmattan.fogFar);
   assert.ok(sun.intensity > 1.5, "Sun intensity matches Harmattan daytime formula");
 
-  // Test interior mode
+  // Test interior mode (crystal-clear visibility upgrade: fog pushed to 140m-350m, soft window daylight 0.75)
   weather.applyToScene(scene, sun, hemi, 12, true);
-  assert.equal((scene.fog as THREE.Fog).near, 15);
-  assert.equal((scene.fog as THREE.Fog).far, 85);
-  assert.equal(sun.intensity, 0.2);
+  assert.equal((scene.fog as THREE.Fog).near, 140);
+  assert.equal((scene.fog as THREE.Fog).far, 350);
+  assert.equal(sun.intensity, 0.75);
 
   // Test particle drift update
   const initialPos = new THREE.Vector3(0, 0, 0);

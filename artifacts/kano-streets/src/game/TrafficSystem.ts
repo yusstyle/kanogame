@@ -189,6 +189,23 @@ export class TrafficSystem {
   private lastCitationTime = -999;
   private citationCooldown = 10.0;
   public onCitation?: (fine: number, reason: string) => void;
+  private sedanGLTF: THREE.Group | null = null;
+
+  public upgradeWithSedanGLTF(sedanGLTF: THREE.Group) {
+    this.sedanGLTF = sedanGLTF;
+    for (const v of this.vehicles) {
+      if (v.type === "sedan" && "attachGLTFBody" in v.model) {
+        const variant = CAR_COLOR_VARIANTS[this.vehicles.indexOf(v) % CAR_COLOR_VARIANTS.length];
+        (v.model as CarModel).attachGLTFBody(sedanGLTF, variant?.body || "#b0b5b8");
+      }
+    }
+    for (const pv of this.parkedVehicles) {
+      if (pv.type === "sedan" && "attachGLTFBody" in pv.model) {
+        const bodyColor = pv.id === "parked_sedan_bompai" ? "#d4d8db" : "#2a4d7d";
+        (pv.model as CarModel).attachGLTFBody(sedanGLTF, bodyColor);
+      }
+    }
+  }
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -530,9 +547,14 @@ export class TrafficSystem {
         case "keke":
           model = createKekeModel(this.materials, p.plate, p.stripe);
           break;
-        case "sedan":
-          model = createCarModel(this.materials, p.body!, p.accent!, p.plate);
+        case "sedan": {
+          const car = createCarModel(this.materials, p.body!, p.accent!, p.plate);
+          if (this.sedanGLTF) {
+            car.attachGLTFBody(this.sedanGLTF, p.body);
+          }
+          model = car;
           break;
+        }
         case "delivery_van":
           model = createDeliveryVanModel(this.materials, p.body!, p.accent!, p.plate);
           break;
@@ -685,7 +707,11 @@ export class TrafficSystem {
       switch (type) {
         case "sedan": {
           const variant = CAR_COLOR_VARIANTS[this.vehicles.length % CAR_COLOR_VARIANTS.length];
-          model = createCarModel(this.materials, variant.body, variant.accent, variant.plate);
+          const car = createCarModel(this.materials, variant.body, variant.accent, variant.plate);
+          if (this.sedanGLTF) {
+            car.attachGLTFBody(this.sedanGLTF, variant.body);
+          }
+          model = car;
           break;
         }
         case "keke": {
@@ -880,26 +906,32 @@ export class TrafficSystem {
     const forward = new THREE.Vector3(Math.sin(v.yaw), 0, Math.cos(v.yaw));
     const right = new THREE.Vector3(Math.cos(v.yaw), 0, -Math.sin(v.yaw));
 
-    // A. Intersection Signal & Clearance Yielding with Smooth Deceleration
+    // A. Intersection Signal & Clearance Yielding with Smooth Deceleration & Anti-Gridlock
     if (v.targetWaypoint.isIntersection) {
       const distToIntersection = Math.sqrt(distToTargetSq);
       if (distToIntersection < 11.5) {
-        const isGreen = v.targetWaypoint.axis === "x" ? isXGreen : isZGreen;
-        const isYellow = v.targetWaypoint.axis === "x" ? isXYellow : isZYellow;
+        // Anti-Gridlock: If vehicle has already crossed past the stop line into the junction (distToIntersection < 5.0),
+        // prioritize clearing the intersection box smoothly to prevent deadlocks or blocking crossing lanes.
+        if (distToIntersection < 5.0) {
+          desiredSpeed = Math.max(desiredSpeed, v.cruisingSpeed * 0.75);
+        } else {
+          const isGreen = v.targetWaypoint.axis === "x" ? isXGreen : isZGreen;
+          const isYellow = v.targetWaypoint.axis === "x" ? isXYellow : isZYellow;
 
-        // Check if another vehicle is currently crossing inside this intersection box
-        const isIntersectionOccupied = this.vehicles.some((other) => {
-          if (other.id === v.id) return false;
-          const otherDist = Math.hypot(other.position.x - v.targetWaypoint.x, other.position.z - v.targetWaypoint.z);
-          return otherDist < 6.0;
-        });
+          // Check if another vehicle is currently crossing inside this intersection box
+          const isIntersectionOccupied = this.vehicles.some((other) => {
+            if (other.id === v.id) return false;
+            const otherDist = Math.hypot(other.position.x - v.targetWaypoint.x, other.position.z - v.targetWaypoint.z);
+            return otherDist < 6.0;
+          });
 
-        if (!isGreen || isYellow || isIntersectionOccupied) {
-          const stopLineDist = Math.max(0, distToIntersection - 5.5);
-          if (stopLineDist < 1.2) {
-            desiredSpeed = 0; // Stopped at stop line
-          } else {
-            desiredSpeed = Math.min(desiredSpeed, v.cruisingSpeed * (stopLineDist / 6.0));
+          if (!isGreen || isYellow || isIntersectionOccupied) {
+            const stopLineDist = Math.max(0, distToIntersection - 5.5);
+            if (stopLineDist < 1.2) {
+              desiredSpeed = 0; // Stopped at stop line
+            } else {
+              desiredSpeed = Math.min(desiredSpeed, v.cruisingSpeed * (stopLineDist / 6.0));
+            }
           }
         }
       }
@@ -952,23 +984,39 @@ export class TrafficSystem {
       const lateralDist = Math.abs(rel.dot(right));
 
       if (forwardDist > 0 && forwardDist < cfg.followingDistance && lateralDist < cfg.lateralBuffer) {
-        const minGap = Math.max(4.0, cfg.collisionRadius + other.collisionRadius * 0.6);
+        const otherCfg = VEHICLE_CONFIGS[other.type];
+        const minGap = Math.max(4.6, (cfg.length + (otherCfg?.length || 4.2)) * 0.5 + 2.2);
         if (forwardDist < minGap) {
           desiredSpeed = 0; // Stopped queue spacing
         } else {
           const ramp = THREE.MathUtils.clamp((forwardDist - minGap) / (cfg.followingDistance - minGap), 0, 1);
-          const followSpeed = other.speed > 0.5 ? Math.max(other.speed * 0.92, v.cruisingSpeed * ramp) : v.cruisingSpeed * ramp * 0.7;
+          const followSpeed = other.speed > 0.5 ? Math.max(other.speed * 0.95, v.cruisingSpeed * ramp) : v.cruisingSpeed * ramp * 0.7;
           desiredSpeed = Math.min(desiredSpeed, followSpeed);
         }
       }
     }
 
-    // E. Static obstacle collision & Anti-Gridlock recovery
+    // E. Forward Lookahead Obstacle & Parked Vehicle Detection
+    const forwardProbeDist = Math.max(3.2, v.speed * 0.75);
+    const probeX = v.position.x + Math.sin(v.yaw) * forwardProbeDist;
+    const probeZ = v.position.z + Math.cos(v.yaw) * forwardProbeDist;
+    const forwardColliders = this.colliderIndex.query(probeX, probeZ, cfg.collisionRadius * 0.85);
+
+    if (forwardColliders.length > 0) {
+      const safeGap = forwardProbeDist - cfg.collisionRadius;
+      if (safeGap < 1.0) {
+        desiredSpeed = 0;
+      } else {
+        desiredSpeed = Math.min(desiredSpeed, v.cruisingSpeed * (safeGap / forwardProbeDist) * 0.5);
+      }
+    }
+
+    // F. Static obstacle collision & Anti-Gridlock recovery
     const isColliding = this.colliderIndex.query(v.position.x, v.position.z, cfg.collisionRadius).length > 0;
 
     if (v.isRecovering) {
       v.recoveryTimer -= dt;
-      desiredSpeed = -2.5; // Reverse gear
+      desiredSpeed = -2.8; // Reverse gear
       v.yaw += (v.recoveryAttempts % 2 === 0 ? 0.45 : -0.45) * dt;
       if (v.recoveryTimer <= 0) {
         v.isRecovering = false;
@@ -976,9 +1024,9 @@ export class TrafficSystem {
       }
     } else if (isColliding || (desiredSpeed > 1.0 && Math.abs(v.speed) < 0.25)) {
       v.stuckTimer += dt;
-      if (v.stuckTimer > 2.6) {
+      if (v.stuckTimer > 2.4) {
         v.recoveryAttempts += 1;
-        if (v.recoveryAttempts >= 2 || v.stuckTimer > 7.0) {
+        if (v.recoveryAttempts >= 2 || v.stuckTimer > 6.5) {
           // Relocate stuck vehicle to unoccupied forward waypoint far from player
           this.relocateStuckVehicle(v, playerPosition);
         } else {
@@ -987,7 +1035,7 @@ export class TrafficSystem {
         }
       }
     } else {
-      v.stuckTimer = Math.max(0, v.stuckTimer - dt * 0.5);
+      v.stuckTimer = Math.max(0, v.stuckTimer - dt * 0.6);
       if (v.speed > 2.0) {
         v.recoveryAttempts = 0;
       }

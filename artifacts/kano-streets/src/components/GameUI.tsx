@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import './GameUI.css';
 import TouchControls from './TouchControls';
-import type { ActiveMissionInfo, CareerPathChoice, SocialContact, StorySnapshotInfo, VehicleType, FurnitureInstance, PropertyId, HomeNavInfo, NeedsState, FreelanceSnapshotInfo, PlayerHomeEntry, BusinessId, CurrencyType, EmpireOverviewSnapshot } from '../game/types';
+import type { ActiveMissionInfo, CareerPathChoice, SocialContact, StorySnapshotInfo, VehicleType, FurnitureInstance, PropertyId, HomeNavInfo, NeedsState, FreelanceSnapshotInfo, PlayerHomeEntry, BusinessId, CurrencyType, EmpireOverviewSnapshot, CameraMode, CameraDebugInfo } from '../game/types';
 import { KANO_LANDMARKS, getGpsLandmark, computeGpsGuidance } from '../game/landmarks';
 import { CAREER_MISSIONS_CATALOG } from '../game/missionSystem';
 import CityMapModal from './CityMapModal';
 import FurnitureShopModal from './FurnitureShopModal';
 import FurnishingOverlay from './FurnishingOverlay';
 import EmpireModal from './EmpireModal';
+import SmartphoneModal from './SmartphoneModal';
+import AccountModal from './AccountModal';
+import { authService, type UserProfile } from '../game/authService';
 
 export type Screen = 'menu' | 'playing' | 'paused';
 export type Mode = 'on-foot' | 'driving';
@@ -51,10 +54,18 @@ export interface GameUIProps {
   playerHomes?: PlayerHomeEntry[];
   needs?: NeedsState;
   freelanceInfo?: FreelanceSnapshotInfo;
-  cameraMode?: "third-person" | "first-person";
+  cameraMode?: CameraMode;
+  cameraDebug?: CameraDebugInfo;
   premiumCoins?: number;
   isEmpireModalOpen?: boolean;
+  isSmartphoneOpen?: boolean;
+  onToggleSmartphone?: (force?: boolean) => unknown;
+  onCaptureScreenshot?: () => string | null;
+  onInteractSocial?: (contactId: string, choiceId: string) => any;
   empireOverview?: EmpireOverviewSnapshot;
+  vehicleCondition?: number;
+  hasSeenOnboarding?: boolean;
+  onDismissOnboarding?: () => void;
   graphicsQuality: GraphicsQuality;
   onStart: () => void;
   onPause: () => void;
@@ -69,6 +80,7 @@ export interface GameUIProps {
   onPurchaseProperty?: (propertyId: PropertyId) => { success: boolean; message: string };
   onToggleEmpireModal?: (force?: boolean) => unknown;
   onUpgradeBusiness?: (id: BusinessId) => { success: boolean; cost?: number; newLevel?: number; message: string };
+  onMaintainBusiness?: (id: BusinessId) => { success: boolean; cost?: number; message: string; newCondition?: number };
   onRenovateProperty?: (id: PropertyId, useCoins?: boolean) => { success: boolean; costCash: number; costCoins: number; newLevel: number; message: string };
   onPurchaseVehicle?: (vehicleId: string, currency?: CurrencyType) => { success: boolean; message: string; costCash?: number; costCoins?: number };
   onPurchaseVehicleSkin?: (skinId: string, vehicleId: string, currency?: CurrencyType) => { success: boolean; message: string; costCash?: number; costCoins?: number };
@@ -132,6 +144,8 @@ export default function GameUI({
   cash,
   trafficFine,
   hasApartmentRental,
+  hasSeenOnboarding,
+  onDismissOnboarding,
   activeInterior,
   timeString,
   gameScore,
@@ -160,8 +174,14 @@ export default function GameUI({
   needs,
   freelanceInfo: _freelanceInfo,
   cameraMode = "third-person",
+  cameraDebug,
   premiumCoins = 250,
   isEmpireModalOpen,
+  isSmartphoneOpen,
+  onToggleSmartphone,
+  onCaptureScreenshot,
+  onInteractSocial,
+  vehicleCondition,
   empireOverview,
   graphicsQuality,
   onStart,
@@ -177,6 +197,7 @@ export default function GameUI({
   onPurchaseProperty,
   onToggleEmpireModal,
   onUpgradeBusiness,
+  onMaintainBusiness,
   onRenovateProperty,
   onPurchaseVehicle,
   onPurchaseVehicleSkin,
@@ -207,6 +228,41 @@ export default function GameUI({
   const [showDirectory, setShowDirectory] = useState(false);
   const [showMissions, setShowMissions] = useState(false);
   const [showEmpire, setShowEmpire] = useState(false);
+  const [showSmartphone, setShowSmartphone] = useState(false);
+
+  useEffect(() => {
+    if (typeof isSmartphoneOpen === "boolean") {
+      setShowSmartphone(isSmartphoneOpen);
+    }
+  }, [isSmartphoneOpen]);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(authService.getState().user);
+  const [dismissedLocally, setDismissedLocally] = useState(false);
+  const [showCameraDebug, setShowCameraDebug] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "F9") {
+        setShowCameraDebug((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const showOnboardingToast = !hasSeenOnboarding && !dismissedLocally;
+
+  const handleDismissOnboarding = useCallback(() => {
+    setDismissedLocally(true);
+    onDismissOnboarding?.();
+  }, [onDismissOnboarding]);
+
+  useEffect(() => {
+    const unsub = authService.subscribe((s) => {
+      setCurrentUser(s.user);
+    });
+    return unsub;
+  }, []);
 
   const isInsideHome = activeInterior === 'apartment' || activeInterior === 'penthouse' || activeInterior === 'house';
   const currentPropertyId: PropertyId = activeInterior === 'apartment' ? 'unit-2b' : activeInterior === 'penthouse' ? 'bompai-penthouse' : 'albaraka-villa';
@@ -228,15 +284,25 @@ export default function GameUI({
       } else if (e.key === 'k' || e.key === 'K') {
         if (onToggleEmpireModal) onToggleEmpireModal();
         else setShowEmpire((prev) => !prev);
+      } else if (e.key === 'p' || e.key === 'P') {
+        if (onToggleSmartphone) onToggleSmartphone();
+        else setShowSmartphone((prev) => !prev);
       } else if (e.key === 'n' || e.key === 'N') {
         onCycleWeather?.();
       } else if (e.key === 'u' || e.key === 'U') {
         onToggleAudioMute?.();
+      } else if (e.key === 'o' || e.key === 'O') {
+        setShowAccountModal((prev) => !prev);
+      } else if (e.key === 'Escape' && (showSmartphone || isSmartphoneOpen)) {
+        if (onToggleSmartphone) onToggleSmartphone(false);
+        else setShowSmartphone(false);
+      } else if (e.key === 'Escape' && showOnboardingToast) {
+        handleDismissOnboarding();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [screen, onCycleWeather, onToggleAudioMute, onToggleEmpireModal, gpsTarget, onFindMyHome, onSetGPSTarget]);
+  }, [screen, onCycleWeather, onToggleAudioMute, onToggleEmpireModal, onToggleSmartphone, showSmartphone, isSmartphoneOpen, gpsTarget, onFindMyHome, onSetGPSTarget, showOnboardingToast, handleDismissOnboarding]);
 
   if (screen === 'menu') {
     return (
@@ -246,7 +312,29 @@ export default function GameUI({
             <BrandMark />
             <span>KANO / FIELD NOTES</span>
           </div>
-          <span className="ks-build-tag"><i /> OPEN WORLD PROTOTYPE</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <button
+              className="ks-menu-account-btn"
+              onClick={() => setShowAccountModal(true)}
+              style={{
+                background: "rgba(15, 23, 42, 0.8)",
+                border: "1px solid rgba(217, 119, 6, 0.35)",
+                color: "#f8fafc",
+                borderRadius: "6px",
+                padding: "0.35rem 0.75rem",
+                fontSize: "0.78rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.45rem",
+              }}
+            >
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: currentUser ? "#10b981" : "#fbbf24" }} />
+              <span>{currentUser ? currentUser.displayName : "Guest (Sign In)"}</span>
+            </button>
+            <span className="ks-build-tag"><i /> OPEN WORLD PROTOTYPE</span>
+          </div>
         </div>
 
         <main className="ks-menu-content">
@@ -280,6 +368,7 @@ export default function GameUI({
           <span>AN ORIGINAL NEIGHBORHOOD, INSPIRED BY KANO</span>
           <span className="ks-prototype-note">World, car &amp; character are original procedural prototype geometry — not photorealistic scans or purchased models.</span>
         </footer>
+        <AccountModal isOpen={showAccountModal} onClose={() => setShowAccountModal(false)} />
       </div>
     );
   }
@@ -352,11 +441,25 @@ export default function GameUI({
             <button
               className="ks-hud-directory-btn ks-hud-camera-btn"
               onClick={onToggleCameraMode}
-              title={`Toggle First/Third Person Camera [V] (Current: ${cameraMode === "first-person" ? "1st Person" : "3rd Person"})`}
+              title={`Toggle Camera Perspective [V] (Current: ${cameraMode === "first-person" ? "1st Person" : cameraMode === "road-focused" ? "Road-Focused" : "3rd Person"})`}
               aria-label="Toggle Camera Perspective"
             >
               <Key>V</Key>
-              <span>{cameraMode === "first-person" ? "👁️ 1ST PERS" : "🎥 3RD PERS"}</span>
+              <span>{cameraMode === "first-person" ? "👁️ 1ST PERS" : cameraMode === "road-focused" ? "🛣️ ROAD VIEW" : "🎥 3RD PERS"}</span>
+            </button>
+            <button
+              className="ks-hud-directory-btn ks-hud-debug-btn"
+              onClick={() => setShowCameraDebug((prev) => !prev)}
+              title="Toggle Camera & Occlusion Diagnostics [F9]"
+              aria-label="Toggle Camera Diagnostics"
+              style={{
+                background: showCameraDebug ? "rgba(16, 185, 129, 0.25)" : undefined,
+                borderColor: showCameraDebug ? "#10b981" : undefined,
+                color: showCameraDebug ? "#34d399" : undefined,
+              }}
+            >
+              <Key>F9</Key>
+              <span>{showCameraDebug ? "🔍 DIAG ON" : "🔍 DIAG"}</span>
             </button>
             {canFurnish && (
               <button
@@ -409,6 +512,37 @@ export default function GameUI({
               <Key>K</Key>
               <span>EMPIRE</span>
             </button>
+            <button
+              className={`ks-hud-directory-btn ks-hud-phone-btn ${showSmartphone || isSmartphoneOpen ? "active" : ""}`}
+              onClick={() => {
+                if (onToggleSmartphone) onToggleSmartphone();
+                else setShowSmartphone((prev) => !prev);
+              }}
+              title="Toggle Unified Smartphone Handset Interface [P]"
+              aria-label="Toggle Smartphone Handset"
+              style={{
+                borderColor: showSmartphone || isSmartphoneOpen ? "#f59e0b" : "rgba(245, 158, 11, 0.4)",
+                background: showSmartphone || isSmartphoneOpen ? "rgba(245, 158, 11, 0.25)" : "rgba(15, 23, 42, 0.6)",
+                color: "#fbbf24",
+              }}
+            >
+              <Key>P</Key>
+              <span>📱 PHONE</span>
+            </button>
+            <button
+              className="ks-hud-directory-btn ks-hud-account-btn"
+              onClick={() => setShowAccountModal(true)}
+              title={currentUser ? `Account: ${currentUser.displayName} [O]` : "Player Account / Sign In [O]"}
+              aria-label="Toggle Player Account Modal"
+              style={{
+                borderColor: currentUser ? "rgba(16, 185, 129, 0.5)" : "rgba(217, 119, 6, 0.4)",
+                background: currentUser ? "rgba(16, 185, 129, 0.15)" : "rgba(30, 41, 59, 0.6)",
+                color: currentUser ? "#6ee7b7" : "#e2e8f0",
+              }}
+            >
+              <Key>O</Key>
+              <span>👤 {currentUser ? currentUser.displayName.split(" ")[0] : "ACCOUNT"}</span>
+            </button>
             <span className="ks-pause-hint"><Key>ESC</Key><span>PAUSE</span></span>
           </header>
 
@@ -437,6 +571,49 @@ export default function GameUI({
                 <span style={{ color: needs.hygiene < 20 ? "#f87171" : "#e2e8f0", fontSize: "11px", fontWeight: "bold" }}>{needs.hygiene}%</span>
               </div>
             </div>
+          )}
+
+          {/* First-Time Player Onboarding Toast */}
+          {showOnboardingToast && (
+            <aside className="ks-onboarding-toast" role="region" aria-label="First-time player guide">
+              <div className="ks-onboarding-header">
+                <div className="ks-onboarding-title-badge">
+                  <span className="ks-onboarding-icon" aria-hidden="true">🧭</span>
+                  <strong>Welcome to Kano. Your story starts here.</strong>
+                </div>
+                <button
+                  className="ks-onboarding-close-btn"
+                  onClick={handleDismissOnboarding}
+                  title="Dismiss welcome guide"
+                  aria-label="Close welcome guide"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="ks-onboarding-body">
+                Explore the neighborhood, find a Keke to drive, or open your career missions <Key>J</Key> to start earning money and building your empire.
+              </p>
+              <div className="ks-onboarding-actions">
+                <button
+                  className="ks-onboarding-action-btn ks-onboarding-primary"
+                  onClick={() => {
+                    handleDismissOnboarding();
+                    setShowMissions(true);
+                  }}
+                  title="Open Logistics & Career Missions board"
+                >
+                  <Key>J</Key>
+                  <span>Missions</span>
+                </button>
+                <button
+                  className="ks-onboarding-action-btn ks-onboarding-secondary"
+                  onClick={handleDismissOnboarding}
+                  title="Acknowledge and dismiss guide"
+                >
+                  Got It
+                </button>
+              </div>
+            </aside>
           )}
 
           {storyInfo && (
@@ -623,7 +800,7 @@ export default function GameUI({
               {mode === 'driving' && <span><Key>SPACE</Key> BRAKE</span>}
               {mode === 'on-foot' && <span><Key>E</Key> INTERACT</span>}
               {canFurnish && <span><Key>F</Key> FURNISH HOME</span>}
-              <span><Key>V</Key> CAMERA ({cameraMode === 'first-person' ? '1ST' : '3RD'})</span>
+              <span><Key>V</Key> CAMERA ({cameraMode === 'first-person' ? '1ST' : cameraMode === 'road-focused' ? 'ROAD' : '3RD'})</span>
               <span><Key>R</Key> RESET POSITION</span>
             </div>
             {interactionPrompt && (
@@ -741,12 +918,76 @@ export default function GameUI({
               premiumCoins={premiumCoins}
               empireOverview={empireOverview}
               onUpgradeBusiness={onUpgradeBusiness}
+              onMaintainBusiness={onMaintainBusiness}
               onRenovateProperty={onRenovateProperty}
               onPurchaseVehicle={onPurchaseVehicle}
               onPurchaseVehicleSkin={onPurchaseVehicleSkin}
               onClaimAchievement={onClaimAchievement}
               onClaimSeasonalChallenge={onClaimSeasonalChallenge}
               onClaimSeasonalMilestone={onClaimSeasonalMilestone}
+            />
+          )}
+
+          {(showSmartphone || isSmartphoneOpen) && (
+            <SmartphoneModal
+              onClose={() => {
+                setShowSmartphone(false);
+                onToggleSmartphone?.(false);
+              }}
+              snapshot={{
+                mode,
+                vehicleType,
+                location,
+                speedKmh,
+                interactionPrompt,
+                statusMessage,
+                cash,
+                trafficFine,
+                hasApartmentRental,
+                activeInterior: activeInterior as any,
+                timeString,
+                gameScore,
+                featuredContact,
+                ownedProperties,
+                ownedBusinesses,
+                dailyIncome,
+                dayCount,
+                gpsTarget,
+                activeMission,
+                availableMissionsCount,
+                playerCoords,
+                playerHeading,
+                storyInfo,
+                weatherPreset: _weatherPreset,
+                weatherDisplayName,
+                audioMuted,
+                selectedHomePropertyId,
+                homeNavInfo,
+                playerHomes,
+                needs,
+                cameraMode,
+                cameraDebug,
+                premiumCoins,
+                empireOverview,
+                vehicleCondition,
+              }}
+              onSetGPSTarget={onSetGPSTarget}
+              onAcceptMission={onAcceptMission}
+              onCancelMission={onCancelMission}
+              onOpenDirectory={() => setShowDirectory(true)}
+              onOpenEmpire={() => {
+                if (onToggleEmpireModal) onToggleEmpireModal(true);
+                else setShowEmpire(true);
+              }}
+              onToggleAudioMute={onToggleAudioMute}
+              onCycleWeather={onCycleWeather}
+              onQualityChange={onQualityChange}
+              graphicsQuality={graphicsQuality}
+              onFindMyHome={onFindMyHome}
+              onCaptureScreenshot={onCaptureScreenshot}
+              onInteractSocial={onInteractSocial}
+              onUpgradeBusiness={onUpgradeBusiness}
+              onMaintainBusiness={onMaintainBusiness}
             />
           )}
 
@@ -763,6 +1004,82 @@ export default function GameUI({
               onRotateItem={onRotateFurnitureItem ?? (() => ({ success: false, message: "" }))}
             />
           )}
+          {/* Camera & Occlusion Debug Diagnostic Overlay */}
+          {showCameraDebug && (
+            <div className="camera-debug-overlay">
+              <div className="camera-debug-header">
+                <span>📷 CAMERA & OCCLUSION DIAGNOSTICS</span>
+                <button className="camera-debug-close" onClick={() => setShowCameraDebug(false)}>✕</button>
+              </div>
+              <div className="camera-debug-body">
+                <div className="camera-debug-row">
+                  <span className="camera-debug-label">Camera View:</span>
+                  <span className="camera-debug-val">{cameraDebug?.cameraMode?.toUpperCase() || cameraMode?.toUpperCase() || "THIRD-PERSON"}</span>
+                </div>
+                <div className="camera-debug-row">
+                  <span className="camera-debug-label">Mode / Context:</span>
+                  <span className="camera-debug-val">{mode?.toUpperCase()} {cameraDebug?.isIndoors ? `(INDOORS: ${cameraDebug.activeInterior || "Unit 2B"})` : "(OUTDOORS)"}</span>
+                </div>
+                {cameraDebug?.activeVehicle && (
+                  <div className="camera-debug-row">
+                    <span className="camera-debug-label">Active Vehicle:</span>
+                    <span className="camera-debug-val">{cameraDebug.activeVehicle.toUpperCase()}</span>
+                  </div>
+                )}
+                {cameraDebug?.isSeated && (
+                  <div className="camera-debug-row">
+                    <span className="camera-debug-label">Posture:</span>
+                    <span className="camera-debug-val highlight">SEATED ON CHAIR / BENCH</span>
+                  </div>
+                )}
+                <div className="camera-debug-row">
+                  <span className="camera-debug-label">Camera World Pos:</span>
+                  <span className="camera-debug-val">
+                    {cameraDebug ? `(${cameraDebug.cameraWorldPos.x.toFixed(2)}, ${cameraDebug.cameraWorldPos.y.toFixed(2)}, ${cameraDebug.cameraWorldPos.z.toFixed(2)})` : "—"}
+                  </span>
+                </div>
+                <div className="camera-debug-row">
+                  <span className="camera-debug-label">Look Direction:</span>
+                  <span className="camera-debug-val">
+                    {cameraDebug ? `(${cameraDebug.cameraLookDir.x.toFixed(2)}, ${cameraDebug.cameraLookDir.y.toFixed(2)}, ${cameraDebug.cameraLookDir.z.toFixed(2)})` : "—"}
+                  </span>
+                </div>
+                <div className="camera-debug-row">
+                  <span className="camera-debug-label">Player/Vehicle Pos:</span>
+                  <span className="camera-debug-val">
+                    {cameraDebug ? `(${cameraDebug.playerVehicleWorldPos.x.toFixed(2)}, ${cameraDebug.playerVehicleWorldPos.y.toFixed(2)}, ${cameraDebug.playerVehicleWorldPos.z.toFixed(2)})` : "—"}
+                  </span>
+                </div>
+                <div className="camera-debug-divider" />
+                <div className="camera-debug-row">
+                  <span className="camera-debug-label">Nearest Mesh:</span>
+                  <span className="camera-debug-val highlight">{cameraDebug?.nearestObstructingMesh ? cameraDebug.nearestObstructingMesh.name : "None (Clear View)"}</span>
+                </div>
+                {cameraDebug?.nearestObstructingMesh && (
+                  <>
+                    <div className="camera-debug-row">
+                      <span className="camera-debug-label">Mesh Category:</span>
+                      <span className="camera-debug-val badge">{cameraDebug.nearestObstructingMesh.category}</span>
+                    </div>
+                    <div className="camera-debug-row">
+                      <span className="camera-debug-label">Distance to Box:</span>
+                      <span className="camera-debug-val">{cameraDebug.nearestObstructingMesh.distanceToBox.toFixed(2)} m</span>
+                    </div>
+                    <div className="camera-debug-row">
+                      <span className="camera-debug-label">Distance to Center:</span>
+                      <span className="camera-debug-val">{cameraDebug.nearestObstructingMesh.distanceToCenter.toFixed(2)} m</span>
+                    </div>
+                    <div className="camera-debug-row">
+                      <span className="camera-debug-label">Camera Inside Box:</span>
+                      <span className={`camera-debug-val ${cameraDebug.nearestObstructingMesh.isInsideBoundingBox ? "warn" : "ok"}`}>
+                        {cameraDebug.nearestObstructingMesh.isInsideBoundingBox ? "⚠️ YES (OCCLUDING)" : "✅ NO (CLEAR)"}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -774,6 +1091,26 @@ export default function GameUI({
             <p>The neighborhood will be right where you left it.</p>
             <button className="ks-button ks-button-primary" onClick={onResume}>
               <span>Back to the streets</span><span className="ks-button-arrow" aria-hidden="true">↗</span>
+            </button>
+            <button
+              className="ks-button ks-button-secondary"
+              onClick={() => setShowAccountModal(true)}
+              style={{
+                marginTop: "0.5rem",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                width: "100%",
+                padding: "0.6rem 1rem",
+                background: "rgba(30, 41, 59, 0.7)",
+                border: "1px solid rgba(217, 119, 6, 0.3)",
+                color: "#f8fafc",
+                borderRadius: "6px",
+                cursor: "pointer",
+              }}
+            >
+              <span>{currentUser ? `Account: ${currentUser.displayName}` : "Player Account / Sign In"}</span>
+              <span className="ks-button-arrow" aria-hidden="true">👤</span>
             </button>
             <button className="ks-reset-button" onClick={onReset}>Start over <span aria-hidden="true">↺</span></button>
             <button
@@ -792,6 +1129,7 @@ export default function GameUI({
           </section>
         </div>
       )}
+      <AccountModal isOpen={showAccountModal} onClose={() => setShowAccountModal(false)} />
     </div>
   );
 }

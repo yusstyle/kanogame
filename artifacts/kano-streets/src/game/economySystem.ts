@@ -14,6 +14,9 @@ import type {
   SeasonDefinition,
   VehicleCatalogItem,
   EmpireOverviewSnapshot,
+  BusinessCategory,
+  DailyFinancialStatement,
+  MonthlyFinancialSummary,
 } from "./types";
 import { getFurnitureCatalogItem } from "./furnitureCatalogue";
 import {
@@ -23,6 +26,7 @@ import {
   ACHIEVEMENT_CATALOG,
   ACTIVE_SEASON_CONFIG,
   UPCOMING_SEASON_PREVIEW,
+  BUSINESS_METADATA,
 } from "./empireCatalog";
 
 export interface SaveData {
@@ -35,6 +39,12 @@ export interface SaveData {
   ownedBusinesses: BusinessId[];
   businessLevels?: Record<string, number>;
   propertyRenovations?: Record<string, number>;
+  businessConditions?: Record<string, number>;
+  businessReputations?: Record<string, number>;
+  businessSatisfaction?: Record<string, number>;
+  businessLastMaintainedDay?: Record<string, number>;
+  financialHistory?: DailyFinancialStatement[];
+  businessNotifications?: string[];
   ownedVehicles?: string[];
   unlockedVehicleSkins?: string[];
   achievements?: Record<string, PlayerAchievementState>;
@@ -63,6 +73,12 @@ export interface SaveData {
   };
   completedFreelanceContracts?: string[];
   freelanceEarnings?: number;
+  dailyAtmWithdrawn?: number;
+  lastAtmWithdrawalDay?: number;
+  hasSeenOnboarding?: boolean;
+  npcMemory?: Record<string, import("./consequenceSystem").NpcMemoryRecord>;
+  vehicleConditions?: Record<string, import("./consequenceSystem").VehicleConditionState>;
+  consequencesHistory?: import("./consequenceSystem").ConsequenceRecord[];
   savedAt: number;
 }
 
@@ -82,6 +98,9 @@ export function normalizePropertyId(rawId: unknown): PropertyId | null {
   return null;
 }
 
+export const ATM_DAILY_LIMIT = 40000;
+export const ATM_WITHDRAWAL_AMOUNT = 20000;
+
 export class EconomySystem {
   public properties: Map<PropertyId, PropertyInfo> = new Map();
   public businesses: Map<BusinessId, BusinessInfo> = new Map();
@@ -89,6 +108,13 @@ export class EconomySystem {
   public premiumCoins = 250; // Clearly labelled dev/test balance
   public businessLevels: Map<BusinessId, number> = new Map();
   public propertyRenovations: Map<PropertyId, number> = new Map();
+  // Phase A Business Management Foundations:
+  public businessConditions: Map<BusinessId, number> = new Map();
+  public businessReputations: Map<BusinessId, number> = new Map();
+  public businessSatisfaction: Map<BusinessId, number> = new Map();
+  public businessLastMaintainedDay: Map<BusinessId, number> = new Map();
+  public financialHistory: DailyFinancialStatement[] = [];
+  public businessNotifications: string[] = [];
   public ownedVehicles: Set<string> = new Set(["veh_sedan"]);
   public unlockedVehicleSkins: Set<string> = new Set(["skin_sedan_stock"]);
   public achievements: Map<string, PlayerAchievementState> = new Map();
@@ -110,6 +136,13 @@ export class EconomySystem {
   };
   public dayCount = 1;
   private lastProcessedDay = 1;
+  public dailyAtmWithdrawn = 0;
+  public lastAtmWithdrawalDay = 1;
+  public hasSeenOnboarding = false;
+
+  public dismissOnboarding(): void {
+    this.hasSeenOnboarding = true;
+  }
 
   constructor() {
     this.initProperties();
@@ -172,6 +205,13 @@ export class EconomySystem {
     props.forEach((p) => this.properties.set(p.id, p));
   }
 
+  public addBusinessNotification(message: string): void {
+    this.businessNotifications.unshift(message);
+    if (this.businessNotifications.length > 20) {
+      this.businessNotifications.length = 20;
+    }
+  }
+
   private initBusinesses() {
     const bizList: BusinessInfo[] = [
       {
@@ -188,6 +228,14 @@ export class EconomySystem {
         upgradeCost: 250000,
         levelTitle: "Retail Electronics Stall",
         perks: ["Steady retail foot traffic in Sabon Gari market"],
+        category: "retail",
+        categoryTitle: "Supermarkets & Retail",
+        condition: 100,
+        reputation: 75,
+        customerSatisfaction: 80,
+        employeeCount: 2,
+        inventoryStatus: "Basic Accessory Stock (65% capacity)",
+        maintenanceCost: 15000,
       },
       {
         id: "arewa-suya-franchise",
@@ -203,6 +251,14 @@ export class EconomySystem {
         upgradeCost: 800000,
         levelTitle: "Airport Corridor Grill Terrace",
         perks: ["24/7 highway frontage beside Airport Road"],
+        category: "restaurant",
+        categoryTitle: "Restaurants & Dining",
+        condition: 100,
+        reputation: 80,
+        customerSatisfaction: 84,
+        employeeCount: 4,
+        inventoryStatus: "Daily Fresh Beef Cuts & Yaji Seasonings",
+        maintenanceCost: 25000,
       },
       {
         id: "cyber-hub-station",
@@ -218,6 +274,14 @@ export class EconomySystem {
         upgradeCost: 500000,
         levelTitle: "Dual PS5 Tournament Pod",
         perks: ["Two tournament esports pods leased to competitive local gamers"],
+        category: "entertainment",
+        categoryTitle: "Entertainment & Leisure",
+        condition: 100,
+        reputation: 78,
+        customerSatisfaction: 82,
+        employeeCount: 2,
+        inventoryStatus: "Dual 4K Displays & High-Speed LAN",
+        maintenanceCost: 20000,
       },
       {
         id: "dawanau-grain-depot",
@@ -233,9 +297,31 @@ export class EconomySystem {
         upgradeCost: 3000000,
         levelTitle: "Grain Silo & Bulk Wholesale Depot",
         perks: ["Major wholesale grain terminal at Dawanau market", "High-capacity bulk freight storage"],
+        category: "logistics",
+        categoryTitle: "Transport & Logistics",
+        condition: 100,
+        reputation: 85,
+        customerSatisfaction: 86,
+        employeeCount: 8,
+        inventoryStatus: "Standard Grain Silo (4,000 Sacks Stored)",
+        maintenanceCost: 80000,
       },
     ];
-    bizList.forEach((b) => this.businesses.set(b.id, b));
+    bizList.forEach((b) => {
+      this.businesses.set(b.id, b);
+      if (!this.businessConditions.has(b.id)) {
+        this.businessConditions.set(b.id, 100);
+      }
+      if (!this.businessReputations.has(b.id)) {
+        this.businessReputations.set(b.id, b.reputation ?? 80);
+      }
+      if (!this.businessSatisfaction.has(b.id)) {
+        this.businessSatisfaction.set(b.id, b.customerSatisfaction ?? 85);
+      }
+      if (!this.businessLastMaintainedDay.has(b.id)) {
+        this.businessLastMaintainedDay.set(b.id, 1);
+      }
+    });
   }
 
   private initAchievements() {
@@ -256,13 +342,33 @@ export class EconomySystem {
       const tiers = BUSINESS_TIERS[b.id];
       const tier = tiers?.find((t) => t.level === level) ?? tiers?.[0];
       const nextTier = tiers?.find((t) => t.level === level + 1);
+      const meta = BUSINESS_METADATA[b.id];
+
       b.level = level;
       b.maxLevel = 3;
       b.levelTitle = tier?.title ?? "Enterprise";
-      b.dailyRevenue = tier?.dailyRevenue ?? b.dailyRevenue;
-      b.dailyCost = tier?.dailyOperatingCost ?? b.dailyCost;
+      b.category = meta?.category ?? "retail";
+      b.categoryTitle = meta?.categoryTitle ?? "Commerce";
       b.upgradeCost = nextTier?.upgradeCost ?? 0;
       b.perks = tier?.perks ?? [];
+
+      const cond = this.businessConditions.get(b.id) ?? 100;
+      b.condition = cond;
+      b.reputation = this.businessReputations.get(b.id) ?? (tier?.baseReputation ?? 80);
+      b.customerSatisfaction = this.businessSatisfaction.get(b.id) ?? (tier?.baseSatisfaction ?? 85);
+      b.employeeCount = tier?.employeeCount ?? 2;
+      b.inventoryStatus = tier?.inventoryStatus ?? (meta?.defaultInventory ?? "Stocked");
+      b.maintenanceCost = tier?.maintenanceCost ?? 15000;
+      b.lastMaintainedDay = this.businessLastMaintainedDay.get(b.id) ?? 1;
+
+      // When condition drops below 70%, revenue is scaled slightly by condition
+      const conditionMultiplier = cond < 70 ? Math.max(0.6, 0.8 + 0.2 * (cond / 100)) : 1.0;
+      const baseRev = tier?.dailyRevenue ?? b.dailyRevenue;
+      b.dailyRevenue = Math.round(baseRev * conditionMultiplier);
+      b.dailyCost = tier?.dailyOperatingCost ?? b.dailyCost;
+      b.dailyTax = Math.round(b.dailyRevenue * 0.05); // 5% fictional in-game municipal commerce levy (gameplay balancing mechanic)
+      b.netProfit = b.dailyRevenue - b.dailyCost - b.dailyTax;
+      b.valuation = b.purchasePrice + (level - 1) * (nextTier?.upgradeCost ?? (tier?.upgradeCost ?? 0));
     });
 
     this.properties.forEach((p) => {
@@ -301,6 +407,136 @@ export class EconomySystem {
     }
   }
 
+  public maintainBusiness(
+    id: BusinessId,
+    playerCash: number,
+  ): { success: boolean; cost: number; message: string; newCondition: number } {
+    const biz = this.businesses.get(id);
+    if (!biz) return { success: false, cost: 0, message: "Business enterprise not found.", newCondition: 0 };
+    if (!biz.isOwned) return { success: false, cost: 0, message: `You must own ${biz.name} before commissioning maintenance.`, newCondition: 0 };
+
+    const currentCond = this.businessConditions.get(id) ?? 100;
+    if (currentCond >= 100) {
+      return {
+        success: false,
+        cost: 0,
+        message: `${biz.name} facilities, equipment and storefront are already in mint 100% operational condition.`,
+        newCondition: 100,
+      };
+    }
+
+    const cost = biz.maintenanceCost ?? 15000;
+    if (playerCash < cost) {
+      return {
+        success: false,
+        cost: 0,
+        message: `Insufficient funds: Routine maintenance for ${biz.name} requires ₦${cost.toLocaleString()} (Available: ₦${playerCash.toLocaleString()}).`,
+        newCondition: currentCond,
+      };
+    }
+
+    this.businessConditions.set(id, 100);
+    const currRep = this.businessReputations.get(id) ?? 80;
+    const currSat = this.businessSatisfaction.get(id) ?? 85;
+    this.businessReputations.set(id, Math.min(100, currRep + 4));
+    this.businessSatisfaction.set(id, Math.min(100, currSat + 6));
+    this.businessLastMaintainedDay.set(id, this.dayCount);
+    this.syncEntityMetadata();
+
+    this.addTransactionRecord(
+      "cash",
+      -cost,
+      "maintenance",
+      `Commissioned facility overhaul & equipment maintenance for ${biz.name}`,
+      playerCash - cost,
+    );
+
+    const msg = `Maintenance complete! ${biz.name} facilities restored to 100% operational condition. Customer satisfaction boosted!`;
+    this.addBusinessNotification(msg);
+
+    return {
+      success: true,
+      cost,
+      message: msg,
+      newCondition: 100,
+    };
+  }
+
+  public getFinancialStatement(currentCash: number): DailyFinancialStatement {
+    this.syncEntityMetadata();
+    let grossRev = 0;
+    let bizCosts = 0;
+    let taxes = 0;
+    let bizVal = 0;
+
+    this.businesses.forEach((b) => {
+      if (b.isOwned) {
+        grossRev += b.dailyRevenue;
+        bizCosts += b.dailyCost;
+        taxes += b.dailyTax ?? Math.round(b.dailyRevenue * 0.05);
+        bizVal += b.valuation ?? b.purchasePrice;
+      }
+    });
+
+    let propUpkeep = 0;
+    let propVal = 0;
+    this.properties.forEach((p) => {
+      if (p.isOwned) {
+        propVal += p.currentValuation ?? p.purchasePrice;
+        propUpkeep += p.dailyUpkeep;
+      } else if (p.isRented) {
+        propUpkeep += p.dailyUpkeep;
+      }
+    });
+
+    const totalExpenses = bizCosts + propUpkeep;
+    const netProfit = grossRev - totalExpenses;
+    const salaries = Math.round(bizCosts * 0.4);
+    const inventoryExp = Math.round(bizCosts * 0.35);
+    const month = Math.floor((this.dayCount - 1) / 30) + 1;
+
+    return {
+      day: this.dayCount,
+      month,
+      calendarPeriod: `Day ${this.dayCount}, Month ${month} (Harmattan Season)`,
+      grossRevenue: grossRev,
+      businessOperatingCosts: bizCosts,
+      employeeSalaries: salaries,
+      inventoryExpenses: inventoryExp,
+      propertyUpkeep: propUpkeep,
+      municipalTaxes: taxes,
+      totalExpenses,
+      netProfit,
+      netCashFlow: netProfit,
+      liquidCash: currentCash,
+      propertyValuation: propVal,
+      businessValuation: bizVal,
+      totalEmpireNetWorth: currentCash + propVal + bizVal,
+      timestamp: Date.now(),
+    };
+  }
+
+  public getMonthlyFinancialSummary(currentCash: number): MonthlyFinancialSummary {
+    const daily = this.getFinancialStatement(currentCash);
+    const month = daily.month;
+    const daysInMonth = 30;
+
+    return {
+      month,
+      periodName: `Month ${month} Fiscal Summary`,
+      totalRevenue: daily.grossRevenue * daysInMonth,
+      totalOperatingCosts: daily.businessOperatingCosts * daysInMonth,
+      totalSalaries: daily.employeeSalaries * daysInMonth,
+      totalInventoryExpenses: daily.inventoryExpenses * daysInMonth,
+      totalPropertyUpkeep: daily.propertyUpkeep * daysInMonth,
+      totalTaxes: daily.municipalTaxes * daysInMonth,
+      totalExpenses: daily.totalExpenses * daysInMonth,
+      totalNetProfit: daily.netProfit * daysInMonth,
+      averageDailyProfit: daily.netProfit,
+      endingNetWorth: daily.totalEmpireNetWorth,
+    };
+  }
+
   public getDailyNetIncome(): number {
     let income = 0;
     this.businesses.forEach((b) => {
@@ -327,6 +563,27 @@ export class EconomySystem {
 
     if (currentDay > this.lastProcessedDay) {
       this.lastProcessedDay = currentDay;
+
+      // Simulate natural operational wear (2% per day) on owned businesses
+      this.businesses.forEach((b) => {
+        if (b.isOwned) {
+          const currentCond = this.businessConditions.get(b.id) ?? 100;
+          const newCond = Math.max(30, currentCond - 2);
+          this.businessConditions.set(b.id, newCond);
+          if (newCond < 70) {
+            const currSat = this.businessSatisfaction.get(b.id) ?? 80;
+            this.businessSatisfaction.set(b.id, Math.max(50, currSat - 1));
+          }
+        }
+      });
+      this.syncEntityMetadata();
+
+      const statement = this.getFinancialStatement(currentCash);
+      this.financialHistory.unshift(statement);
+      if (this.financialHistory.length > 30) {
+        this.financialHistory.length = 30;
+      }
+
       const net = this.getDailyNetIncome();
       if (net !== 0) {
         const sign = net > 0 ? "+" : "";
@@ -338,12 +595,46 @@ export class EconomySystem {
           net,
           net > 0 ? "business_income" : "property_upkeep",
           msg,
-          currentCash + net,
+          Math.max(0, currentCash + net),
         );
+        this.addBusinessNotification(`Day ${currentDay} Statement: Gross ₦${statement.grossRevenue.toLocaleString()}, Costs ₦${statement.totalExpenses.toLocaleString()}, Net Profit ${sign}₦${net.toLocaleString()}`);
         return { cashDelta: net, message: msg };
       }
     }
     return { cashDelta: 0, message: null };
+  }
+
+  public withdrawFromAtm(amount = ATM_WITHDRAWAL_AMOUNT): {
+    success: boolean;
+    dispensed: number;
+    message: string;
+    remainingDailyLimit: number;
+  } {
+    if (this.lastAtmWithdrawalDay !== this.dayCount) {
+      this.dailyAtmWithdrawn = 0;
+      this.lastAtmWithdrawalDay = this.dayCount;
+    }
+
+    const remaining = Math.max(0, ATM_DAILY_LIMIT - this.dailyAtmWithdrawn);
+    if (amount > remaining || remaining === 0) {
+      return {
+        success: false,
+        dispensed: 0,
+        message: `ATM: Daily withdrawal limit reached (₦${ATM_DAILY_LIMIT.toLocaleString()} max per day). Remaining today: ₦${remaining.toLocaleString()}. Return tomorrow!`,
+        remainingDailyLimit: remaining,
+      };
+    }
+
+    this.dailyAtmWithdrawn += amount;
+    this.lastAtmWithdrawalDay = this.dayCount;
+    const newRemaining = Math.max(0, ATM_DAILY_LIMIT - this.dailyAtmWithdrawn);
+
+    return {
+      success: true,
+      dispensed: amount,
+      message: `ATM: Dispensed ₦${amount.toLocaleString()} cash from Arewa Commercial Bank account. Remaining daily limit: ₦${newRemaining.toLocaleString()}.`,
+      remainingDailyLimit: newRemaining,
+    };
   }
 
   public purchaseProperty(id: PropertyId, playerCash: number): { success: boolean; cost: number; message: string } {
@@ -842,6 +1133,9 @@ export class EconomySystem {
       if (b.isOwned) bizCosts += b.dailyCost;
     });
 
+    const statement = this.getFinancialStatement(currentCash);
+    const monthly = this.getMonthlyFinancialSummary(currentCash);
+
     return {
       streetCash: currentCash,
       premiumCoins: this.premiumCoins,
@@ -892,6 +1186,10 @@ export class EconomySystem {
         },
       },
       transactionHistory: [...this.transactionHistory],
+      financialStatement: statement,
+      monthlySummary: monthly,
+      recentFinancialStatements: [...this.financialHistory],
+      businessEventNotifications: [...this.businessNotifications],
     };
   }
 
@@ -1108,6 +1406,11 @@ export class EconomySystem {
     needs?: { hunger: number; energy: number; hygiene: number },
     completedFreelanceContracts?: string[],
     freelanceEarnings?: number,
+    consequencesData?: {
+      npcMemory?: Record<string, import("./consequenceSystem").NpcMemoryRecord>;
+      vehicleConditions?: Record<string, import("./consequenceSystem").VehicleConditionState>;
+      consequencesHistory?: import("./consequenceSystem").ConsequenceRecord[];
+    },
   ): boolean {
     if (typeof window === "undefined" || !window.localStorage) return false;
     try {
@@ -1126,6 +1429,26 @@ export class EconomySystem {
         achievementsObj[k] = { ...v };
       });
 
+      const bizConditionsObj: Record<string, number> = {};
+      this.businessConditions.forEach((v, k) => {
+        bizConditionsObj[k] = v;
+      });
+
+      const bizReputationsObj: Record<string, number> = {};
+      this.businessReputations.forEach((v, k) => {
+        bizReputationsObj[k] = v;
+      });
+
+      const bizSatisfactionObj: Record<string, number> = {};
+      this.businessSatisfaction.forEach((v, k) => {
+        bizSatisfactionObj[k] = v;
+      });
+
+      const bizLastMaintainedObj: Record<string, number> = {};
+      this.businessLastMaintainedDay.forEach((v, k) => {
+        bizLastMaintainedObj[k] = v;
+      });
+
       const data: SaveData = {
         version: 1, // Keep version 1 for maximum backwards compatibility
         cash,
@@ -1136,6 +1459,12 @@ export class EconomySystem {
         ownedBusinesses: this.getOwnedBusinessesList(),
         businessLevels: bizLevelsObj,
         propertyRenovations: propRenovationsObj,
+        businessConditions: bizConditionsObj,
+        businessReputations: bizReputationsObj,
+        businessSatisfaction: bizSatisfactionObj,
+        businessLastMaintainedDay: bizLastMaintainedObj,
+        financialHistory: this.financialHistory.slice(0, 30),
+        businessNotifications: this.businessNotifications.slice(0, 20),
         ownedVehicles: Array.from(this.ownedVehicles),
         unlockedVehicleSkins: Array.from(this.unlockedVehicleSkins),
         achievements: achievementsObj,
@@ -1157,6 +1486,12 @@ export class EconomySystem {
         needs: needs ? { ...needs } : undefined,
         completedFreelanceContracts: completedFreelanceContracts ? [...completedFreelanceContracts] : [],
         freelanceEarnings: freelanceEarnings ?? 0,
+        dailyAtmWithdrawn: this.dailyAtmWithdrawn,
+        lastAtmWithdrawalDay: this.lastAtmWithdrawalDay,
+        hasSeenOnboarding: this.hasSeenOnboarding,
+        npcMemory: consequencesData?.npcMemory,
+        vehicleConditions: consequencesData?.vehicleConditions,
+        consequencesHistory: consequencesData?.consequencesHistory,
         savedAt: Date.now(),
       };
       window.localStorage.setItem("kano_streets_save_v1", JSON.stringify(data));
@@ -1274,6 +1609,42 @@ export class EconomySystem {
         });
       }
 
+      // Restore Phase A Business Management state
+      if (data.businessConditions && typeof data.businessConditions === "object") {
+        Object.entries(data.businessConditions).forEach(([id, cond]) => {
+          if (this.businesses.has(id as BusinessId) && typeof cond === "number") {
+            this.businessConditions.set(id as BusinessId, Math.max(0, Math.min(100, Math.floor(cond))));
+          }
+        });
+      }
+      if (data.businessReputations && typeof data.businessReputations === "object") {
+        Object.entries(data.businessReputations).forEach(([id, rep]) => {
+          if (this.businesses.has(id as BusinessId) && typeof rep === "number") {
+            this.businessReputations.set(id as BusinessId, Math.max(0, Math.min(100, Math.floor(rep))));
+          }
+        });
+      }
+      if (data.businessSatisfaction && typeof data.businessSatisfaction === "object") {
+        Object.entries(data.businessSatisfaction).forEach(([id, sat]) => {
+          if (this.businesses.has(id as BusinessId) && typeof sat === "number") {
+            this.businessSatisfaction.set(id as BusinessId, Math.max(0, Math.min(100, Math.floor(sat))));
+          }
+        });
+      }
+      if (data.businessLastMaintainedDay && typeof data.businessLastMaintainedDay === "object") {
+        Object.entries(data.businessLastMaintainedDay).forEach(([id, day]) => {
+          if (this.businesses.has(id as BusinessId) && typeof day === "number") {
+            this.businessLastMaintainedDay.set(id as BusinessId, Math.max(1, Math.floor(day)));
+          }
+        });
+      }
+      if (Array.isArray(data.financialHistory)) {
+        this.financialHistory = data.financialHistory.filter((f) => f && typeof f.netProfit === "number").slice(0, 30);
+      }
+      if (Array.isArray(data.businessNotifications)) {
+        this.businessNotifications = data.businessNotifications.filter((n) => typeof n === "string").slice(0, 20);
+      }
+
       // Restore property renovations
       if (data.propertyRenovations && typeof data.propertyRenovations === "object") {
         Object.entries(data.propertyRenovations).forEach(([id, tier]) => {
@@ -1350,6 +1721,23 @@ export class EconomySystem {
       if (data.dayCount) {
         this.dayCount = data.dayCount;
         this.lastProcessedDay = data.dayCount;
+      }
+      if (typeof data.dailyAtmWithdrawn === "number") {
+        this.dailyAtmWithdrawn = data.dailyAtmWithdrawn;
+      }
+      if (typeof data.lastAtmWithdrawalDay === "number") {
+        this.lastAtmWithdrawalDay = data.lastAtmWithdrawalDay;
+      }
+      if (typeof data.hasSeenOnboarding === "boolean") {
+        this.hasSeenOnboarding = data.hasSeenOnboarding;
+      } else {
+        const isVeteran = (typeof data.dayCount === "number" && data.dayCount > 1) ||
+          (typeof data.cash === "number" && data.cash > 50000) ||
+          !!data.hasApartmentRental ||
+          (Array.isArray(data.completedMissions) && data.completedMissions.length > 0) ||
+          (Array.isArray(data.ownedProperties) && data.ownedProperties.length > 0) ||
+          (Array.isArray(data.ownedBusinesses) && data.ownedBusinesses.length > 0);
+        this.hasSeenOnboarding = isVeteran;
       }
       if (data.selectedHomePropertyId !== undefined) {
         data.selectedHomePropertyId = normalizePropertyId(data.selectedHomePropertyId);

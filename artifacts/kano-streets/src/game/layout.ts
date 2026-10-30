@@ -11,6 +11,8 @@ export type RoadSpec = {
 
 export const WORLD_BOUNDS = 136;
 export const WORLD_EXTENT = WORLD_BOUNDS * 2;
+export const WORLD_BOUNDS_NORTH = -230;
+export const WORLD_BOUNDS_SOUTH = 136;
 export const ROAD_CENTERS = [-124, -62, 0, 62, 124] as const;
 
 export const ROAD_LAYOUT: RoadSpec[] = [

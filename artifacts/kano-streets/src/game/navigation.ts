@@ -558,3 +558,16 @@ export function getNextTrafficWaypoint(
   const choice = current.nextIds[Math.floor(rng() * current.nextIds.length)];
   return network.trafficWaypoints.get(choice) ?? null;
 }
+
+/**
+ * Evaluates whether two angular headings are equivalent within a given threshold,
+ * correctly handling modular angular wraparound across 0 and 2π / -π and +π boundaries.
+ */
+export function isHeadingEquivalent(h1?: number, h2?: number, threshold = 0.035): boolean {
+  if (h1 === undefined || h2 === undefined) return h1 === h2;
+  let diff = Math.abs(h1 - h2) % (Math.PI * 2);
+  if (diff > Math.PI) {
+    diff = Math.PI * 2 - diff;
+  }
+  return diff < threshold;
+}
