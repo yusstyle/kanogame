@@ -155,6 +155,36 @@ function addCourtyard(
   }
 
   addArchFrame(root, modern ? materials.concrete : materials.trim, 0, 0, 7.03, 3.25, 2.55, 2.05, 2.06, 0.28);
+
+  if (!modern) {
+    // Traditional Hausa Zaure Gatehouse Portal Architecture
+    // 1. Stepped clay pilasters / flanking entrance buttresses
+    for (const px of [-1.75, 1.75]) {
+      box(root, materials.clay, px, height * 0.75, 7.18, 0.52, height * 1.5, 0.48);
+      // Traditional decorative pinnacle (Zankwaye) crowning the portal buttress
+      const portalPinnacle = box(root, materials.ochre, px, height * 1.5 + 0.35, 7.18, 0.28, 0.65, 0.28);
+      portalPinnacle.rotation.y = Math.PI / 4;
+    }
+    // 2. Heavy horizontal desert timber lintel beam (Garafuni) spanning above the entrance
+    box(root, materials.wood, 0, height * 1.4, 7.22, 3.8, 0.22, 0.26);
+    // 3. Hausa geometric plaster relief motif (Dakin Gona northern star / diamond crest)
+    const crest = box(root, materials.trim, 0, height * 1.4 + 0.38, 7.24, 0.45, 0.45, 0.12);
+    crest.rotation.z = Math.PI / 4;
+    // 4. Zaure rain canopy projection with authentic wooden drainage spout (Zannuwa)
+    box(root, materials.compoundWall, 0, height * 1.52, 7.36, 4.0, 0.16, 0.55);
+    cylinder(root, materials.wood, 0, height * 1.54, 7.62, 0.045, 0.045, 0.45);
+  } else {
+    // Modern Kano Compound Gatehouse Columns & Security Sconces
+    for (const px of [-1.75, 1.75]) {
+      box(root, materials.concrete, px, height * 0.72, 7.18, 0.55, height * 1.44, 0.52);
+      box(root, materials.trim, px, height * 1.45, 7.18, 0.68, 0.14, 0.65);
+      // Modern exterior security wall lantern
+      box(root, materials.black, px, height * 1.05, 7.48, 0.14, 0.24, 0.14);
+      box(root, materials.lampGlow || materials.glassLit, px, height * 1.03, 7.48, 0.1, 0.16, 0.1, false);
+    }
+    box(root, materials.concrete, 0, height * 1.42, 7.18, 3.8, 0.22, 0.36);
+  }
+
   const gateSlot = new THREE.Group();
   gateSlot.name = "compound-gate-asset-slot";
   gateSlot.userData.noMerge = true;
@@ -166,15 +196,16 @@ function addCourtyard(
   root.add(gateSlot);
 
   box(proceduralGate, materials.metal, 0, 0.86, 0, 1.82, 1.62, 0.14);
-  for (let i = 0; i < 11; i += 1) {
-    const x = -0.82 + i * 0.164;
-    box(proceduralGate, i % 2 ? materials.trim : materials.ochre, x, 0.84, 0.09, 0.045, 1.48, 0.09);
+  for (let i = 0; i < 9; i += 1) {
+    const x = -0.76 + i * 0.19;
+    box(proceduralGate, i % 2 ? materials.trim : materials.ochre, x, 0.84, 0.09, 0.05, 1.54, 0.09);
   }
-  box(proceduralGate, materials.trim, 0, 1.55, 0.1, 1.88, 0.08, 0.11);
   for (const x of [-0.48, 0, 0.48]) {
-    const stud = box(proceduralGate, materials.ochre, x, 1.79, 0.12, 0.13, 0.13, 0.08);
+    const stud = box(proceduralGate, materials.ochre, x, 0.88, 0.12, 0.14, 0.14, 0.08);
     stud.rotation.z = Math.PI / 4;
   }
+  box(proceduralGate, materials.trim, 0, 0.22, 0.1, 1.88, 0.09, 0.11);
+  box(proceduralGate, materials.trim, 0, 1.55, 0.1, 1.88, 0.08, 0.11);
   box(proceduralGate, materials.darkTrim, 0, 0.04, 0.01, 2.1, 0.12, 0.68, false);
   proceduralGate.traverse((c) => { c.userData.noMerge = true; });
 
@@ -217,11 +248,23 @@ function addWindow(
   isFront = true,
 ) {
   const frameDepth = 0.13;
+  // Recessed dark frame
   box(root, materials.darkTrim, x, y, z, width + 0.24, height + 0.22, frameDepth);
-  box(root, materials.glass, x, y, z + (isFront ? 0.08 : 0), width, height, 0.08);
-  box(root, materials.trim, x, y + height / 2 + 0.09, z + 0.1, width + 0.3, 0.08, 0.16);
-  box(root, materials.trim, x, y - height / 2 - 0.09, z + 0.12, width + 0.3, 0.08, 0.18);
+  // Window glazing
+  box(root, materials.glassLit || materials.glass, x, y, z + (isFront ? 0.08 : 0), width, height, 0.08);
+  // Projecting upper lintel / sunshade canopy hood
+  box(root, materials.trim, x, y + height / 2 + 0.09, z + 0.14, width + 0.32, 0.08, 0.24);
+  // Lower window sill with drip reveal
+  box(root, materials.trim, x, y - height / 2 - 0.09, z + 0.14, width + 0.32, 0.08, 0.22);
+  // Center wooden mullion
   box(root, materials.wood, x, y, z + 0.14, 0.045, height + 0.12, 0.045);
+  // Wrought iron burglar security bars
+  const barMat = materials.burglarBars || materials.metal;
+  const numBars = Math.max(2, Math.floor(width / 0.38));
+  const spacing = width / numBars;
+  for (let b = 1; b < numBars; b += 1) {
+    box(root, barMat, x - width / 2 + b * spacing, y, z + 0.15, 0.03, height, 0.03, false);
+  }
 }
 
 function addTraditionalHouse(
@@ -247,6 +290,14 @@ function addTraditionalHouse(
   box(root, materials.wood, doorX, 1.08, front + 0.13, 1.09, 2.02, 0.14);
   box(root, materials.darkTrim, doorX + 0.36, 1.08, front + 0.23, 0.06, 0.07, 0.05);
   box(root, materials.ochre, doorX, 2.32, front + 0.16, 1.94, 0.13, 0.34);
+
+  // Hausa Dakin Gona engraved geometric wall relief patterns on front facade
+  for (const rx of [-1.8, 1.8]) {
+    const reliefDiamond = box(root, materials.trim, rx, 1.75, front + 0.05, 0.65, 0.65, 0.05);
+    reliefDiamond.rotation.z = Math.PI / 4;
+    const innerRelief = box(root, materials.ochre, rx, 1.75, front + 0.08, 0.36, 0.36, 0.04);
+    innerRelief.rotation.z = Math.PI / 4;
+  }
 
   // Shaded entry veranda and carved-looking Hausa-inspired geometric band.
   box(root, materials.clay, doorX, 2.68, front + 0.98, 2.62, 0.13, 1.92);
@@ -290,6 +341,15 @@ function addTraditionalHouse(
     const crenel = box(root, materials.trim, x, 3.96, z + 3.12, 0.34, 0.24, 0.24);
     crenel.rotation.z = variant % 2 ? 0 : Math.PI / 4;
   }
+
+  // Traditional Hausa wooden roof rainwater drainage spouts (Zannuwa)
+  for (const spoutX of [-2.4, 0, 2.4]) {
+    cylinder(root, materials.wood, spoutX, 3.65, front + 0.28, 0.045, 0.045, 0.55);
+  }
+
+  // Front exterior mud conversation bench (Dakali)
+  box(root, materials.clay, -2.3, 0.22, front + 0.32, 1.7, 0.42, 0.4);
+  box(root, materials.clay, 2.3, 0.22, front + 0.32, 1.7, 0.42, 0.4);
 
   colliders.push({ x: 0, z, halfX: 3.66, halfZ: 3.25, height: 3.9 });
 }
@@ -346,6 +406,14 @@ function addModernHome(
       panel.rotation.x = -0.1;
     }
   }
+
+  // Modern residential external split-unit AC condenser unit
+  box(root, materials.white, 3.15, 3.85, front + 0.28, 0.72, 0.52, 0.34);
+  cylinder(root, materials.darkTrim, 3.15, 3.85, front + 0.46, 0.18, 0.04, Math.PI / 2);
+
+  // Rooftop black GeePee water storage tank on support plinth
+  box(root, materials.concrete, -2.4, 6.15, z - 1.2, 1.5, 0.3, 1.5);
+  cylinder(root, materials.black, -2.4, 7.05, z - 1.2, 0.62, 0.62, 1.45);
   colliders.push({ x: 0, z, halfX: 3.95, halfZ: 3.24, height: 6 });
 }
 
@@ -466,30 +534,175 @@ export function createPlot(
 
 export function createMarketStall(materials: GameMaterials, variant = 0): PlotAsset {
   const root = new THREE.Group();
+  root.name = `market-stall-${variant}`;
   const colliders: Collider[] = [];
-  const stallTint = variant % 2 === 0 ? materials.cloth : materials.clothRed;
+  const stallTint = variant % 3 === 0
+    ? materials.cloth
+    : variant % 3 === 1
+    ? materials.clothRed
+    : materials.terracotta || materials.clothRed;
 
-  box(root, materials.wood, 0, 0.85, 0.3, 3.2, 0.28, 1.05);
-  box(root, materials.ochre, 0, 0.55, 0.3, 3.35, 0.18, 1.15);
+  const wood = materials.wood;
+  const darkTrim = materials.darkTrim;
+  const burlap = materials.burlapSack || materials.cloth;
+
+  // 1. Heavy Timber Structural Posts with Corner Braces
   for (const x of [-1.5, 1.5]) {
     for (const z of [-0.15, 1.18]) {
-      box(root, materials.wood, x, 1.65, z, 0.12, 2.95, 0.12);
+      box(root, wood, x, 1.65, z, 0.12, 2.95, 0.12);
     }
+    // Diagonal timber knee brace joining post to canopy beam
+    const brace = box(root, wood, x, 2.75, 0.52, 0.08, 0.45, 0.08);
+    brace.rotation.x = x > 0 ? 0.35 : -0.35;
   }
-  box(root, stallTint, 0, 3.14, 0.51, 3.55, 0.14, 2.15);
-  box(root, materials.cloth, 0, 2.91, -0.54, 3.55, 0.42, 0.12);
+  // Longitudinal top perimeter rails
+  box(root, wood, 0, 3.02, -0.15, 3.2, 0.09, 0.09);
+  box(root, wood, 0, 3.12, 1.18, 3.2, 0.09, 0.09);
 
-  for (let i = 0; i < 5; i += 1) {
-    const produce = new THREE.Mesh(
-      new THREE.SphereGeometry(0.16, 8, 6),
-      [materials.clothRed, materials.foliageLight, materials.ochre][i % 3],
+  // 2. Solid Timber Lower Cabinet & Burlap Storage Base
+  box(root, wood, 0, 0.45, 0.3, 3.1, 0.72, 1.05);
+  box(root, darkTrim, 0, 0.1, 0.3, 3.18, 0.18, 1.12);
+
+  // Stacked burlap grain sacks under/beside the lower counter
+  for (let s = 0; s < 3; s += 1) {
+    const sack = box(root, burlap, -1.0 + s * 0.55, 0.22, 0.32, 0.48, 0.26, 0.38);
+    sack.rotation.y = (s * 0.25) - 0.2;
+  }
+
+  // 3. Tiered Slanted Upper Produce Display Shelf
+  const displayTray = box(root, wood, 0, 0.92, 0.32, 3.2, 0.12, 1.08);
+  displayTray.rotation.x = 0.12;
+
+  // Produce partition divider slats
+  for (const dx of [-0.75, 0, 0.75]) {
+    const divider = box(root, wood, dx, 0.98, 0.32, 0.04, 0.16, 1.05);
+    divider.rotation.x = 0.12;
+  }
+
+  // Authentic Northern Nigerian Market Produce:
+  // Compartment 1: Northern Red Chili Peppers (Attarugu)
+  for (let i = 0; i < 7; i += 1) {
+    const pepper = new THREE.Mesh(
+      new THREE.SphereGeometry(0.085, 7, 6),
+      materials.clothRed,
     );
-    produce.position.set(-1.15 + i * 0.52, 1.1 + (i % 2) * 0.04, 0.26);
-    produce.scale.set(1, 0.72, 0.82);
-    produce.castShadow = true;
-    root.add(produce);
+    pepper.position.set(-1.18 + (i % 3) * 0.16, 1.02 + Math.floor(i / 3) * 0.06, 0.15 + (i % 2) * 0.22);
+    pepper.scale.set(0.85, 1.35, 0.85);
+    pepper.castShadow = true;
+    root.add(pepper);
+  }
+
+  // Compartment 2: Golden Sahelian Onions (Albasa)
+  for (let i = 0; i < 6; i += 1) {
+    const onion = new THREE.Mesh(
+      new THREE.SphereGeometry(0.095, 8, 6),
+      materials.ochre,
+    );
+    onion.position.set(-0.42 + (i % 3) * 0.18, 1.04 + Math.floor(i / 3) * 0.07, 0.18 + (i % 2) * 0.22);
+    onion.castShadow = true;
+    root.add(onion);
+  }
+
+  // Compartment 3: Stacked Fresh Tubers / Yams
+  for (let i = 0; i < 4; i += 1) {
+    const yam = cylinder(root, materials.bark || darkTrim, 0.38 + (i % 2) * 0.22, 1.04 + Math.floor(i / 2) * 0.08, 0.28, 0.07, 0.42, 0);
+    yam.rotation.z = Math.PI / 2;
+  }
+
+  // Compartment 4: Savanna Spice Bowl (Suya Spice & Cloves)
+  cylinder(root, darkTrim, 1.15, 1.02, 0.28, 0.22, 0.12);
+  cylinder(root, materials.terracotta || materials.clothRed, 1.15, 1.07, 0.28, 0.19, 0.04);
+
+  // 4. Weathered Fabric Canopy with Overhang Valance Flaps
+  box(root, stallTint, 0, 3.18, 0.51, 3.55, 0.12, 2.15);
+  box(root, stallTint, 0, 2.94, -0.54, 3.55, 0.38, 0.08); // Front valance
+  for (const vx of [-1.75, 1.75]) {
+    box(root, stallTint, vx, 2.96, 0.51, 0.08, 0.34, 2.12); // Side valance
+  }
+
+  // Suspended Solar Market Lamp hanging from ridge pole
+  cylinder(root, materials.metal, 0, 3.0, 0.45, 0.015, 0.015, 0.24); // Suspension cord
+  cylinder(root, materials.lampGlow || materials.glassLit, 0, 2.86, 0.45, 0.09, 0.06, 0.12); // Glowing lamp lens
+  box(root, materials.solarPanel || materials.metal, 0, 3.25, 0.85, 0.55, 0.025, 0.45); // Roof solar panel
+
+  // 5. Merchant's Low Wooden Stool (Kujerar Itace)
+  box(root, wood, 0, 0.24, -0.65, 0.42, 0.06, 0.36);
+  for (const sx of [-0.16, 0.16]) {
+    for (const sz of [-0.78, -0.52]) {
+      cylinder(root, wood, sx, 0.12, sz, 0.03, 0.03, 0.24);
+    }
   }
 
   colliders.push({ x: 0, z: 0.3, halfX: 1.72, halfZ: 0.65, height: 3.5 });
+  return { root, colliders };
+}
+
+export function createRoadsideKiosk(
+  materials: GameMaterials,
+  variant = 0,
+): PlotAsset {
+  const root = new THREE.Group();
+  root.name = `roadside-kiosk-${variant}`;
+  const colliders: Collider[] = [];
+
+  const wood = materials.wood;
+  const metal = materials.metal;
+  const zinc = materials.corrugatedZinc || materials.metal;
+  const darkTrim = materials.darkTrim;
+  const yellow = materials.kekeYellow;
+  const green = materials.karotaGreen || materials.kekeGreen;
+
+  if (variant === 0) {
+    // 1. "Mai Shayi" Roadside Tea, Coffee & Bread Stall
+    box(root, materials.ochre, 0, 1.15, 0, 1.6, 2.3, 1.4);
+    box(root, zinc, 0, 2.36, 0.1, 1.85, 0.1, 1.65);
+    box(root, darkTrim, 0, 1.35, 0.71, 1.3, 1.0, 0.04, false);
+    box(root, wood, 0, 0.88, 0.78, 1.4, 0.08, 0.35);
+
+    // Aluminum tea kettle & beverage service
+    cylinder(root, metal, -0.42, 1.05, 0.82, 0.12, 0.14, 0.24);
+    cylinder(root, metal, -0.42, 1.2, 0.82, 0.02, 0.02, 0.12);
+    for (let c = 0; c < 3; c += 1) {
+      cylinder(root, materials.white, 0.42, 0.98 + c * 0.11, 0.82, 0.05, 0.05, 0.1);
+    }
+    box(root, wood, 0.05, 0.98, 0.82, 0.38, 0.14, 0.22);
+
+    const sign = makeSignMaterial("MAI SHAYI & COFFEE\nFRESH HOT TEA", "#c46f47");
+    box(root, sign, 0, 2.1, 0.73, 1.4, 0.32, 0.06);
+  } else if (variant === 1) {
+    // 2. "POS / Mobile Money & Airtime" Neighborhood Agent Kiosk
+    box(root, yellow, 0, 1.15, 0, 1.5, 2.3, 1.3);
+    box(root, green, 0, 1.15, 0, 1.52, 0.4, 1.32);
+    box(root, zinc, 0, 2.36, 0.05, 1.75, 0.08, 1.5);
+
+    box(root, darkTrim, 0, 1.4, 0.66, 1.1, 0.85, 0.04, false);
+    box(root, materials.burglarBars || metal, 0, 1.4, 0.68, 1.05, 0.8, 0.02, false);
+    box(root, wood, 0, 0.92, 0.75, 1.2, 0.08, 0.32);
+
+    const solar = new THREE.Group();
+    solar.position.set(0, 2.45, 0);
+    solar.rotation.x = -0.25;
+    root.add(solar);
+    box(solar, materials.solarPanel || metal, 0, 0, 0, 0.85, 0.03, 0.65);
+
+    const sign = makeSignMaterial("POS AGENT\nTRANSFER & AIRTIME", "#156228");
+    box(root, sign, 0, 2.05, 0.68, 1.3, 0.35, 0.06);
+  } else {
+    // 3. "Kano Cold Drinks & Provisions" Kiosk
+    box(root, materials.plaster, 0, 1.15, 0, 1.6, 2.3, 1.4);
+    box(root, zinc, 0, 2.36, 0.1, 1.85, 0.1, 1.65);
+    box(root, darkTrim, 0, 1.35, 0.71, 1.25, 0.95, 0.04, false);
+    box(root, wood, 0, 0.88, 0.78, 1.35, 0.08, 0.35);
+
+    box(root, materials.motorcycleRed || materials.clothRed, -0.38, 0.98, 0.82, 0.35, 0.22, 0.25);
+    box(root, metal, 0.35, 1.5, 0.72, 0.02, 0.45, 0.02);
+    for (let s = 0; s < 3; s += 1) {
+      box(root, s % 2 ? yellow : materials.warmOrange || materials.clothRed, 0.35, 1.35 + s * 0.12, 0.74, 0.12, 0.08, 0.04);
+    }
+    const sign = makeSignMaterial("COLD DRINKS & SNACKS\nPURE WATER", "#24558f");
+    box(root, sign, 0, 2.1, 0.73, 1.4, 0.32, 0.06);
+  }
+
+  colliders.push({ x: 0, z: 0, halfX: 0.85, halfZ: 0.75, height: 2.5 });
   return { root, colliders };
 }

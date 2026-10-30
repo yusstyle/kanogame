@@ -1,15 +1,18 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Kano Streets API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication and identity operations
+  - name: saves
+    description: Player cloud saves and synchronization operations
 paths:
   /healthz:
     get:
@@ -24,6 +27,217 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register player account
+      description: Creates a new player user account with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Account created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Authenticate player
+      description: Authenticates player credentials and issues a secure HTTP-only session cookie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Successfully authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many failed login attempts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout player
+      description: Destroys current session and clears the session cookie
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Get current authenticated player
+      description: Returns the profile of the player associated with the current session
+      responses:
+        "200":
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /saves:
+    get:
+      operationId: getCloudSave
+      tags: [saves]
+      summary: Retrieve authenticated player cloud save
+      description: Returns the cloud save record associated with the current user's session
+      responses:
+        "200":
+          description: Cloud save retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloudSaveResponse"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: No cloud save found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: putCloudSave
+      tags: [saves]
+      summary: Upload or update player cloud save with optimistic revision check
+      description: Creates or updates cloud save if expectedRevision matches current server state
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveUploadRequest"
+      responses:
+        "200":
+          description: Save updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloudSaveResponse"
+        "201":
+          description: Initial cloud save created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloudSaveResponse"
+        "400":
+          description: Invalid payload or validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Revision conflict detected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaveConflictResponse"
+        "413":
+          description: Payload exceeds size limit (500KB)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /saves/resolve-conflict:
+    post:
+      operationId: resolveConflict
+      tags: [saves]
+      summary: Resolve cloud save revision conflict
+      description: Explicitly resolves conflict by forcing local save or accepting cloud save
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResolveConflictRequest"
+      responses:
+        "200":
+          description: Conflict resolved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloudSaveResponse"
+        "400":
+          description: Invalid resolution parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Revision has changed since conflict was displayed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaveConflictResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -33,4 +247,165 @@ components:
           type: string
       required:
         - status
-
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        emailVerified:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - email
+        - displayName
+        - emailVerified
+        - createdAt
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/UserProfile"
+      required:
+        - user
+    RegisterRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 50
+      required:
+        - email
+        - password
+        - displayName
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required:
+        - email
+        - password
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+        - success
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+        - message
+    CloudSaveRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        saveVersion:
+          type: integer
+        revision:
+          type: integer
+        payload:
+          type: object
+        checksum:
+          type: string
+        clientSavedAt:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - saveVersion
+        - revision
+        - payload
+        - checksum
+        - createdAt
+        - updatedAt
+    CloudSaveResponse:
+      type: object
+      properties:
+        save:
+          $ref: "#/components/schemas/CloudSaveRecord"
+      required:
+        - save
+    SaveUploadRequest:
+      type: object
+      properties:
+        expectedRevision:
+          type: integer
+          minimum: 0
+        clientSavedAt:
+          type: integer
+        payload:
+          type: object
+      required:
+        - expectedRevision
+        - clientSavedAt
+        - payload
+    SaveConflictResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        currentRevision:
+          type: integer
+        serverSavedAt:
+          type: string
+        cloudSave:
+          $ref: "#/components/schemas/CloudSaveRecord"
+      required:
+        - error
+        - message
+        - currentRevision
+        - serverSavedAt
+        - cloudSave
+    ResolveConflictRequest:
+      type: object
+      properties:
+        resolution:
+          type: string
+          enum: ["keep_local", "keep_cloud"]
+        baseRevision:
+          type: integer
+        payload:
+          type: object
+      required:
+        - resolution
+        - baseRevision

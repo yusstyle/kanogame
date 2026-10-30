@@ -14,18 +14,22 @@ export class ColliderIndex {
     readonly cellSize = 24,
   ) {
     for (const collider of colliders) {
-      const minX = Math.floor((collider.x - collider.halfX) / cellSize);
-      const maxX = Math.floor((collider.x + collider.halfX) / cellSize);
-      const minZ = Math.floor((collider.z - collider.halfZ) / cellSize);
-      const maxZ = Math.floor((collider.z + collider.halfZ) / cellSize);
+      this.add(collider);
+    }
+  }
 
-      for (let x = minX; x <= maxX; x += 1) {
-        for (let z = minZ; z <= maxZ; z += 1) {
-          const key = cellKey(x, z);
-          const bucket = this.cells.get(key);
-          if (bucket) bucket.push(collider);
-          else this.cells.set(key, [collider]);
-        }
+  add(collider: Collider): void {
+    const minX = Math.floor((collider.x - collider.halfX) / this.cellSize);
+    const maxX = Math.floor((collider.x + collider.halfX) / this.cellSize);
+    const minZ = Math.floor((collider.z - collider.halfZ) / this.cellSize);
+    const maxZ = Math.floor((collider.z + collider.halfZ) / this.cellSize);
+
+    for (let x = minX; x <= maxX; x += 1) {
+      for (let z = minZ; z <= maxZ; z += 1) {
+        const key = cellKey(x, z);
+        const bucket = this.cells.get(key);
+        if (bucket) bucket.push(collider);
+        else this.cells.set(key, [collider]);
       }
     }
   }

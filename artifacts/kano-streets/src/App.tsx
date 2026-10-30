@@ -1,7 +1,11 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import GameUI from "./components/GameUI";
 import GameViewport, { type GameViewportHandle } from "./components/GameViewport";
-import type { GameScreen, GameSnapshot, GraphicsQuality } from "./game/types";
+import type { CareerPathChoice, GameScreen, GameSnapshot, GraphicsQuality, PropertyId, BusinessId, CurrencyType } from "./game/types";
+import { authService } from "./game/authService";
+import { isHeadingEquivalent } from "./game/navigation";
+
+export { isHeadingEquivalent };
 
 const INITIAL_SNAPSHOT: GameSnapshot = {
   mode: "on-foot",
@@ -17,6 +21,11 @@ function App() {
   const [screen, setScreen] = useState<GameScreen>("menu");
   const [snapshot, setSnapshot] = useState<GameSnapshot>(INITIAL_SNAPSHOT);
   const [graphicsQuality, setGraphicsQuality] = useState<GraphicsQuality>("balanced");
+
+  useEffect(() => {
+    // Check for existing session on startup (401 seamlessly resolves to Guest Mode)
+    authService.initSession().catch(() => {});
+  }, []);
 
   const start = useCallback(() => {
     setSnapshot(INITIAL_SNAPSHOT);
@@ -41,6 +50,175 @@ function App() {
     viewportRef.current?.setControlKey(key, pressed);
   }, []);
 
+  const setGPSTarget = useCallback((id: string | null) => {
+    viewportRef.current?.setGPSTarget(id);
+  }, []);
+
+  const acceptMission = useCallback((id: string) => {
+    return viewportRef.current?.acceptMission(id) ?? false;
+  }, []);
+
+  const cancelMission = useCallback(() => {
+    return viewportRef.current?.cancelMission() ?? false;
+  }, []);
+
+  const examineIndenture = useCallback(() => {
+    return viewportRef.current?.examineStoryIndenture() ?? false;
+  }, []);
+
+  const chooseInvestigation = useCallback((choice: "elders" | "bank") => {
+    return viewportRef.current?.chooseStoryInvestigation(choice);
+  }, []);
+
+  const chooseCareer = useCallback((choice: CareerPathChoice) => {
+    return viewportRef.current?.chooseStoryCareer(choice);
+  }, []);
+
+  const resolveChapter1 = useCallback(() => {
+    return viewportRef.current?.resolveStoryChapter1();
+  }, []);
+
+  const cycleWeather = useCallback(() => {
+    return viewportRef.current?.cycleWeather();
+  }, []);
+
+  const toggleAudioMute = useCallback(() => {
+    return viewportRef.current?.toggleAudioMute();
+  }, []);
+
+  const openFurnitureShop = useCallback(() => {
+    viewportRef.current?.openFurnitureShop();
+  }, []);
+
+  const closeFurnitureShop = useCallback(() => {
+    viewportRef.current?.closeFurnitureShop();
+  }, []);
+
+  const purchaseFurniture = useCallback((catalogId: string) => {
+    return viewportRef.current?.purchaseFurniture(catalogId) ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const toggleFurnishingMode = useCallback(() => {
+    return viewportRef.current?.toggleFurnishingMode() ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const placeFurnitureItem = useCallback(
+    (instanceId: string, room: string, floor: number, position: { x: number; y: number; z: number }, rotationY: number) => {
+      return (
+        viewportRef.current?.placeFurnitureItem(instanceId, room, floor, position, rotationY) ?? {
+          success: false,
+          message: "Engine not ready",
+        }
+      );
+    },
+    [],
+  );
+
+  const moveFurnitureItem = useCallback(
+    (instanceId: string, position: { x: number; y: number; z: number }, rotationY: number) => {
+      return (
+        viewportRef.current?.moveFurnitureItem(instanceId, position, rotationY) ?? {
+          success: false,
+          message: "Engine not ready",
+        }
+      );
+    },
+    [],
+  );
+
+  const storeFurnitureItem = useCallback((instanceId: string) => {
+    return viewportRef.current?.storeFurnitureItem(instanceId) ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const rotateFurnitureItem = useCallback((instanceId: string, deltaYaw: number) => {
+    return viewportRef.current?.rotateFurnitureItem(instanceId, deltaYaw) ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const getUnplacedFurniture = useCallback(() => {
+    return viewportRef.current?.getUnplacedFurniture() ?? [];
+  }, []);
+
+  const getPlacedFurniture = useCallback((propertyId?: PropertyId) => {
+    return viewportRef.current?.getPlacedFurniture(propertyId) ?? [];
+  }, []);
+
+  const setSelectedHome = useCallback((propertyId: PropertyId) => {
+    return viewportRef.current?.setSelectedHome(propertyId);
+  }, []);
+
+  const teleportHome = useCallback((destination?: "entrance" | "interior") => {
+    return viewportRef.current?.teleportHome(destination);
+  }, []);
+
+  const findMyHome = useCallback(() => {
+    return viewportRef.current?.findMyHome();
+  }, []);
+
+  const leaseProperty = useCallback((propertyId?: PropertyId) => {
+    return viewportRef.current?.leaseProperty(propertyId) ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const purchaseProperty = useCallback((propertyId: PropertyId) => {
+    return viewportRef.current?.purchaseProperty(propertyId) ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const toggleCameraMode = useCallback(() => {
+    return viewportRef.current?.toggleCameraMode();
+  }, []);
+
+  const toggleSmartphone = useCallback((force?: boolean) => {
+    return viewportRef.current?.toggleSmartphone(force);
+  }, []);
+
+  const captureScreenshot = useCallback(() => {
+    return viewportRef.current?.captureScreenshot() ?? null;
+  }, []);
+
+  const interactSocial = useCallback((contactId: string, choiceId: string) => {
+    return viewportRef.current?.interactSocial(contactId, choiceId) ?? null;
+  }, []);
+
+  const toggleEmpireModal = useCallback((force?: boolean) => {
+    return viewportRef.current?.toggleEmpireModal(force);
+  }, []);
+
+  const upgradeBusiness = useCallback((id: BusinessId) => {
+    return viewportRef.current?.upgradeBusiness(id) ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const maintainBusiness = useCallback((id: BusinessId) => {
+    return viewportRef.current?.maintainBusiness(id) ?? { success: false, cost: 0, message: "Engine not ready", newCondition: 0 };
+  }, []);
+
+  const renovateProperty = useCallback((id: PropertyId, useCoins?: boolean) => {
+    return viewportRef.current?.renovateProperty(id, useCoins) ?? { success: false, costCash: 0, costCoins: 0, newLevel: 0, message: "Engine not ready" };
+  }, []);
+
+  const purchaseVehicle = useCallback((vehicleId: string, currency?: CurrencyType) => {
+    return viewportRef.current?.purchaseVehicle(vehicleId, currency) ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const purchaseVehicleSkin = useCallback((skinId: string, vehicleId: string, currency?: CurrencyType) => {
+    return viewportRef.current?.purchaseVehicleSkin(skinId, vehicleId, currency) ?? { success: false, message: "Engine not ready" };
+  }, []);
+
+  const claimAchievement = useCallback((achievementId: string) => {
+    return viewportRef.current?.claimAchievement(achievementId) ?? { success: false, rewardCash: 0, rewardCoins: 0, message: "Engine not ready" };
+  }, []);
+
+  const claimSeasonalChallenge = useCallback((challengeId: string) => {
+    return viewportRef.current?.claimSeasonalChallenge(challengeId) ?? { success: false, rewardCash: 0, rewardCoins: 0, message: "Engine not ready" };
+  }, []);
+
+  const claimSeasonalMilestone = useCallback(() => {
+    return viewportRef.current?.claimSeasonalMilestone() ?? { success: false, rewardCoins: 0, message: "Engine not ready" };
+  }, []);
+
+  const dismissOnboarding = useCallback(() => {
+    viewportRef.current?.dismissOnboarding();
+    setSnapshot((prev) => ({ ...prev, hasSeenOnboarding: true }));
+  }, []);
+
   const receiveSnapshot = useCallback((next: GameSnapshot) => {
     setSnapshot((current) => {
       if (
@@ -49,7 +227,46 @@ function App() {
         current.speedKmh === next.speedKmh &&
         current.interactionPrompt === next.interactionPrompt &&
         current.statusMessage === next.statusMessage &&
-        current.vehicleType === next.vehicleType
+        current.vehicleType === next.vehicleType &&
+        current.cash === next.cash &&
+        current.trafficFine === next.trafficFine &&
+        current.hasApartmentRental === next.hasApartmentRental &&
+        current.activeInterior === next.activeInterior &&
+        current.timeString === next.timeString &&
+        current.gameScore === next.gameScore &&
+        current.featuredContact === next.featuredContact &&
+        current.dailyIncome === next.dailyIncome &&
+        current.dayCount === next.dayCount &&
+        current.gpsTarget === next.gpsTarget &&
+        current.activeMission === next.activeMission &&
+        current.availableMissionsCount === next.availableMissionsCount &&
+        current.playerCoords?.x === next.playerCoords?.x &&
+        current.playerCoords?.z === next.playerCoords?.z &&
+        isHeadingEquivalent(current.playerHeading, next.playerHeading, 0.035) &&
+        current.storyInfo?.stageName === next.storyInfo?.stageName &&
+        current.storyInfo?.currentObjective === next.storyInfo?.currentObjective &&
+        current.weatherPreset === next.weatherPreset &&
+        current.weatherDisplayName === next.weatherDisplayName &&
+        current.audioMuted === next.audioMuted &&
+        current.isFurnishingMode === next.isFurnishingMode &&
+        current.furnishingTargetName === next.furnishingTargetName &&
+        current.unplacedFurnitureCount === next.unplacedFurnitureCount &&
+        current.placedFurnitureCount === next.placedFurnitureCount &&
+        current.isFurnitureShopOpen === next.isFurnitureShopOpen &&
+        current.selectedHomePropertyId === next.selectedHomePropertyId &&
+        current.homeNavInfo?.propertyId === next.homeNavInfo?.propertyId &&
+        current.homeNavInfo?.distanceMeters === next.homeNavInfo?.distanceMeters &&
+        current.playerHomes?.length === next.playerHomes?.length &&
+        current.ownedProperties?.length === next.ownedProperties?.length &&
+        current.needs?.hunger === next.needs?.hunger &&
+        current.needs?.energy === next.needs?.energy &&
+        current.needs?.hygiene === next.needs?.hygiene &&
+        current.cameraMode === next.cameraMode &&
+        current.premiumCoins === next.premiumCoins &&
+        current.isEmpireModalOpen === next.isEmpireModalOpen &&
+        current.isSmartphoneOpen === next.isSmartphoneOpen &&
+        current.empireOverview === next.empireOverview &&
+        current.hasSeenOnboarding === next.hasSeenOnboarding
       ) {
         return current;
       }
@@ -74,13 +291,89 @@ function App() {
         speedKmh={snapshot.speedKmh}
         interactionPrompt={snapshot.interactionPrompt}
         statusMessage={snapshot.statusMessage}
+        cash={snapshot.cash}
+        trafficFine={snapshot.trafficFine}
+        hasApartmentRental={snapshot.hasApartmentRental}
+        activeInterior={snapshot.activeInterior}
+        timeString={snapshot.timeString}
+        gameScore={snapshot.gameScore}
+        featuredContact={snapshot.featuredContact}
+        ownedProperties={snapshot.ownedProperties}
+        ownedBusinesses={snapshot.ownedBusinesses}
+        dailyIncome={snapshot.dailyIncome}
+        dayCount={snapshot.dayCount}
+        gpsTarget={snapshot.gpsTarget}
+        activeMission={snapshot.activeMission}
+        availableMissionsCount={snapshot.availableMissionsCount}
+        playerCoords={snapshot.playerCoords}
+        playerHeading={snapshot.playerHeading}
+        storyInfo={snapshot.storyInfo}
+        weatherPreset={snapshot.weatherPreset}
+        weatherDisplayName={snapshot.weatherDisplayName}
+        audioMuted={snapshot.audioMuted}
+        isFurnishingMode={snapshot.isFurnishingMode}
+        furnishingTargetName={snapshot.furnishingTargetName}
+        unplacedFurnitureCount={snapshot.unplacedFurnitureCount}
+        placedFurnitureCount={snapshot.placedFurnitureCount}
+        isFurnitureShopOpen={snapshot.isFurnitureShopOpen}
+        selectedHomePropertyId={snapshot.selectedHomePropertyId}
+        homeNavInfo={snapshot.homeNavInfo}
+        playerHomes={snapshot.playerHomes}
+        needs={snapshot.needs}
+        freelanceInfo={snapshot.freelanceInfo}
+        cameraMode={snapshot.cameraMode ?? "third-person"}
+        cameraDebug={snapshot.cameraDebug}
+        onToggleCameraMode={toggleCameraMode}
+        premiumCoins={snapshot.premiumCoins}
+        isEmpireModalOpen={snapshot.isEmpireModalOpen}
+        isSmartphoneOpen={snapshot.isSmartphoneOpen}
+        onToggleSmartphone={toggleSmartphone}
+        onCaptureScreenshot={captureScreenshot}
+        onInteractSocial={interactSocial}
+        vehicleCondition={snapshot.vehicleCondition}
+        empireOverview={snapshot.empireOverview}
+        onToggleEmpireModal={toggleEmpireModal}
+        onUpgradeBusiness={upgradeBusiness}
+        onMaintainBusiness={maintainBusiness}
+        onRenovateProperty={renovateProperty}
+        onPurchaseVehicle={purchaseVehicle}
+        onPurchaseVehicleSkin={purchaseVehicleSkin}
+        onClaimAchievement={claimAchievement}
+        onClaimSeasonalChallenge={claimSeasonalChallenge}
+        onClaimSeasonalMilestone={claimSeasonalMilestone}
         graphicsQuality={graphicsQuality}
         onStart={start}
         onPause={pause}
         onResume={resume}
         onReset={reset}
         onControlKey={setControlKey}
+        onSetGPSTarget={setGPSTarget}
+        onSetSelectedHome={setSelectedHome}
+        onTeleportHome={teleportHome}
+        onFindMyHome={findMyHome}
+        onLeaseProperty={leaseProperty}
+        onPurchaseProperty={purchaseProperty}
+        onAcceptMission={acceptMission}
+        onCancelMission={cancelMission}
+        onExamineIndenture={examineIndenture}
+        onChooseInvestigation={chooseInvestigation}
+        onChooseCareer={chooseCareer}
+        onResolveChapter1={resolveChapter1}
+        onCycleWeather={cycleWeather}
+        onToggleAudioMute={toggleAudioMute}
+        onOpenFurnitureShop={openFurnitureShop}
+        onCloseFurnitureShop={closeFurnitureShop}
+        onPurchaseFurniture={purchaseFurniture}
+        onToggleFurnishingMode={toggleFurnishingMode}
+        onPlaceFurnitureItem={placeFurnitureItem}
+        onMoveFurnitureItem={moveFurnitureItem}
+        onStoreFurnitureItem={storeFurnitureItem}
+        onRotateFurnitureItem={rotateFurnitureItem}
+        getUnplacedFurniture={getUnplacedFurniture}
+        getPlacedFurniture={getPlacedFurniture}
         onQualityChange={setGraphicsQuality}
+        hasSeenOnboarding={snapshot.hasSeenOnboarding}
+        onDismissOnboarding={dismissOnboarding}
       />
     </main>
   );

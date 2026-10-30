@@ -382,6 +382,133 @@ export function buildNavigationNetwork(): NavigationNetwork {
     }
   }
 
+  // 3. BUILD PEDESTRIAN CROSSWALKS (Zebra crossings linking opposite sidewalks)
+  const arterialXRoads = ROAD_LAYOUT.filter((r) => r.axis === "x" && r.arterial);
+  const arterialZRoads = ROAD_LAYOUT.filter((r) => r.axis === "z" && r.arterial);
+
+  for (const hRoad of arterialXRoads) {
+    for (const vRoad of arterialZRoads) {
+      const ix = vRoad.center;
+      const iz = hRoad.center;
+      const hOffset = vRoad.width / 2 + 2.5;
+      const vOffset = hRoad.width / 2 + 2.5;
+
+      // Crossing horizontal road (running North-South across zCenter) at ix + side * hOffset
+      for (const side of [-1, 1] as const) {
+        const crossX = Math.round(ix + side * hOffset);
+        const northCurbZ = Math.round(iz - hRoad.width / 2 - 1.25);
+        const southCurbZ = Math.round(iz + hRoad.width / 2 + 1.25);
+        const midZ = Math.round(iz);
+
+        const idNorthCurb = `ped_cw_curb_${crossX}_${northCurbZ}`;
+        const idMid = `ped_cw_road_${crossX}_${midZ}`;
+        const idSouthCurb = `ped_cw_curb_${crossX}_${southCurbZ}`;
+
+        pedestrianWaypoints.set(idNorthCurb, {
+          id: idNorthCurb,
+          x: crossX,
+          z: northCurbZ,
+          area: "sidewalk",
+          nextIds: [idMid],
+        });
+        pedestrianWaypoints.set(idMid, {
+          id: idMid,
+          x: crossX,
+          z: midZ,
+          area: "crosswalk",
+          nextIds: [idNorthCurb, idSouthCurb],
+        });
+        pedestrianWaypoints.set(idSouthCurb, {
+          id: idSouthCurb,
+          x: crossX,
+          z: southCurbZ,
+          area: "sidewalk",
+          nextIds: [idMid],
+        });
+
+        // Link curb waypoints to closest sidewalk waypoints
+        for (const [curbId, curbZ] of [
+          [idNorthCurb, northCurbZ],
+          [idSouthCurb, southCurbZ],
+        ] as const) {
+          const curbWp = pedestrianWaypoints.get(curbId);
+          if (!curbWp) continue;
+          let nearestSw: PedestrianWaypoint | null = null;
+          let nearestDist = Infinity;
+          for (const [swId, swWp] of pedestrianWaypoints) {
+            if (swWp.area !== "sidewalk" || swId.startsWith("ped_cw_")) continue;
+            const d = Math.hypot(swWp.x - crossX, swWp.z - curbZ);
+            if (d < nearestDist) {
+              nearestDist = d;
+              nearestSw = swWp;
+            }
+          }
+          if (nearestSw && nearestDist < 16) {
+            if (!curbWp.nextIds.includes(nearestSw.id)) curbWp.nextIds.push(nearestSw.id);
+            if (!nearestSw.nextIds.includes(curbWp.id)) nearestSw.nextIds.push(curbWp.id);
+          }
+        }
+      }
+
+      // Crossing vertical road (running East-West across xCenter) at iz + side * vOffset
+      for (const side of [-1, 1] as const) {
+        const crossZ = Math.round(iz + side * vOffset);
+        const westCurbX = Math.round(ix - vRoad.width / 2 - 1.25);
+        const eastCurbX = Math.round(ix + vRoad.width / 2 + 1.25);
+        const midX = Math.round(ix);
+
+        const idWestCurb = `ped_cw_curb_${westCurbX}_${crossZ}`;
+        const idMid = `ped_cw_road_${midX}_${crossZ}`;
+        const idEastCurb = `ped_cw_curb_${eastCurbX}_${crossZ}`;
+
+        pedestrianWaypoints.set(idWestCurb, {
+          id: idWestCurb,
+          x: westCurbX,
+          z: crossZ,
+          area: "sidewalk",
+          nextIds: [idMid],
+        });
+        pedestrianWaypoints.set(idMid, {
+          id: idMid,
+          x: midX,
+          z: crossZ,
+          area: "crosswalk",
+          nextIds: [idWestCurb, idEastCurb],
+        });
+        pedestrianWaypoints.set(idEastCurb, {
+          id: idEastCurb,
+          x: eastCurbX,
+          z: crossZ,
+          area: "sidewalk",
+          nextIds: [idMid],
+        });
+
+        // Link curb waypoints to closest sidewalk waypoints
+        for (const [curbId, curbX] of [
+          [idWestCurb, westCurbX],
+          [idEastCurb, eastCurbX],
+        ] as const) {
+          const curbWp = pedestrianWaypoints.get(curbId);
+          if (!curbWp) continue;
+          let nearestSw: PedestrianWaypoint | null = null;
+          let nearestDist = Infinity;
+          for (const [swId, swWp] of pedestrianWaypoints) {
+            if (swWp.area !== "sidewalk" || swId.startsWith("ped_cw_")) continue;
+            const d = Math.hypot(swWp.x - curbX, swWp.z - crossZ);
+            if (d < nearestDist) {
+              nearestDist = d;
+              nearestSw = swWp;
+            }
+          }
+          if (nearestSw && nearestDist < 16) {
+            if (!curbWp.nextIds.includes(nearestSw.id)) curbWp.nextIds.push(nearestSw.id);
+            if (!nearestSw.nextIds.includes(curbWp.id)) nearestSw.nextIds.push(curbWp.id);
+          }
+        }
+      }
+    }
+  }
+
   return {
     trafficWaypoints,
     trafficWaypointList: Array.from(trafficWaypoints.values()),
@@ -430,4 +557,17 @@ export function getNextTrafficWaypoint(
   // At intersections: prefer straight ahead 60%, turn right 20%, turn left 20%
   const choice = current.nextIds[Math.floor(rng() * current.nextIds.length)];
   return network.trafficWaypoints.get(choice) ?? null;
+}
+
+/**
+ * Evaluates whether two angular headings are equivalent within a given threshold,
+ * correctly handling modular angular wraparound across 0 and 2π / -π and +π boundaries.
+ */
+export function isHeadingEquivalent(h1?: number, h2?: number, threshold = 0.035): boolean {
+  if (h1 === undefined || h2 === undefined) return h1 === h2;
+  let diff = Math.abs(h1 - h2) % (Math.PI * 2);
+  if (diff > Math.PI) {
+    diff = Math.PI * 2 - diff;
+  }
+  return diff < threshold;
 }
