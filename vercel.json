@@ -1,10 +1,14 @@
+
 {
   "version": 2,
   "framework": null,
   "installCommand": "pnpm install --frozen-lockfile",
   "buildCommand": "pnpm --filter @workspace/kano-streets run build",
-  "outputDirectory": "artifacts/kano-streets/dist/public",
+  "outputDirectory": "dist/public",
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
