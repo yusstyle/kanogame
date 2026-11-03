@@ -4,6 +4,7 @@ import GameViewport, { type GameViewportHandle } from "./components/GameViewport
 import type { CareerPathChoice, GameScreen, GameSnapshot, GraphicsQuality, PropertyId, BusinessId, CurrencyType } from "./game/types";
 import { authService } from "./game/authService";
 import { isHeadingEquivalent } from "./game/navigation";
+import { getRecommendedGraphicsQuality, saveGraphicsQualityPreference } from "./game/deviceDetection";
 
 export { isHeadingEquivalent };
 
@@ -20,7 +21,12 @@ function App() {
   const viewportRef = useRef<GameViewportHandle>(null);
   const [screen, setScreen] = useState<GameScreen>("menu");
   const [snapshot, setSnapshot] = useState<GameSnapshot>(INITIAL_SNAPSHOT);
-  const [graphicsQuality, setGraphicsQuality] = useState<GraphicsQuality>("balanced");
+  const [graphicsQuality, setGraphicsQuality] = useState<GraphicsQuality>(() => getRecommendedGraphicsQuality());
+
+  const handleQualityChange = useCallback((quality: GraphicsQuality) => {
+    setGraphicsQuality(quality);
+    saveGraphicsQualityPreference(quality);
+  }, []);
 
   useEffect(() => {
     // Check for existing session on startup (401 seamlessly resolves to Guest Mode)
@@ -371,7 +377,7 @@ function App() {
         onRotateFurnitureItem={rotateFurnitureItem}
         getUnplacedFurniture={getUnplacedFurniture}
         getPlacedFurniture={getPlacedFurniture}
-        onQualityChange={setGraphicsQuality}
+        onQualityChange={handleQualityChange}
         hasSeenOnboarding={snapshot.hasSeenOnboarding}
         onDismissOnboarding={dismissOnboarding}
       />

@@ -65,6 +65,15 @@ export type GameViewportHandle = {
   dismissOnboarding: () => void;
 };
 
+const LOADING_TIPS = [
+  "Rest at your Sabon Gari compound to restore stamina and preserve your empire progress.",
+  "Press C to toggle between Third-Person, Cinematic, and Dash Cam views.",
+  "Look out for keke napep and danfo minibuses along the commercial avenues.",
+  "High heat index slows stamina recovery. Hydrate or seek shade under neem trees.",
+  "Visit the local bazaar to buy and place authentic Sahelian furniture in your compounds.",
+  "Complete delivery and freelance contracts across Fagge and Sabon Gari to build your empire.",
+];
+
 type GameViewportProps = {
   screen: GameScreen;
   graphicsQuality: GraphicsQuality;
@@ -81,6 +90,16 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
     const qualityRef = useRef(graphicsQuality);
     const [gameReady, setGameReady] = useState(false);
     const [webglUnavailable, setWebglUnavailable] = useState(false);
+    const [loadingStage, setLoadingStage] = useState({ progress: 15, stage: "INITIALIZING 3D ENGINE" });
+    const [tipIndex, setTipIndex] = useState(0);
+
+    useEffect(() => {
+      if (gameReady) return;
+      const interval = setInterval(() => {
+        setTipIndex((prev) => (prev + 1) % LOADING_TIPS.length);
+      }, 3500);
+      return () => clearInterval(interval);
+    }, [gameReady]);
 
     callbacksRef.current = { onSnapshot, onPause };
     screenRef.current = screen;
@@ -156,7 +175,11 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
 
       const initialize = async () => {
         try {
+          setLoadingStage({ progress: 20, stage: "INITIALIZING 3D ENGINE" });
           const { GameEngine } = await import("../game/GameEngine");
+          if (cancelled) return;
+          setLoadingStage({ progress: 50, stage: "STREAMING KANO DISTRICTS" });
+          await new Promise((r) => setTimeout(r, 60));
           if (cancelled) return;
           const engine = new GameEngine(canvas, {
             onSnapshot: (snapshot) => callbacksRef.current.onSnapshot(snapshot),
@@ -164,8 +187,15 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
           });
           localEngine = engine;
           engineRef.current = engine;
+          (window as any).__kanoEngine = engine;
+          setLoadingStage({ progress: 85, stage: "SPAWNING TRAFFIC AND CITIZENS" });
+          await new Promise((r) => setTimeout(r, 40));
+          if (cancelled) return;
           engine.setGraphicsQuality(qualityRef.current);
           engine.setScreen(screenRef.current);
+          setLoadingStage({ progress: 100, stage: "ENTERING KANO STREETS" });
+          await new Promise((r) => setTimeout(r, 60));
+          if (cancelled) return;
           setGameReady(true);
         } catch (error) {
           if (cancelled) return;
@@ -179,6 +209,7 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
         cancelled = true;
         window.removeEventListener("blur", handleBlur);
         localEngine?.dispose();
+        delete (window as any).__kanoEngine;
         if (engineRef.current === localEngine) engineRef.current = null;
       };
     }, [gameRequested]);
@@ -217,7 +248,22 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
           role="img"
         />
         {gameRequested && !webglUnavailable && !gameReady && (
-          <div className="ks-game-loading" aria-live="polite">Loading the neighborhood…</div>
+          <div className="ks-loading-overlay" aria-live="polite">
+            <div className="ks-loading-card">
+              <div className="ks-loading-badge">KANO STREETS · 3D WORLD</div>
+              <h2 className="ks-loading-title">{loadingStage.stage}</h2>
+              <div className="ks-loading-bar-track">
+                <div
+                  className="ks-loading-bar-fill"
+                  style={{ width: `${loadingStage.progress}%` }}
+                />
+              </div>
+              <div className="ks-loading-footer">
+                <span className="ks-loading-percent">{loadingStage.progress}%</span>
+                <span className="ks-loading-tip">{LOADING_TIPS[tipIndex]}</span>
+              </div>
+            </div>
+          </div>
         )}
       </>
     );

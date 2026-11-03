@@ -925,7 +925,7 @@ function addAutoTuningWorkshop(root: THREE.Group, materials: GameMaterials, coll
   );
 }
 
-function mergeStaticMeshesByCell(root: THREE.Group) {
+function mergeStaticMeshesByCell(root: THREE.Group, staticBatches?: THREE.Mesh[]) {
   root.updateMatrixWorld(true);
   const buckets = new Map<
     string,
@@ -991,6 +991,7 @@ function mergeStaticMeshesByCell(root: THREE.Group) {
     batch.receiveShadow = bucket.receiveShadow;
     batch.name = `neighborhood-static-${key.slice(-8)}`;
     root.add(batch);
+    if (staticBatches) staticBatches.push(batch);
     for (const mesh of bucket.sources) mesh.parent?.remove(mesh);
   }
 
@@ -1003,12 +1004,14 @@ export type WorldResult = {
   bounds: number;
   gateSlots: THREE.Group[];
   skyMesh?: THREE.Mesh;
+  staticBatches?: THREE.Mesh[];
 };
 
 export function createWorld(materials: GameMaterials): WorldResult {
   const root = new THREE.Group();
   const colliders: Collider[] = [];
   const gateSlots: THREE.Group[] = [];
+  const staticBatches: THREE.Mesh[] = [];
   const bounds = WORLD_BOUNDS;
   const cityExtent = WORLD_EXTENT;
 
@@ -1364,7 +1367,7 @@ export function createWorld(materials: GameMaterials): WorldResult {
     root.add(mound);
   });
 
-  mergeStaticMeshesByCell(root);
+  mergeStaticMeshesByCell(root, staticBatches);
 
-  return { root, colliders, bounds, gateSlots, skyMesh: sky };
+  return { root, colliders, bounds, gateSlots, skyMesh: sky, staticBatches };
 }

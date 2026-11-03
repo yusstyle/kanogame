@@ -182,7 +182,7 @@ export class TrafficSystem {
   public vehicles: AIVehicle[] = [];
   public parkedVehicles: ParkedVehicle[] = [];
   public signalPosts: TrafficSignalPost[] = [];
-  private readonly root = new THREE.Group();
+  public readonly root = new THREE.Group();
   private quality: GraphicsQuality = "balanced";
   private time = 0;
   private timeOfDayHours = 10;

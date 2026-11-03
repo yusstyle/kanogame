@@ -1,15 +1,15 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import './GameUI.css';
 import TouchControls from './TouchControls';
 import type { ActiveMissionInfo, CareerPathChoice, SocialContact, StorySnapshotInfo, VehicleType, FurnitureInstance, PropertyId, HomeNavInfo, NeedsState, FreelanceSnapshotInfo, PlayerHomeEntry, BusinessId, CurrencyType, EmpireOverviewSnapshot, CameraMode, CameraDebugInfo } from '../game/types';
 import { KANO_LANDMARKS, getGpsLandmark, computeGpsGuidance } from '../game/landmarks';
 import { CAREER_MISSIONS_CATALOG } from '../game/missionSystem';
-import CityMapModal from './CityMapModal';
-import FurnitureShopModal from './FurnitureShopModal';
-import FurnishingOverlay from './FurnishingOverlay';
-import EmpireModal from './EmpireModal';
-import SmartphoneModal from './SmartphoneModal';
-import AccountModal from './AccountModal';
+const CityMapModal = lazy(() => import('./CityMapModal'));
+const FurnitureShopModal = lazy(() => import('./FurnitureShopModal'));
+const FurnishingOverlay = lazy(() => import('./FurnishingOverlay'));
+const EmpireModal = lazy(() => import('./EmpireModal'));
+const SmartphoneModal = lazy(() => import('./SmartphoneModal'));
+const AccountModal = lazy(() => import('./AccountModal'));
 import { authService, type UserProfile } from '../game/authService';
 
 export type Screen = 'menu' | 'playing' | 'paused';
@@ -368,7 +368,11 @@ export default function GameUI({
           <span>AN ORIGINAL NEIGHBORHOOD, INSPIRED BY KANO</span>
           <span className="ks-prototype-note">World, car &amp; character are original procedural prototype geometry — not photorealistic scans or purchased models.</span>
         </footer>
+        <Suspense fallback={null}>
+          <Suspense fallback={null}>
         <AccountModal isOpen={showAccountModal} onClose={() => setShowAccountModal(false)} />
+      </Suspense>
+        </Suspense>
       </div>
     );
   }
@@ -813,7 +817,8 @@ export default function GameUI({
           {statusMessage && <div className="ks-status-message" role="status">{statusMessage}</div>}
 
           {showDirectory && (
-            <CityMapModal
+            <Suspense fallback={null}>
+              <CityMapModal
               onClose={() => setShowDirectory(false)}
               playerCoords={playerCoords}
               playerHeading={playerHeading}
@@ -836,6 +841,7 @@ export default function GameUI({
               onChooseCareer={onChooseCareer}
               onResolveChapter1={onResolveChapter1}
             />
+          </Suspense>
           )}
 
           {showMissions && (
@@ -901,15 +907,18 @@ export default function GameUI({
           )}
 
           {isFurnitureShopOpen && (
-            <FurnitureShopModal
+            <Suspense fallback={null}>
+              <FurnitureShopModal
               onClose={() => onCloseFurnitureShop?.()}
               playerCash={cash ?? 0}
               onPurchaseFurniture={onPurchaseFurniture ?? ((id: string) => ({ success: false, message: "" }))}
             />
+          </Suspense>
           )}
 
           {(showEmpire || isEmpireModalOpen) && (
-            <EmpireModal
+            <Suspense fallback={null}>
+              <EmpireModal
               onClose={() => {
                 setShowEmpire(false);
                 onToggleEmpireModal?.(false);
@@ -926,10 +935,12 @@ export default function GameUI({
               onClaimSeasonalChallenge={onClaimSeasonalChallenge}
               onClaimSeasonalMilestone={onClaimSeasonalMilestone}
             />
+          </Suspense>
           )}
 
           {(showSmartphone || isSmartphoneOpen) && (
-            <SmartphoneModal
+            <Suspense fallback={null}>
+              <SmartphoneModal
               onClose={() => {
                 setShowSmartphone(false);
                 onToggleSmartphone?.(false);
@@ -989,10 +1000,12 @@ export default function GameUI({
               onUpgradeBusiness={onUpgradeBusiness}
               onMaintainBusiness={onMaintainBusiness}
             />
+          </Suspense>
           )}
 
           {isFurnishingMode && canFurnish && (
-            <FurnishingOverlay
+            <Suspense fallback={null}>
+              <FurnishingOverlay
               propertyName={furnishingTargetName || "Residence"}
               propertyId={currentPropertyId}
               unplacedItems={getUnplacedFurniture ? getUnplacedFurniture() : []}
@@ -1003,6 +1016,7 @@ export default function GameUI({
               onStoreItem={onStoreFurnitureItem ?? (() => ({ success: false, message: "" }))}
               onRotateItem={onRotateFurnitureItem ?? (() => ({ success: false, message: "" }))}
             />
+          </Suspense>
           )}
           {/* Camera & Occlusion Debug Diagnostic Overlay */}
           {showCameraDebug && (
@@ -1129,7 +1143,9 @@ export default function GameUI({
           </section>
         </div>
       )}
-      <AccountModal isOpen={showAccountModal} onClose={() => setShowAccountModal(false)} />
+      <Suspense fallback={null}>
+        <AccountModal isOpen={showAccountModal} onClose={() => setShowAccountModal(false)} />
+      </Suspense>
     </div>
   );
 }

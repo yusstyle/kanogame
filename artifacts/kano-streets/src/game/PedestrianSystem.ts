@@ -386,7 +386,7 @@ const VENDOR_PROFILES = [
 
 export class PedestrianSystem {
   public pedestrians: Pedestrian[] = [];
-  private readonly root = new THREE.Group();
+  public readonly root = new THREE.Group();
   private quality: GraphicsQuality = "balanced";
   private time = 0;
   private timeOfDayHours = 10;

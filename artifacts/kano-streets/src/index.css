@@ -499,19 +499,92 @@ button {
   touch-action: none;
 }
 
-.ks-game-loading {
+.ks-loading-overlay {
   position: fixed;
-  z-index: 15;
-  pointer-events: none;
-  top: 50%;
-  left: 50%;
-  padding: 11px 16px;
-  transform: translate(-50%, -50%);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(20, 29, 27, 0.76);
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: radial-gradient(circle at 50% 40%, rgba(30, 42, 38, 0.94), rgba(14, 20, 18, 0.98));
+  backdrop-filter: blur(6px);
   color: #f4eedf;
-  font: 11px 'DM Sans', 'Trebuchet MS', sans-serif;
-  letter-spacing: 0.08em;
+  font-family: 'DM Sans', 'Trebuchet MS', sans-serif;
+  user-select: none;
+}
+
+.ks-loading-card {
+  width: min(100%, 460px);
+  padding: clamp(20px, 4vw, 32px);
+  background: rgba(22, 32, 29, 0.95);
+  border: 1px solid rgba(228, 161, 110, 0.28);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ks-loading-badge {
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  font-weight: 700;
+  color: #e4a16e;
+  text-transform: uppercase;
+}
+
+.ks-loading-title {
+  margin: 0;
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: clamp(18px, 3.5vw, 22px);
+  font-weight: 500;
+  color: #f7f2e7;
+  letter-spacing: 0.02em;
+}
+
+.ks-loading-bar-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  border-radius: 3px;
+  position: relative;
+}
+
+.ks-loading-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #b8860b, #e4a16e, #4ade80);
+  border-radius: 3px;
+  transition: width 0.25s ease-out;
+}
+
+.ks-loading-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 12px;
+  color: rgba(244, 238, 223, 0.7);
+}
+
+.ks-loading-percent {
+  font-weight: 700;
+  color: #e4a16e;
+  font-variant-numeric: tabular-nums;
+  min-width: 38px;
+}
+
+.ks-loading-tip {
+  font-size: 11px;
+  font-style: italic;
+  color: rgba(244, 238, 223, 0.65);
+  line-height: 1.4;
+  text-align: right;
+  flex: 1;
+}
+
+.ks-game-loading {
+  display: none;
 }
 
 .ks-webgl-fallback {

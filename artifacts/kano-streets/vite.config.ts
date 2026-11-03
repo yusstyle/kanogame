@@ -55,6 +55,8 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('/node_modules/three/')) return 'three-vendor';
+          if (id.includes('/node_modules/recharts/') || id.includes('/node_modules/framer-motion/') || id.includes('/node_modules/@radix-ui/')) return 'ui-vendor';
+          if (id.includes('/node_modules/react/') || id.includes('/node_modules/react-dom/')) return 'react-vendor';
         },
       },
     },

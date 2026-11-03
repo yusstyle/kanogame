@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { makeSignMaterial } from "./materials";
 import type { BuildingKind, Collider, GameMaterials, PlotAsset } from "./types";
 
@@ -77,6 +78,69 @@ function addArchFrame(
   mesh.receiveShadow = true;
   root.add(mesh);
   return mesh;
+}
+
+
+let cachedGateMetalGeom: THREE.BufferGeometry | null = null;
+let cachedGateTrimGeom: THREE.BufferGeometry | null = null;
+let cachedGateOchreGeom: THREE.BufferGeometry | null = null;
+let cachedGateDarkTrimGeom: THREE.BufferGeometry | null = null;
+
+function makeBoxPartGeom(x: number, y: number, z: number, w: number, h: number, d: number, rotZ = 0): THREE.BufferGeometry {
+  const g = unitBox.clone();
+  const m = new THREE.Matrix4();
+  if (rotZ !== 0) {
+    m.makeRotationZ(rotZ);
+    g.applyMatrix4(m);
+  }
+  m.makeScale(w, h, d);
+  g.applyMatrix4(m);
+  m.makeTranslation(x, y, z);
+  g.applyMatrix4(m);
+  return g;
+}
+
+function getSharedGateGeometries() {
+  if (cachedGateMetalGeom) {
+    return {
+      metal: cachedGateMetalGeom,
+      trim: cachedGateTrimGeom!,
+      ochre: cachedGateOchreGeom!,
+      darkTrim: cachedGateDarkTrimGeom!,
+    };
+  }
+
+  cachedGateMetalGeom = makeBoxPartGeom(0, 0.86, 0, 1.82, 1.62, 0.14);
+
+  const trimParts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 9; i += 2) {
+    const x = -0.76 + i * 0.19;
+    trimParts.push(makeBoxPartGeom(x, 0.84, 0.09, 0.05, 1.54, 0.09));
+  }
+  trimParts.push(makeBoxPartGeom(0, 0.22, 0.1, 1.88, 0.09, 0.11));
+  trimParts.push(makeBoxPartGeom(0, 1.55, 0.1, 1.88, 0.08, 0.11));
+  cachedGateTrimGeom = mergeGeometries(trimParts, false);
+  for (const p of trimParts) p.dispose();
+
+  const ochreParts: THREE.BufferGeometry[] = [];
+  for (let i = 1; i < 9; i += 2) {
+    const x = -0.76 + i * 0.19;
+    ochreParts.push(makeBoxPartGeom(x, 0.84, 0.09, 0.05, 1.54, 0.09));
+  }
+  for (const x of [-0.48, 0, 0.48]) {
+    ochreParts.push(makeBoxPartGeom(x, 0.88, 0.12, 0.14, 0.14, 0.08, Math.PI / 4));
+  }
+  cachedGateOchreGeom = mergeGeometries(ochreParts, false);
+  for (const p of ochreParts) p.dispose();
+
+  cachedGateDarkTrimGeom = makeBoxPartGeom(0, 0.04, 0.01, 2.1, 0.12, 0.68);
+
+  return {
+    metal: cachedGateMetalGeom,
+    trim: cachedGateTrimGeom,
+    ochre: cachedGateOchreGeom,
+    darkTrim: cachedGateDarkTrimGeom,
+  };
 }
 
 function box(
@@ -195,18 +259,26 @@ function addCourtyard(
   gateSlot.add(proceduralGate);
   root.add(gateSlot);
 
-  box(proceduralGate, materials.metal, 0, 0.86, 0, 1.82, 1.62, 0.14);
-  for (let i = 0; i < 9; i += 1) {
-    const x = -0.76 + i * 0.19;
-    box(proceduralGate, i % 2 ? materials.trim : materials.ochre, x, 0.84, 0.09, 0.05, 1.54, 0.09);
-  }
-  for (const x of [-0.48, 0, 0.48]) {
-    const stud = box(proceduralGate, materials.ochre, x, 0.88, 0.12, 0.14, 0.14, 0.08);
-    stud.rotation.z = Math.PI / 4;
-  }
-  box(proceduralGate, materials.trim, 0, 0.22, 0.1, 1.88, 0.09, 0.11);
-  box(proceduralGate, materials.trim, 0, 1.55, 0.1, 1.88, 0.08, 0.11);
-  box(proceduralGate, materials.darkTrim, 0, 0.04, 0.01, 2.1, 0.12, 0.68, false);
+  const gateGeoms = getSharedGateGeometries();
+  const mMetal = new THREE.Mesh(gateGeoms.metal, materials.metal);
+  mMetal.castShadow = true;
+  mMetal.receiveShadow = true;
+  proceduralGate.add(mMetal);
+
+  const mTrim = new THREE.Mesh(gateGeoms.trim, materials.trim);
+  mTrim.castShadow = true;
+  mTrim.receiveShadow = true;
+  proceduralGate.add(mTrim);
+
+  const mOchre = new THREE.Mesh(gateGeoms.ochre, materials.ochre);
+  mOchre.castShadow = true;
+  mOchre.receiveShadow = true;
+  proceduralGate.add(mOchre);
+
+  const mDark = new THREE.Mesh(gateGeoms.darkTrim, materials.darkTrim);
+  mDark.castShadow = false;
+  mDark.receiveShadow = true;
+  proceduralGate.add(mDark);
   proceduralGate.traverse((c) => { c.userData.noMerge = true; });
 
   // Traditional Hausa exterior mud benches (Dakali) for roadside conversation

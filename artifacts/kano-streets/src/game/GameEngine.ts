@@ -29,6 +29,7 @@ import { MissionSystem } from "./missionSystem";
 import { StorySystem } from "./storySystem";
 import { WeatherSystem, type WeatherPreset } from "./weatherSystem";
 import { AudioSystem } from "./audioSystem";
+import { detectDeviceCapability } from "./deviceDetection";
 import { getPropertyByEntrance, getPropertyRegistryEntry } from "./propertyRegistry";
 import { LifeSimulationSystem } from "./lifeSimulation";
 import { FreelanceSystem, FREELANCE_CONTRACT_CATALOG } from "./freelanceSystem";
@@ -104,6 +105,13 @@ export class GameEngine {
   private running = true;
   private animationFrame = 0;
   private lastFrameAt = 0;
+  private frameTimes: number[] = [];
+  private currentFps = 60;
+  private maxFrameTimeMs = 16.6;
+  private staticBatches: THREE.Mesh[] = [];
+  private chunkCullCounter = 0;
+  private lastChunkCullPos = new THREE.Vector3(9999, 9999, 9999);
+  private deviceCapability = detectDeviceCapability();
   private lastSnapshotAt = 0;
   private statusMessage: string | null = null;
   private playerPosition = PLAYER_START.clone();
@@ -243,6 +251,7 @@ export class GameEngine {
     this.economy.resolveSelectedHome(this.hasApartmentRental);
     this.syncAllPlacedFurniture();
     this.world = createWorld(this.materials);
+    this.staticBatches = this.world.staticBatches || [];
     this.colliderIndex = new ColliderIndex(this.world.colliders);
     this.scene.add(this.world.root);
     this.radiatorSteamGroup.name = "RadiatorSteamEffects";
@@ -675,21 +684,64 @@ export class GameEngine {
     this.touchLookPointerId = null;
   }
 
+  private updateChunkCulling(force = false) {
+    if (!this.staticBatches || this.staticBatches.length === 0) return;
+    const center = this.playerPosition;
+    if (!force && center.distanceToSquared(this.lastChunkCullPos) < 16) return;
+    this.lastChunkCullPos.copy(center);
+
+    const isMobile = this.deviceCapability?.isMobile;
+    const maxDist = this.graphicsQuality === "performance" ? 110 : (isMobile || this.graphicsQuality === "balanced") ? 155 : 210;
+    const maxDistSq = maxDist * maxDist;
+
+    for (let i = 0; i < this.staticBatches.length; i++) {
+      const batch = this.staticBatches[i];
+      const sphere = batch.geometry.boundingSphere;
+      if (!sphere) continue;
+      const dx = sphere.center.x - center.x;
+      const dz = sphere.center.z - center.z;
+      const dSq = dx * dx + dz * dz;
+      const effectiveDistSq = Math.max(0, dSq - sphere.radius * sphere.radius);
+      batch.visible = effectiveDistSq <= maxDistSq;
+    }
+  }
+
   setGraphicsQuality(quality: GraphicsQuality) {
     if (this.graphicsQuality === quality && this.sunLight) return;
     this.graphicsQuality = quality;
     this.trafficSystem?.setQuality(quality);
     this.pedestrianSystem?.setQuality(quality);
-    const pixelRatioCap = quality === "performance" ? 1 : quality === "quality" ? 1.65 : 1.25;
+
+    const isMobile = this.deviceCapability?.isMobile;
+    let pixelRatioCap: number;
+    let shadowSize: number;
+    let shadowBounds: number;
+
+    if (isMobile) {
+      pixelRatioCap = quality === "performance" ? 0.9 : quality === "quality" ? 1.25 : 1.05;
+      shadowSize = quality === "quality" ? 1024 : 512;
+      shadowBounds = quality === "quality" ? 48 : 36;
+    } else {
+      pixelRatioCap = quality === "performance" ? 1.0 : quality === "quality" ? 1.65 : 1.25;
+      shadowSize = quality === "quality" ? 2048 : quality === "balanced" ? 1024 : 512;
+      shadowBounds = quality === "quality" ? 64 : 54;
+    }
+
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, pixelRatioCap));
     this.renderer.shadowMap.enabled = quality !== "performance";
-    const shadowSize = quality === "quality" ? 2048 : quality === "balanced" ? 1024 : 512;
+
     if (this.sunLight) {
       this.sunLight.shadow.mapSize.set(shadowSize, shadowSize);
+      this.sunLight.shadow.camera.left = -shadowBounds;
+      this.sunLight.shadow.camera.right = shadowBounds;
+      this.sunLight.shadow.camera.top = shadowBounds;
+      this.sunLight.shadow.camera.bottom = -shadowBounds;
+      this.sunLight.shadow.camera.updateProjectionMatrix();
       this.sunLight.shadow.map?.dispose();
       this.sunLight.shadow.map = null;
       this.sunLight.shadow.needsUpdate = true;
     }
+    this.updateChunkCulling(true);
     this.resize();
   }
 
@@ -1506,6 +1558,14 @@ export class GameEngine {
   private animate = () => {
     if (!this.running) return;
     const now = performance.now() / 1000;
+    if (this.lastFrameAt > 0) {
+      const frameMs = (now - this.lastFrameAt) * 1000;
+      this.frameTimes.push(frameMs);
+      if (this.frameTimes.length > 60) this.frameTimes.shift();
+      const avgMs = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
+      this.currentFps = Math.round(1000 / Math.max(1, avgMs));
+      this.maxFrameTimeMs = Math.round(Math.max(...this.frameTimes) * 10) / 10;
+    }
     const dt = Math.min(this.lastFrameAt === 0 ? 1 / 60 : now - this.lastFrameAt, 0.04);
     this.lastFrameAt = now;
     if (this.screen === "playing") {
@@ -1582,6 +1642,18 @@ export class GameEngine {
       );
       this.pedestrianSystem.update(dt, this.playerPosition, activeVehPos);
       this.updateVisualConsequences(now);
+      this.chunkCullCounter++;
+      if (this.chunkCullCounter % 20 === 0) {
+        this.updateChunkCulling();
+      }
+    }
+    const isIndoors = Boolean(this.interiorManager.activeInterior);
+    if (this.world?.root && this.world.root.visible === isIndoors) {
+      this.world.root.visible = !isIndoors;
+      if (this.trafficSystem?.root) this.trafficSystem.root.visible = !isIndoors;
+      if (this.pedestrianSystem?.root) this.pedestrianSystem.root.visible = !isIndoors;
+      if (this.radiatorSteamGroup) this.radiatorSteamGroup.visible = !isIndoors;
+      if (this.suyaSmokeGroup) this.suyaSmokeGroup.visible = !isIndoors;
     }
     this.updateLighting();
     this.updateCamera(dt);
@@ -3116,6 +3188,20 @@ export class GameEngine {
     });
   }
 
+  public getPerformanceMetrics() {
+    return {
+      fps: this.currentFps,
+      maxFrameTimeMs: this.maxFrameTimeMs,
+      drawCalls: this.renderer.info.render.calls,
+      triangles: this.renderer.info.render.triangles,
+      points: this.renderer.info.render.points,
+      lines: this.renderer.info.render.lines,
+      geometries: this.renderer.info.memory.geometries,
+      textures: this.renderer.info.memory.textures,
+      quality: this.graphicsQuality,
+    };
+  }
+
   public getCameraDebugInfo(): any {
     const isIndoors = Boolean(this.interiorManager.activeInterior);
     return {
@@ -3455,6 +3541,14 @@ export class GameEngine {
 
   public setWeatherPreset(preset: WeatherPreset): void {
     this.weatherSystem.setPreset(preset);
+    const isIndoors = Boolean(this.interiorManager.activeInterior);
+    if (this.world?.root && this.world.root.visible === isIndoors) {
+      this.world.root.visible = !isIndoors;
+      if (this.trafficSystem?.root) this.trafficSystem.root.visible = !isIndoors;
+      if (this.pedestrianSystem?.root) this.pedestrianSystem.root.visible = !isIndoors;
+      if (this.radiatorSteamGroup) this.radiatorSteamGroup.visible = !isIndoors;
+      if (this.suyaSmokeGroup) this.suyaSmokeGroup.visible = !isIndoors;
+    }
     this.updateLighting();
     this.saveGame();
     this.pushSnapshot(true);
@@ -3463,6 +3557,14 @@ export class GameEngine {
   public cycleWeather(): WeatherPreset {
     const next = this.weatherSystem.cyclePreset();
     this.statusMessage = `Atmosphere: ${this.weatherSystem.getPresetDisplayName(next)}`;
+    const isIndoors = Boolean(this.interiorManager.activeInterior);
+    if (this.world?.root && this.world.root.visible === isIndoors) {
+      this.world.root.visible = !isIndoors;
+      if (this.trafficSystem?.root) this.trafficSystem.root.visible = !isIndoors;
+      if (this.pedestrianSystem?.root) this.pedestrianSystem.root.visible = !isIndoors;
+      if (this.radiatorSteamGroup) this.radiatorSteamGroup.visible = !isIndoors;
+      if (this.suyaSmokeGroup) this.suyaSmokeGroup.visible = !isIndoors;
+    }
     this.updateLighting();
     this.saveGame();
     this.pushSnapshot(true);

@@ -347,7 +347,72 @@ export interface InteriorZone {
 export class BuildingInteriorManager {
   public readonly root = new THREE.Group();
   public interiors = new Map<InteriorId, InteriorZone>();
-  public activeInterior: InteriorId | null = null;
+  private _activeInterior: InteriorId | null = null;
+
+  public get activeInterior(): InteriorId | null {
+    return this._activeInterior;
+  }
+
+  public set activeInterior(id: InteriorId | null) {
+    this._activeInterior = id;
+    this.root.visible = id !== null;
+    for (const [zoneId, zone] of this.interiors) {
+      zone.root.visible = zoneId === id;
+    }
+    if (id === "apartment" || id === "furniture-showroom") {
+      this.ensureApartmentRealisticAssetsLoaded();
+    }
+  }
+
+  private realisticApartmentAssetsLoaded = false;
+  private proceduralSofaRef?: THREE.Group;
+  private proceduralArmchairRef?: THREE.Group;
+  private proceduralBedRef?: THREE.Group;
+  private apartmentGroupRef?: THREE.Group;
+
+  public ensureApartmentRealisticAssetsLoaded() {
+    if (this.realisticApartmentAssetsLoaded) return;
+    this.realisticApartmentAssetsLoaded = true;
+
+    loadGLTFModel("/assets/furniture/SheenWoodLeatherSofa.glb").then((model) => {
+      if (!model || !this.proceduralSofaRef || !this.apartmentGroupRef) return;
+      fitModelToBounds(model, 3.2, 1.35, 1.05, -3.4, -0.55, 0.02, 0);
+      this.proceduralSofaRef.visible = false;
+      this.apartmentGroupRef.add(model);
+    });
+
+    loadGLTFModel("/assets/furniture/SheenChair.glb").then((model) => {
+      if (!model || !this.apartmentGroupRef) return;
+      fitModelToBounds(model, 0.88, 0.88, 0.86, -2.05, 0.55, 0.02, -Math.PI * 0.55);
+      model.name = "realisticArmchair";
+      model.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.userData.isFurniture = true;
+          child.userData.roomObject = "armchair";
+          if (child.material) {
+            child.material = Array.isArray(child.material)
+              ? child.material.map((m) => m.clone())
+              : child.material.clone();
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach((m) => {
+              m.transparent = true;
+              m.userData = m.userData || {};
+              m.userData.baseOpacity = m.opacity ?? 1.0;
+            });
+          }
+        }
+      });
+      if (this.proceduralArmchairRef) this.proceduralArmchairRef.visible = false;
+      this.apartmentGroupRef.add(model);
+    });
+
+    loadGLTFModel("/assets/furniture/vintage_day_bed/vintage_day_bed_1k.gltf").then((model) => {
+      if (!model || !this.proceduralBedRef || !this.apartmentGroupRef) return;
+      fitModelToBounds(model, 2.25, 2.25, 1.25, -4.2, 4.25, 0.02, Math.PI);
+      this.proceduralBedRef.visible = false;
+      this.apartmentGroupRef.add(model);
+    });
+  }
   public outdoorSavedPosition = new THREE.Vector3(-4, 0, -4);
   public outdoorSavedYaw = 0;
   public interactiveDoors: InteractiveDoor[] = [];
@@ -357,6 +422,7 @@ export class BuildingInteriorManager {
 
   constructor(private readonly materials: GameMaterials) {
     this.root.name = "building-interiors-root";
+    this.root.visible = false;
     this.buildHouseInterior();
     this.buildApartmentInterior();
     this.buildPenthouseInterior();
@@ -365,6 +431,9 @@ export class BuildingInteriorManager {
     this.buildRestaurantInterior();
     this.buildGamingHubInterior();
     this.buildFurnitureShowroomInterior();
+    for (const zone of this.interiors.values()) {
+      zone.root.visible = false;
+    }
   }
 
   private addInteractiveDoor(
@@ -1498,6 +1567,7 @@ export class BuildingInteriorManager {
     const cy = -60;
     const cz = 0;
     const group = new THREE.Group();
+    this.apartmentGroupRef = group;
     group.position.set(cx, cy, cz);
     this.root.add(group);
 
@@ -1604,13 +1674,7 @@ export class BuildingInteriorManager {
     addBox(proceduralSofa, this.materials.clothRed, -2.4, 0.58, -0.85, 0.42, 0.38, 0.14);
     addBox(proceduralSofa, this.materials.cloth, -5.3, 0.58, 0.1, 0.14, 0.38, 0.42);
 
-    // Asynchronously prototype realistic 3D Sectional Sofa
-    loadGLTFModel("/assets/furniture/SheenWoodLeatherSofa.glb").then((model) => {
-      if (!model) return;
-      fitModelToBounds(model, 3.2, 1.35, 1.05, -3.4, -0.55, 0.02, 0);
-      proceduralSofa.visible = false;
-      group.add(model);
-    });
+    this.proceduralSofaRef = proceduralSofa;
 
     // Framed Contemporary Artwork on wall above sofa
     addWallArtwork(group, darkMat, this.materials.clothRed, -3.4, 2.1, -1.2, 2.4, 1.2, 0);
@@ -1654,31 +1718,7 @@ export class BuildingInteriorManager {
       }
     });
 
-    // Asynchronously prototype realistic 3D Accent Armchair
-    loadGLTFModel("/assets/furniture/SheenChair.glb").then((model) => {
-      if (!model) return;
-      fitModelToBounds(model, 0.88, 0.88, 0.86, chairX, chairZ, 0.02, chairRotY);
-      model.name = "realisticArmchair";
-      model.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          child.userData.isFurniture = true;
-          child.userData.roomObject = "armchair";
-          if (child.material) {
-            child.material = Array.isArray(child.material)
-              ? child.material.map((m) => m.clone())
-              : child.material.clone();
-            const mats = Array.isArray(child.material) ? child.material : [child.material];
-            mats.forEach((m) => {
-              m.transparent = true;
-              m.userData = m.userData || {};
-              m.userData.baseOpacity = m.opacity ?? 1.0;
-            });
-          }
-        }
-      });
-      proceduralArmchair.visible = false;
-      group.add(model);
-    });
+    this.proceduralArmchairRef = proceduralArmchair;
 
     // Designer Woven Geometric Area Rug (authentic Nigerian terracotta/linen borders)
     addBox(group, this.materials.patternedRug || this.materials.cloth, -3.4, 0.015, 0.4, 3.2, 0.02, 2.4, false);
@@ -1895,13 +1935,7 @@ export class BuildingInteriorManager {
       addBox(proceduralBed, darkMat, -4.2 + hx, 1.05, 4.88, 0.02, 1.2, 0.02, false); // Fluting
     }
 
-    // Asynchronously prototype realistic 3D Bed (Vintage Day Bed with Duvet & Pillows)
-    loadGLTFModel("/assets/furniture/vintage_day_bed/vintage_day_bed_1k.gltf").then((model) => {
-      if (!model) return;
-      fitModelToBounds(model, 2.25, 2.25, 1.25, -4.2, 4.25, 0.02, Math.PI);
-      proceduralBed.visible = false;
-      group.add(model);
-    });
+    this.proceduralBedRef = proceduralBed;
     // Framed art above bed
     addWallArtwork(group, darkMat, this.materials.cloth, -4.2, 2.2, 4.96, 1.8, 0.8, Math.PI);
 
