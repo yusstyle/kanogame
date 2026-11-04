@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import GameUI from "./components/GameUI";
 import GameViewport, { type GameViewportHandle } from "./components/GameViewport";
 import type { CareerPathChoice, GameScreen, GameSnapshot, GraphicsQuality, PropertyId, BusinessId, CurrencyType } from "./game/types";
+import type { CityId, TravelMethod } from "./game/cityRegistry";
 import { authService } from "./game/authService";
 import { isHeadingEquivalent } from "./game/navigation";
 import { getRecommendedGraphicsQuality, saveGraphicsQualityPreference } from "./game/deviceDetection";
@@ -225,6 +226,10 @@ function App() {
     setSnapshot((prev) => ({ ...prev, hasSeenOnboarding: true }));
   }, []);
 
+  const travelToCity = useCallback((targetCity: CityId, method?: TravelMethod) => {
+    return viewportRef.current?.travelToCity(targetCity, method);
+  }, []);
+
   const receiveSnapshot = useCallback((next: GameSnapshot) => {
     setSnapshot((current) => {
       if (
@@ -272,7 +277,8 @@ function App() {
         current.isEmpireModalOpen === next.isEmpireModalOpen &&
         current.isSmartphoneOpen === next.isSmartphoneOpen &&
         current.empireOverview === next.empireOverview &&
-        current.hasSeenOnboarding === next.hasSeenOnboarding
+        current.hasSeenOnboarding === next.hasSeenOnboarding &&
+        current.currentCity === next.currentCity
       ) {
         return current;
       }
@@ -347,6 +353,9 @@ function App() {
         onClaimAchievement={claimAchievement}
         onClaimSeasonalChallenge={claimSeasonalChallenge}
         onClaimSeasonalMilestone={claimSeasonalMilestone}
+        currentCity={snapshot.currentCity ?? "kano"}
+        cityDisplayName={snapshot.cityDisplayName ?? "Kano"}
+        onTravelToCity={travelToCity}
         graphicsQuality={graphicsQuality}
         onStart={start}
         onPause={pause}

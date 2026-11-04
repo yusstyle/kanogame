@@ -21,6 +21,10 @@ import { buildNavigationNetwork, type NavigationNetwork } from "./navigation";
 import { PedestrianSystem } from "./PedestrianSystem";
 import { TrafficSystem } from "./TrafficSystem";
 import { createWorld } from "./world";
+import { createAbujaWorld } from "./abujaWorld";
+import { buildAbujaNavigationNetwork } from "./abujaNavigation";
+import { getAbujaDistrict } from "./abujaLandmarks";
+import { CITIES_REGISTRY, getCitySpec, type CityId, type TravelMethod } from "./cityRegistry";
 import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType, CareerPathChoice, PropertyId, InteriorId, FurnitureInstance, HomeNavInfo, PlayerHomeEntry, BusinessId, CurrencyType, CameraMode } from "./types";
 import { SocialSystem } from "./socialSystem";
 import { EconomySystem, normalizePropertyId, ATM_DAILY_LIMIT } from "./economySystem";
@@ -64,15 +68,23 @@ export class GameEngine {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(57, 1, 0.1, 420);
-  private readonly world: ReturnType<typeof createWorld>;
-  private readonly colliderIndex: ColliderIndex;
+  private currentCity: CityId = "kano";
+  private cityPositions: Record<CityId, { x: number; y: number; z: number; yaw: number }> = {
+    kano: { x: 0, y: 0, z: 0, yaw: 0 },
+    abuja: { x: 0, y: 0, z: -40, yaw: 0 },
+    lagos: { x: 0, y: 0, z: 0, yaw: 0 },
+    jos: { x: 0, y: 0, z: 0, yaw: 0 },
+    kaduna: { x: 0, y: 0, z: 0, yaw: 0 },
+  };
+  private world: ReturnType<typeof createWorld>;
+  private colliderIndex: ColliderIndex;
   private readonly materials: ReturnType<typeof createMaterials>;
   private readonly player: PlayerModel;
   private readonly car: CarModel;
   private readonly keke: KekeModel;
-  private readonly navigation: NavigationNetwork;
-  private readonly trafficSystem: TrafficSystem;
-  private readonly pedestrianSystem: PedestrianSystem;
+  private navigation: NavigationNetwork;
+  private trafficSystem: TrafficSystem;
+  private pedestrianSystem: PedestrianSystem;
   private readonly keys = new Set<string>();
   private readonly lookMatrix = new THREE.Matrix4();
   private readonly desiredCameraQuaternion = new THREE.Quaternion();
@@ -248,9 +260,28 @@ export class GameEngine {
         this.consequenceSystem.deserialize(saved);
       }
     }
+    if (saved?.currentCity && CITIES_REGISTRY[saved.currentCity as CityId]) {
+      this.currentCity = saved.currentCity as CityId;
+    }
+    if (saved?.cityPositions) {
+      Object.assign(this.cityPositions, saved.cityPositions);
+    }
+
     this.economy.resolveSelectedHome(this.hasApartmentRental);
     this.syncAllPlacedFurniture();
-    this.world = createWorld(this.materials);
+
+    if (this.currentCity === "abuja") {
+      this.world = createAbujaWorld(this.materials);
+      this.navigation = buildAbujaNavigationNetwork();
+    } else {
+      this.world = createWorld(this.materials);
+      this.navigation = buildNavigationNetwork();
+    }
+
+    const initialCitySpec = getCitySpec(this.currentCity);
+    this.scene.background = new THREE.Color(initialCitySpec.skyColor);
+    this.scene.fog = new THREE.Fog(initialCitySpec.fogColor, initialCitySpec.fogNear, initialCitySpec.fogFar);
+
     this.staticBatches = this.world.staticBatches || [];
     this.colliderIndex = new ColliderIndex(this.world.colliders);
     this.scene.add(this.world.root);
@@ -260,8 +291,6 @@ export class GameEngine {
     this.scene.add(this.suyaSmokeGroup);
     this.initSuyaVisuals();
     this.addLighting();
-
-    this.navigation = buildNavigationNetwork();
     this.trafficSystem = new TrafficSystem(
       this.scene,
       this.materials,
@@ -893,6 +922,31 @@ export class GameEngine {
   }
 
   private handleInteract() {
+    // Intercity Travel Departures
+    if (this.currentCity === "kano") {
+      const distToll = this.playerPosition.distanceTo(new THREE.Vector3(0, 0, 125));
+      if (distToll <= 14.0) {
+        void this.travelToCity("abuja", "highway");
+        return;
+      }
+      const distAirport = this.playerPosition.distanceTo(new THREE.Vector3(62, 0, -100));
+      if (distAirport <= 10.0) {
+        void this.travelToCity("abuja", "flight");
+        return;
+      }
+    } else if (this.currentCity === "abuja") {
+      const distToll = this.playerPosition.distanceTo(new THREE.Vector3(0, 0, -160));
+      if (distToll <= 16.0) {
+        void this.travelToCity("kano", "highway");
+        return;
+      }
+      const distAirport = this.playerPosition.distanceTo(new THREE.Vector3(90, 0, 120));
+      if (distAirport <= 10.0) {
+        void this.travelToCity("kano", "flight");
+        return;
+      }
+    }
+
     // 1. Check Mission Checkpoint Interaction (active mission step - works on foot or in vehicle)
     const activeTarget = this.mode === "driving" ? this.getActiveVehiclePosition() : this.playerPosition;
     const activeMission = this.missionSystem.getActiveMission();
@@ -2530,6 +2584,11 @@ export class GameEngine {
     if (this.interiorManager.activeInterior) {
       return this.interiorManager.getSurfaceHeight(this.interiorManager.activeInterior, x, z);
     }
+    if (this.currentCity === "abuja") {
+      if (Math.abs(x) <= 14 || Math.abs(z) <= 12) return 0.02;
+      if (Math.abs(x) <= 95 && Math.abs(z) <= 95) return 0.05;
+      return 0.03;
+    }
     if (Math.abs(x + 31) <= 10.5 && Math.abs(z - 31) <= 9) return 0.045;
     for (const road of ROAD_LAYOUT) {
       const lateral = road.axis === "x" ? Math.abs(z - road.center) : Math.abs(x - road.center);
@@ -2959,6 +3018,23 @@ export class GameEngine {
         }
       }
     } else {
+      // Intercity Travel Terminal Prompts
+      if (!interactionPrompt) {
+        if (this.currentCity === "kano") {
+          if (this.playerPosition.distanceTo(new THREE.Vector3(0, 0, 125)) <= 12.0) {
+            interactionPrompt = "Highway A2 Toll Plaza: Press [E] to Drive to Abuja (420 km)";
+          } else if (this.playerPosition.distanceTo(new THREE.Vector3(62, 0, -100)) <= 9.0) {
+            interactionPrompt = "Mallam Aminu Kano Airport: Press [E] to Fly to Abuja (₦35,000)";
+          }
+        } else if (this.currentCity === "abuja") {
+          if (this.playerPosition.distanceTo(new THREE.Vector3(0, 0, -160)) <= 14.0) {
+            interactionPrompt = "Highway A2 Toll Gate: Press [E] to Drive to Kano (420 km)";
+          } else if (this.playerPosition.distanceTo(new THREE.Vector3(90, 0, 120)) <= 9.0) {
+            interactionPrompt = "Nnamdi Azikiwe Airport: Press [E] to Fly to Kano (₦35,000)";
+          }
+        }
+      }
+
       // 1. Check Mission Checkpoint Interaction on foot
       const missionInter = this.missionSystem.checkMissionInteraction(this.playerPosition);
       if (missionInter) {
@@ -3113,7 +3189,9 @@ export class GameEngine {
     const activeZone = this.interiorManager.getActiveZone();
     const locationLabel = activeZone
       ? activeZone.districtLabel
-      : getDistrictLabel(getDistrict(location.x, location.z));
+      : this.currentCity === "abuja"
+        ? getAbujaDistrict(location.x, location.z)
+        : getDistrictLabel(getDistrict(location.x, location.z));
 
     const totalMins = Math.floor(this.gameMinutes) % (24 * 60);
     const hrs = Math.floor(totalMins / 60);
@@ -3148,6 +3226,8 @@ export class GameEngine {
       gameScore: this.gameScore,
       vehicleCondition: this.mode === "driving" ? this.consequenceSystem.getVehicleCondition(this.activeVehicle).condition : undefined,
       activeConsequence: this.consequenceSystem.getConsequencesHistory()[0]?.stateChanges.incidentTitle ?? null,
+      currentCity: this.currentCity,
+      cityDisplayName: getCitySpec(this.currentCity).name,
       featuredContact,
       ownedProperties: this.economy.getOwnedPropertiesList(),
       ownedBusinesses: this.economy.getOwnedBusinessesList(),
@@ -3528,6 +3608,8 @@ export class GameEngine {
       this.freelanceSystem.getCompletedIds(),
       this.freelanceSystem.totalEarnings,
       this.consequenceSystem.serialize(),
+      this.currentCity,
+      this.cityPositions,
     );
   }
 
@@ -3903,6 +3985,148 @@ export class GameEngine {
       this.pushSnapshot(true);
     }
     return res;
+  }
+
+  public getCurrentCity(): CityId {
+    return this.currentCity;
+  }
+
+  public getCitySpec(cityId?: CityId) {
+    return getCitySpec(cityId || this.currentCity);
+  }
+
+  public async travelToCity(
+    targetCity: CityId,
+    method: TravelMethod = "highway",
+    customSpawn?: { x: number; y: number; z: number; yaw?: number },
+  ): Promise<boolean> {
+    if (this.currentCity === targetCity) return false;
+    const targetSpec = getCitySpec(targetCity);
+    if (!targetSpec || targetSpec.status !== "playable") {
+      this.statusMessage = `${targetSpec ? targetSpec.name : targetCity} is currently under development.`;
+      this.pushSnapshot(true);
+      return false;
+    }
+
+    if (method === "flight") {
+      const flightCost = 35000;
+      if (this.cash < flightCost) {
+        this.statusMessage = `Insufficient funds for domestic flight (₦${flightCost.toLocaleString()} required).`;
+        this.pushSnapshot(true);
+        return false;
+      }
+      this.cash -= flightCost;
+    }
+
+    // Exit active vehicle or interior cleanly before intercity travel
+    if (this.mode === "driving") {
+      this.toggleVehicle();
+    }
+    if (this.interiorManager.activeInterior) {
+      this.interiorManager.activeInterior = null;
+    }
+
+    // Record previous city position
+    this.cityPositions[this.currentCity] = {
+      x: this.playerPosition.x,
+      y: this.playerPosition.y,
+      z: this.playerPosition.z,
+      yaw: this.playerYaw,
+    };
+
+    const fromName = this.currentCity.toUpperCase();
+    this.statusMessage = `Departing ${fromName} for ${targetCity.toUpperCase()} (${method === "flight" ? "Direct Flight" : "Highway A2 Expressway"})...`;
+    this.pushSnapshot(true);
+
+    // Unload previous city world
+    if (this.world?.root) {
+      this.scene.remove(this.world.root);
+      for (const batch of this.staticBatches) {
+        batch.geometry.dispose();
+      }
+      this.staticBatches = [];
+    }
+    this.trafficSystem?.dispose();
+    this.pedestrianSystem?.dispose();
+
+    // Mount new city world
+    this.currentCity = targetCity;
+    if (targetCity === "abuja") {
+      this.world = createAbujaWorld(this.materials);
+      this.navigation = buildAbujaNavigationNetwork();
+    } else {
+      this.world = createWorld(this.materials);
+      this.navigation = buildNavigationNetwork();
+    }
+
+    this.staticBatches = this.world.staticBatches || [];
+    this.colliderIndex = new ColliderIndex(this.world.colliders);
+    this.scene.add(this.world.root);
+
+    // Update scene fog, sky, and light to match target city
+    this.scene.background = new THREE.Color(targetSpec.skyColor);
+    this.scene.fog = new THREE.Fog(targetSpec.fogColor, targetSpec.fogNear, targetSpec.fogFar);
+    if (this.sunLight) {
+      this.sunLight.color.set(targetSpec.sunColor);
+      this.sunLight.intensity = targetSpec.sunIntensity;
+    }
+
+    // Reinitialize traffic and pedestrians
+    this.trafficSystem = new TrafficSystem(
+      this.scene,
+      this.materials,
+      this.navigation,
+      this.colliderIndex,
+      (x, z) => this.surfaceHeight(x, z),
+    );
+    this.trafficSystem.onCitation = (fine, reason) => {
+      if (this.trafficFine === 0) {
+        this.trafficFine = fine;
+        this.statusMessage = reason;
+        this.pushSnapshot(true);
+        this.saveGame();
+      }
+    };
+    this.pedestrianSystem = new PedestrianSystem(
+      this.scene,
+      this.materials,
+      this.navigation,
+      this.colliderIndex,
+      (x, z) => this.surfaceHeight(x, z),
+    );
+    this.trafficSystem.setQuality(this.graphicsQuality);
+    this.pedestrianSystem.setQuality(this.graphicsQuality);
+
+    // Position player at target city arrival location
+    let spawn: { x: number; y: number; z: number; yaw: number };
+    if (customSpawn) {
+      spawn = { x: customSpawn.x, y: customSpawn.y, z: customSpawn.z, yaw: customSpawn.yaw ?? 0 };
+    } else if (method === "highway") {
+      spawn = targetSpec.intercityHighwaySpawn;
+    } else if (method === "flight") {
+      spawn = targetSpec.airportSpawn;
+    } else {
+      spawn = this.cityPositions[targetCity] || targetSpec.defaultSpawn;
+    }
+
+    this.playerPosition.set(spawn.x, this.surfaceHeight(spawn.x, spawn.z), spawn.z);
+    this.playerVerticalVelocity = 0;
+    this.playerYaw = spawn.yaw;
+    this.cameraYaw = spawn.yaw;
+    this.updateTransform();
+
+    // Position player's personal car near arrival area
+    if (this.car?.root) {
+      this.car.root.position.set(spawn.x + 4, this.surfaceHeight(spawn.x + 4, spawn.z + 2), spawn.z + 2);
+    }
+
+    this.updateChunkCulling(true);
+    this.saveGame();
+    this.statusMessage = targetCity === "abuja"
+      ? "Welcome to Abuja! Federal Capital Territory · Centre of Unity"
+      : "Welcome back to Kano! Ancient Commercial Emporium";
+    this.pushSnapshot(true);
+    return true;
   }
 
   private lerpAngle(from: number, to: number, alpha: number) {

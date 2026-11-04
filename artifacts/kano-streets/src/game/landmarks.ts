@@ -1,5 +1,7 @@
 import type { HomeNavInfo, PropertyId } from "./types";
 import { PROPERTY_REGISTRY } from "./propertyRegistry";
+import { ABUJA_LANDMARKS } from "./abujaLandmarks";
+import type { CityId } from "./cityRegistry";
 
 export type LandmarkCategory = "civic" | "commercial" | "residence" | "worship" | "security" | "industrial" | "historic";
 
@@ -259,7 +261,11 @@ export const KANO_LANDMARKS: LandmarkLocation[] = [
   },
 ];
 
-export function getNearestLandmark(x: number, z: number): { landmark: LandmarkLocation; distance: number } | null {
+export function getCityLandmarks(city: CityId = "kano"): LandmarkLocation[] {
+  return city === "abuja" ? ABUJA_LANDMARKS : KANO_LANDMARKS;
+}
+
+export function getNearestLandmark(x: number, z: number, city: CityId = "kano"): { landmark: LandmarkLocation; distance: number } | null {
   if (KANO_LANDMARKS.length === 0) return null;
   let nearest: LandmarkLocation = KANO_LANDMARKS[0];
   let minDistance = Infinity;
@@ -278,6 +284,7 @@ export function getNearestLandmark(x: number, z: number): { landmark: LandmarkLo
 export function getGpsLandmark(
   id: string | null | undefined,
   homeNavInfo?: HomeNavInfo | null,
+  city: CityId = "kano",
 ): LandmarkLocation | null {
   if (!id) return null;
   if (id === "my-home" && homeNavInfo) {
@@ -344,7 +351,10 @@ export function getGpsLandmark(
     };
   }
 
-  return KANO_LANDMARKS.find((l) => l.id === id) ?? null;
+  const targetList = getCityLandmarks(city);
+  const foundInTarget = targetList.find((l) => l.id === id);
+  if (foundInTarget) return foundInTarget;
+  return KANO_LANDMARKS.find((l) => l.id === id) ?? ABUJA_LANDMARKS.find((l) => l.id === id) ?? null;
 }
 
 export interface GpsGuidance {

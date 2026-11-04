@@ -79,6 +79,8 @@ export interface SaveData {
   npcMemory?: Record<string, import("./consequenceSystem").NpcMemoryRecord>;
   vehicleConditions?: Record<string, import("./consequenceSystem").VehicleConditionState>;
   consequencesHistory?: import("./consequenceSystem").ConsequenceRecord[];
+  currentCity?: import("./cityRegistry").CityId;
+  cityPositions?: Partial<Record<import("./cityRegistry").CityId, { x: number; y: number; z: number; yaw: number }>>;
   savedAt: number;
 }
 
@@ -1411,6 +1413,8 @@ export class EconomySystem {
       vehicleConditions?: Record<string, import("./consequenceSystem").VehicleConditionState>;
       consequencesHistory?: import("./consequenceSystem").ConsequenceRecord[];
     },
+    currentCity?: import("./cityRegistry").CityId,
+    cityPositions?: Partial<Record<import("./cityRegistry").CityId, { x: number; y: number; z: number; yaw: number }>>,
   ): boolean {
     if (typeof window === "undefined" || !window.localStorage) return false;
     try {
@@ -1492,6 +1496,8 @@ export class EconomySystem {
         npcMemory: consequencesData?.npcMemory,
         vehicleConditions: consequencesData?.vehicleConditions,
         consequencesHistory: consequencesData?.consequencesHistory,
+        currentCity,
+        cityPositions,
         savedAt: Date.now(),
       };
       window.localStorage.setItem("kano_streets_save_v1", JSON.stringify(data));

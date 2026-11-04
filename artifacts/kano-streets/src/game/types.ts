@@ -24,6 +24,8 @@ export type BuildingKind =
 
 export type GraphicsQuality = "performance" | "balanced" | "quality";
 
+export type CityId = "kano" | "abuja" | "lagos" | "jos" | "kaduna";
+
 export type PlotAsset = {
   root: import("three").Group;
   colliders: Collider[];
@@ -528,6 +530,8 @@ export type GameSnapshot = {
   hasSeenOnboarding?: boolean;
   vehicleCondition?: number;
   activeConsequence?: string | null;
+  currentCity?: CityId;
+  cityDisplayName?: string;
   isSmartphoneOpen?: boolean;
   dailyAtmWithdrawn?: number;
   atmDailyLimit?: number;

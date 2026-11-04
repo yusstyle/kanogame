@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
-import { KANO_LANDMARKS, getGpsLandmark, computeGpsGuidance, type LandmarkCategory, type LandmarkLocation } from "../game/landmarks";
+import { KANO_LANDMARKS, getGpsLandmark, getCityLandmarks, computeGpsGuidance, type LandmarkCategory, type LandmarkLocation } from "../game/landmarks";
+import { ABUJA_LANDMARKS } from "../game/abujaLandmarks";
+import type { CityId, TravelMethod } from "../game/cityRegistry";
 import { INDENTURE_1968 } from "../game/storySystem";
 import { PROPERTY_REGISTRY } from "../game/propertyRegistry";
 import { normalizePropertyId } from "../game/economySystem";
@@ -27,6 +29,8 @@ export interface CityMapModalProps {
   onChooseInvestigation?: (choice: "elders" | "bank") => unknown;
   onChooseCareer?: (choice: CareerPathChoice) => unknown;
   onResolveChapter1?: () => unknown;
+  currentCity?: CityId;
+  onTravelToCity?: (city: CityId, method?: TravelMethod) => unknown;
 }
 
 type TabType = "map" | "homes" | "directory" | "story";
@@ -83,7 +87,10 @@ export default function CityMapModal({
   onChooseInvestigation,
   onChooseCareer,
   onResolveChapter1,
+  currentCity = "kano",
+  onTravelToCity,
 }: CityMapModalProps) {
+  const [viewingCity, setViewingCity] = useState<CityId>(currentCity);
   const [activeTab, setActiveTab] = useState<TabType>("map");
   const [categoryFilter, setCategoryFilter] = useState<LandmarkCategory | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -237,7 +244,8 @@ export default function CityMapModal({
     return `${minX} ${minY} ${zoomW} ${zoomH}`;
   }, [isMapZoomed, mapZoomTarget]);
 
-  const filteredLandmarks = KANO_LANDMARKS.filter((lm) => {
+  const activeLandmarkList = getCityLandmarks(viewingCity);
+  const filteredLandmarks = activeLandmarkList.filter((lm) => {
     const matchesCategory = categoryFilter === "all" || lm.category === categoryFilter;
     const matchesSearch =
       searchQuery.trim() === "" ||
@@ -280,7 +288,7 @@ export default function CityMapModal({
               className={`ks-map-tab-btn ${activeTab === "directory" ? "active" : ""}`}
               onClick={() => setActiveTab("directory")}
             >
-              📋 Directory ({KANO_LANDMARKS.length})
+              📋 Directory ({activeLandmarkList.length})
             </button>
             <button
               className={`ks-map-tab-btn ${activeTab === "story" ? "active" : ""}`}
@@ -293,6 +301,57 @@ export default function CityMapModal({
             </button>
           </div>
         </div>
+
+        {/* Multi-City Region Expansion Selector */}
+        <div className="ks-city-selector-bar">
+          <button
+            className={`ks-city-pill ${viewingCity === "kano" ? "active" : ""}`}
+            onClick={() => { setViewingCity("kano"); setSelectedLandmark(null); setIsMapZoomed(false); }}
+          >
+            🏛️ Kano State {currentCity === "kano" ? "· (Current)" : ""}
+          </button>
+          <button
+            className={`ks-city-pill ${viewingCity === "abuja" ? "active" : ""}`}
+            onClick={() => { setViewingCity("abuja"); setSelectedLandmark(null); setIsMapZoomed(false); }}
+          >
+            ⭐ Abuja FCT {currentCity === "abuja" ? "· (Current)" : ""}
+          </button>
+          <button className="ks-city-pill disabled" title="Coming in future expansion milestone">
+            🌊 Lagos (Planned)
+          </button>
+          <button className="ks-city-pill disabled" title="Coming in future expansion milestone">
+            ⛰️ Jos (Planned)
+          </button>
+          <button className="ks-city-pill disabled" title="Coming in future expansion milestone">
+            🚂 Kaduna (Planned)
+          </button>
+        </div>
+
+        {viewingCity !== currentCity && (
+          <div className="ks-intercity-travel-banner">
+            <span>Viewing <strong>{viewingCity.toUpperCase()}</strong> map. You are currently in {currentCity.toUpperCase()}.</span>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                className="ks-intercity-travel-btn"
+                onClick={() => {
+                  onTravelToCity?.(viewingCity, "highway");
+                  onClose();
+                }}
+              >
+                🚗 Drive via Highway A2 (Free)
+              </button>
+              <button
+                className="ks-intercity-flight-btn"
+                onClick={() => {
+                  onTravelToCity?.(viewingCity, "flight");
+                  onClose();
+                }}
+              >
+                ✈️ Fly (₦35,000)
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Tab 1: Interactive Open-World Vector/SVG Map */}
         {activeTab === "map" && (
@@ -724,7 +783,7 @@ export default function CityMapModal({
                 })()}
 
                 {/* Landmark Pins */}
-                {KANO_LANDMARKS.map((lm) => {
+                {activeLandmarkList.map((lm) => {
                   const lx = toSvgX(lm.x);
                   const ly = toSvgY(lm.z);
                   const isGpsActive = gpsTarget === lm.id;

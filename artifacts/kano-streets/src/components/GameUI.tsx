@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import './GameUI.css';
 import TouchControls from './TouchControls';
 import type { ActiveMissionInfo, CareerPathChoice, SocialContact, StorySnapshotInfo, VehicleType, FurnitureInstance, PropertyId, HomeNavInfo, NeedsState, FreelanceSnapshotInfo, PlayerHomeEntry, BusinessId, CurrencyType, EmpireOverviewSnapshot, CameraMode, CameraDebugInfo } from '../game/types';
+import type { CityId, TravelMethod } from '../game/cityRegistry';
 import { KANO_LANDMARKS, getGpsLandmark, computeGpsGuidance } from '../game/landmarks';
 import { CAREER_MISSIONS_CATALOG } from '../game/missionSystem';
 const CityMapModal = lazy(() => import('./CityMapModal'));
@@ -66,6 +67,9 @@ export interface GameUIProps {
   vehicleCondition?: number;
   hasSeenOnboarding?: boolean;
   onDismissOnboarding?: () => void;
+  currentCity?: CityId;
+  cityDisplayName?: string;
+  onTravelToCity?: (city: CityId, method?: TravelMethod) => unknown;
   graphicsQuality: GraphicsQuality;
   onStart: () => void;
   onPause: () => void;
@@ -183,6 +187,9 @@ export default function GameUI({
   onInteractSocial,
   vehicleCondition,
   empireOverview,
+  currentCity = "kano",
+  cityDisplayName = "Kano",
+  onTravelToCity,
   graphicsQuality,
   onStart,
   onPause,
@@ -819,6 +826,8 @@ export default function GameUI({
           {showDirectory && (
             <Suspense fallback={null}>
               <CityMapModal
+              currentCity={currentCity}
+              onTravelToCity={onTravelToCity}
               onClose={() => setShowDirectory(false)}
               playerCoords={playerCoords}
               playerHeading={playerHeading}

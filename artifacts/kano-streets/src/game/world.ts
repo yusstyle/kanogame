@@ -925,7 +925,7 @@ function addAutoTuningWorkshop(root: THREE.Group, materials: GameMaterials, coll
   );
 }
 
-function mergeStaticMeshesByCell(root: THREE.Group, staticBatches?: THREE.Mesh[]) {
+export function mergeStaticMeshesByCell(root: THREE.Group, staticBatches?: THREE.Mesh[]) {
   root.updateMatrixWorld(true);
   const buckets = new Map<
     string,

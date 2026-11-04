@@ -7,6 +7,7 @@ import {
 } from "react";
 import type { GameEngine } from "../game/GameEngine";
 import type { CareerPathChoice, GameScreen, GameSnapshot, GraphicsQuality, FurnitureInstance, PropertyId, PlayerHomeEntry, BusinessId, CurrencyType, CameraMode } from "../game/types";
+import type { CityId, TravelMethod } from "../game/cityRegistry";
 
 export type GameViewportHandle = {
   requestPointerLock: () => void;
@@ -63,6 +64,8 @@ export type GameViewportHandle = {
   claimSeasonalChallenge: (challengeId: string) => { success: boolean; rewardCash: number; rewardCoins: number; message: string };
   claimSeasonalMilestone: () => { success: boolean; rewardCoins: number; rewardTitle?: string; message: string };
   dismissOnboarding: () => void;
+  travelToCity: (targetCity: CityId, method?: TravelMethod) => Promise<boolean>;
+  getCurrentCity: () => CityId;
 };
 
 const LOADING_TIPS = [
@@ -156,6 +159,8 @@ const GameViewport = forwardRef<GameViewportHandle, GameViewportProps>(
         claimSeasonalChallenge: (cId) => engineRef.current?.claimSeasonalChallenge(cId) ?? { success: false, rewardCash: 0, rewardCoins: 0, message: "Engine not ready" },
         claimSeasonalMilestone: () => engineRef.current?.claimSeasonalMilestone() ?? { success: false, rewardCoins: 0, message: "Engine not ready" },
         dismissOnboarding: () => engineRef.current?.dismissOnboarding(),
+        travelToCity: (city, method) => engineRef.current?.travelToCity(city, method) ?? Promise.resolve(false),
+        getCurrentCity: () => engineRef.current?.getCurrentCity() ?? "kano",
       }),
       [],
     );
