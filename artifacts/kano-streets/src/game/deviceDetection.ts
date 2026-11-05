@@ -4,6 +4,7 @@ export interface DeviceCapability {
   isMobile: boolean;
   isTablet: boolean;
   isLowEnd: boolean;
+  isIntegratedGpu: boolean;
   devicePixelRatio: number;
   recommendedQuality: GraphicsQuality;
   hardwareConcurrency: number;
@@ -21,6 +22,7 @@ export function detectDeviceCapability(): DeviceCapability {
       isMobile: false,
       isTablet: false,
       isLowEnd: false,
+      isIntegratedGpu: false,
       devicePixelRatio: 1,
       recommendedQuality: "balanced",
       hardwareConcurrency: 4,
@@ -53,12 +55,15 @@ export function detectDeviceCapability(): DeviceCapability {
   } catch {}
 
   const isMaliOrAdrenoLow = /Mali-4|Mali-G3|Mali-G5|Adreno \(TM\) 3|Adreno \(TM\) 50/i.test(gpuRenderer);
+  const isIntegratedGpu =
+    /Intel|UHD|HD Graphics|Iris/i.test(gpuRenderer) ||
+    (/ANGLE/i.test(gpuRenderer) && !/NVIDIA|GeForce|Radeon RX|RTX|Discrete/i.test(gpuRenderer));
   const isLowEnd = hardwareConcurrency <= 4 || deviceMemory <= 3 || isMaliOrAdrenoLow;
 
   let recommendedQuality: GraphicsQuality = "balanced";
   if (isMobile || isLowEnd) {
     recommendedQuality = "performance";
-  } else if (!isTablet && hardwareConcurrency >= 8 && deviceMemory >= 8) {
+  } else if (!isTablet && !isIntegratedGpu && hardwareConcurrency >= 8 && deviceMemory >= 8) {
     recommendedQuality = "quality";
   } else {
     recommendedQuality = "balanced";
@@ -68,6 +73,7 @@ export function detectDeviceCapability(): DeviceCapability {
     isMobile,
     isTablet,
     isLowEnd,
+    isIntegratedGpu,
     devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
     recommendedQuality,
     hardwareConcurrency,

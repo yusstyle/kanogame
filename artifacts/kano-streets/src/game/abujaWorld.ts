@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   createAsoRockMonolith,
   createThreeArmsCivicComplex,
@@ -14,8 +15,8 @@ import {
   createWuseMarketPavilions,
   createIntercityTollPlaza,
   createAirportTerminalShuttle,
-  createTropicalPalmTree,
-  createModernSolarStreetlight,
+  createTropicalPalmTreeInstances,
+  createModernSolarStreetlightInstances,
 } from "./abujaDistrict";
 import { mergeStaticMeshesByCell } from "./world";
 import type { Collider, GameMaterials } from "./types";
@@ -60,11 +61,6 @@ export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
   const roadLineWhite = new THREE.MeshStandardMaterial({
     color: "#fdfefe",
     roughness: 0.3,
-  });
-
-  const roadLineYellow = new THREE.MeshStandardMaterial({
-    color: "#f4d03f",
-    roughness: 0.35,
   });
 
   // 1. Sky Dome tailored for Abuja (Crisp Slate/Teal Horizon)
@@ -166,26 +162,39 @@ export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
   root.add(obeliskSpire);
   colliders.push({ x: 0, z: 0, halfX: 3.5, halfZ: 3.5, height: 20 });
 
-  // 5. White Thermoplastic Lane Markings on Major Boulevards
+  // 5. Batched White Thermoplastic Lane Markings on Major Boulevards
+  const dashGeometries: THREE.BufferGeometry[] = [];
+  const rotMinusX = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
+
   for (let lz = -bounds + 10; lz < bounds - 10; lz += 8) {
     if (Math.abs(lz) < 24) continue; // skip central roundabout
-    // Left & Right Lane Dashes
     for (const lx of [-8, 8]) {
-      const dash = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 4.5), roadLineWhite);
-      dash.rotation.x = -Math.PI / 2;
-      dash.position.set(lx, 0.02, lz);
-      root.add(dash);
+      const g = new THREE.PlaneGeometry(0.3, 4.5);
+      const m = new THREE.Matrix4().makeTranslation(lx, 0.02, lz).multiply(rotMinusX);
+      g.applyMatrix4(m);
+      dashGeometries.push(g);
     }
   }
 
   for (let lx = -bounds + 10; lx < bounds - 10; lx += 8) {
     if (Math.abs(lx) < 24) continue; // skip central roundabout
     for (const lz of [-6.5, 6.5]) {
-      const dash = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 0.3), roadLineWhite);
-      dash.rotation.x = -Math.PI / 2;
-      dash.position.set(lx, 0.02, lz);
-      root.add(dash);
+      const g = new THREE.PlaneGeometry(4.5, 0.3);
+      const m = new THREE.Matrix4().makeTranslation(lx, 0.02, lz).multiply(rotMinusX);
+      g.applyMatrix4(m);
+      dashGeometries.push(g);
     }
+  }
+
+  if (dashGeometries.length > 0) {
+    const mergedDashes = mergeGeometries(dashGeometries);
+    for (const g of dashGeometries) g.dispose();
+    const dashesMesh = new THREE.Mesh(mergedDashes, roadLineWhite);
+    dashesMesh.receiveShadow = true;
+    dashesMesh.castShadow = false;
+    dashesMesh.name = "AbujaBoulevardLaneMarkingsMerged";
+    dashesMesh.userData.noMerge = true;
+    root.add(dashesMesh);
   }
 
   // 6. Aso Rock Monolith Northeast Horizon
@@ -255,20 +264,19 @@ export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
   const airportTerminal = createAirportTerminalShuttle(materials, colliders, 90, 120);
   root.add(airportTerminal);
 
-  // 14. Tropical Royal Palm Trees & Streetlights lining Boulevards
+  // 14. High-Performance Instanced Palm Trees & Solar Streetlights
+  const palmPositions: { x: number; y: number; z: number }[] = [];
+  const streetlightPositions: { x: number; y: number; z: number }[] = [];
+
   for (let zPos = -140; zPos <= 140; zPos += 20) {
     if (Math.abs(zPos) < 26) continue; // skip roundabout
     // East and West Boulevard curbs
     for (const xPos of [-16, 16]) {
-      const palm = createTropicalPalmTree(materials);
-      palm.position.set(xPos, 0, zPos);
-      root.add(palm);
+      palmPositions.push({ x: xPos, y: 0, z: zPos });
     }
     // Solar Streetlights on Median
     if (zPos % 40 === 0) {
-      const light = createModernSolarStreetlight(materials);
-      light.position.set(0, 0, zPos);
-      root.add(light);
+      streetlightPositions.push({ x: 0, y: 0, z: zPos });
     }
   }
 
@@ -276,11 +284,17 @@ export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
   for (let xPos = -120; xPos <= 120; xPos += 24) {
     if (Math.abs(xPos) < 26) continue;
     for (const zPos of [-14, 14]) {
-      const palm = createTropicalPalmTree(materials);
-      palm.position.set(xPos, 0, zPos);
-      root.add(palm);
+      palmPositions.push({ x: xPos, y: 0, z: zPos });
     }
   }
+
+  const palmInstances = createTropicalPalmTreeInstances(palmPositions);
+  palmInstances.userData.noMerge = true;
+  root.add(palmInstances);
+
+  const streetlightInstances = createModernSolarStreetlightInstances(streetlightPositions, materials);
+  streetlightInstances.userData.noMerge = true;
+  root.add(streetlightInstances);
 
   // 15. Peripheral Boundaries & Security Fences
   const boundaryThickness = 4;

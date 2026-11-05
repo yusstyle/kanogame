@@ -210,7 +210,12 @@ export class GameEngine {
   ) {
     this.callbacks = callbacks;
     this.renderer = rendererFactory(canvas);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.35));
+    const initialPixelRatioCap = this.deviceCapability?.isMobile
+      ? 1.0
+      : this.deviceCapability?.isIntegratedGpu
+        ? 1.05
+        : 1.25;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, initialPixelRatioCap));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.12;
@@ -280,7 +285,12 @@ export class GameEngine {
 
     const initialCitySpec = getCitySpec(this.currentCity);
     this.scene.background = new THREE.Color(initialCitySpec.skyColor);
-    this.scene.fog = new THREE.Fog(initialCitySpec.fogColor, initialCitySpec.fogNear, initialCitySpec.fogFar);
+    const initialFogFar = this.graphicsQuality === "performance"
+      ? 90
+      : (this.deviceCapability?.isMobile || this.deviceCapability?.isIntegratedGpu || this.graphicsQuality === "balanced")
+        ? 110
+        : initialCitySpec.fogFar;
+    this.scene.fog = new THREE.Fog(initialCitySpec.fogColor, initialCitySpec.fogNear, initialFogFar);
 
     this.staticBatches = this.world.staticBatches || [];
     this.colliderIndex = new ColliderIndex(this.world.colliders);
@@ -720,7 +730,12 @@ export class GameEngine {
     this.lastChunkCullPos.copy(center);
 
     const isMobile = this.deviceCapability?.isMobile;
-    const maxDist = this.graphicsQuality === "performance" ? 110 : (isMobile || this.graphicsQuality === "balanced") ? 155 : 210;
+    const isIntegrated = this.deviceCapability?.isIntegratedGpu;
+    const maxDist = this.graphicsQuality === "performance"
+      ? 75
+      : (isMobile || isIntegrated || this.graphicsQuality === "balanced")
+        ? 92
+        : 145;
     const maxDistSq = maxDist * maxDist;
 
     for (let i = 0; i < this.staticBatches.length; i++) {
@@ -742,18 +757,25 @@ export class GameEngine {
     this.pedestrianSystem?.setQuality(quality);
 
     const isMobile = this.deviceCapability?.isMobile;
+    const isIntegrated = this.deviceCapability?.isIntegratedGpu;
     let pixelRatioCap: number;
     let shadowSize: number;
     let shadowBounds: number;
 
     if (isMobile) {
-      pixelRatioCap = quality === "performance" ? 0.9 : quality === "quality" ? 1.25 : 1.05;
+      pixelRatioCap = quality === "performance" ? 0.85 : quality === "quality" ? 1.15 : 1.0;
       shadowSize = quality === "quality" ? 1024 : 512;
-      shadowBounds = quality === "quality" ? 48 : 36;
+      shadowBounds = quality === "quality" ? 36 : 28;
+    } else if (isIntegrated) {
+      // Integrated GPU (Intel UHD/Iris, AMD APU) - cap DPR and tighten shadow bounds to eliminate fill bottleneck
+      pixelRatioCap = quality === "performance" ? 1.0 : quality === "quality" ? 1.2 : 1.05;
+      shadowSize = quality === "quality" ? 1024 : 512;
+      shadowBounds = quality === "quality" ? 40 : 32;
     } else {
+      // Discrete Dedicated GPU (NVIDIA / AMD Radeon RX)
       pixelRatioCap = quality === "performance" ? 1.0 : quality === "quality" ? 1.65 : 1.25;
       shadowSize = quality === "quality" ? 2048 : quality === "balanced" ? 1024 : 512;
-      shadowBounds = quality === "quality" ? 64 : 54;
+      shadowBounds = quality === "quality" ? 56 : 42;
     }
 
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, pixelRatioCap));
@@ -770,6 +792,17 @@ export class GameEngine {
       this.sunLight.shadow.map = null;
       this.sunLight.shadow.needsUpdate = true;
     }
+
+    if (this.scene.fog && this.scene.fog instanceof THREE.Fog) {
+      const citySpec = getCitySpec(this.currentCity);
+      const fogFar = quality === "performance"
+        ? 90
+        : (isMobile || isIntegrated || quality === "balanced")
+          ? 110
+          : citySpec.fogFar;
+      this.scene.fog.far = fogFar;
+    }
+
     this.updateChunkCulling(true);
     this.resize();
   }
@@ -4065,7 +4098,12 @@ export class GameEngine {
 
     // Update scene fog, sky, and light to match target city
     this.scene.background = new THREE.Color(targetSpec.skyColor);
-    this.scene.fog = new THREE.Fog(targetSpec.fogColor, targetSpec.fogNear, targetSpec.fogFar);
+    const travelFogFar = this.graphicsQuality === "performance"
+      ? 90
+      : (this.deviceCapability?.isMobile || this.deviceCapability?.isIntegratedGpu || this.graphicsQuality === "balanced")
+        ? 110
+        : targetSpec.fogFar;
+    this.scene.fog = new THREE.Fog(targetSpec.fogColor, targetSpec.fogNear, travelFogFar);
     if (this.sunLight) {
       this.sunLight.color.set(targetSpec.sunColor);
       this.sunLight.intensity = targetSpec.sunIntensity;
