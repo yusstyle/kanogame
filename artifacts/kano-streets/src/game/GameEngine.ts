@@ -4116,8 +4116,14 @@ export class GameEngine {
     this.updateTransform();
 
     // Position player's personal car near arrival area
+    const carX = spawn.x + 3.2;
+    const carZ = spawn.z + 1.8;
+    this.carPosition.set(carX, this.surfaceHeight(carX, carZ), carZ);
+    this.carYaw = spawn.yaw;
+    this.carSpeed = 0;
     if (this.car?.root) {
-      this.car.root.position.set(spawn.x + 4, this.surfaceHeight(spawn.x + 4, spawn.z + 2), spawn.z + 2);
+      this.car.root.position.copy(this.carPosition);
+      this.car.root.rotation.y = spawn.yaw;
     }
 
     this.updateChunkCulling(true);
