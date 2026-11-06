@@ -1,8 +1,12 @@
 import * as THREE from "three";
 import { buildAbujaInfrastructure } from "./abujaInfrastructure";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
-  createAsoRockMonolith,
+  buildRollingSavannahTerrain,
+  createRealisticAsoRock,
+  createMillenniumParkLandscape,
+} from "./abujaLandscape";
+import { buildAbujaVegetationSystem } from "./abujaVegetation";
+import {
   createThreeArmsCivicComplex,
   createAbujaNationalMosque,
   createNationalChristianCentre,
@@ -12,11 +16,9 @@ import {
   createAbujaLuxuryHotel,
   createMaitamaLuxuryVilla,
   createNnpcMegaFuelStation,
-  createCentralParkRecreation,
   createWuseMarketPavilions,
   createIntercityTollPlaza,
   createAirportTerminalShuttle,
-  createTropicalPalmTreeInstances,
   createModernSolarStreetlightInstances,
 } from "./abujaDistrict";
 import { mergeStaticMeshesByCell } from "./world";
@@ -38,33 +40,7 @@ export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
   const staticBatches: THREE.Mesh[] = [];
   const bounds = 220;
 
-  // 1. Savannah Grass Terrain Base with Procedural Micro-Texture (Anti-Acne PBR)
-  const grassCanvas = document.createElement("canvas");
-  grassCanvas.width = grassCanvas.height = 256;
-  const gCtx = grassCanvas.getContext("2d")!;
-  gCtx.fillStyle = "#385e3f"; // Rich Nigerian Guinean forest-savannah green
-  gCtx.fillRect(0, 0, 256, 256);
-  let state = 719;
-  for (let i = 0; i < 5000; i++) {
-    state = (state * 1664525 + 1013904223) >>> 0;
-    const r1 = state / 4294967296;
-    state = (state * 1664525 + 1013904223) >>> 0;
-    const r2 = state / 4294967296;
-    gCtx.fillStyle = r1 > 0.5 ? "#2a4830" : "#456e4c";
-    gCtx.fillRect(r1 * 256, r2 * 256, 1.4, 1.4);
-  }
-  const grassTexture = new THREE.CanvasTexture(grassCanvas);
-  grassTexture.colorSpace = THREE.SRGBColorSpace;
-  grassTexture.wrapS = grassTexture.wrapT = THREE.RepeatWrapping;
-  grassTexture.repeat.set(36, 36);
-
-  const grassMat = new THREE.MeshStandardMaterial({
-    map: grassTexture,
-    roughness: 0.90,
-    metalness: 0.02,
-  });
-
-  // Sky Dome tailored for Abuja (Crisp Slate/Teal Horizon)
+  // 1. Sky Dome tailored for Abuja (Crisp Slate/Teal Horizon)
   const skyGeo = new THREE.SphereGeometry(380, 24, 16);
   const skyMat = new THREE.MeshBasicMaterial({
     color: "#c2d4cb",
@@ -75,13 +51,9 @@ export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
   skyMesh.name = "AbujaSkyDome";
   root.add(skyMesh);
 
-  // Expansive Terrain Base
-  const terrainGeo = new THREE.PlaneGeometry(bounds * 2 + 100, bounds * 2 + 100);
-  const terrainMesh = new THREE.Mesh(terrainGeo, grassMat);
-  terrainMesh.rotation.x = -Math.PI / 2;
-  terrainMesh.position.y = -0.05;
-  terrainMesh.receiveShadow = true;
-  root.add(terrainMesh);
+  // 2. Rolling Savannah Terrain Base with Laterite Earth & Undulating Elevation
+  const rollingTerrain = buildRollingSavannahTerrain(bounds);
+  root.add(rollingTerrain);
 
   // 2. Integrated Master-Planned Infrastructure System
   // (Realistic Asphalt PBR Roads, Continuous Pedestrian Sidewalks, Beveled Curbs,
@@ -119,9 +91,8 @@ export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
   root.add(obeliskSpire);
   colliders.push({ x: 0, z: 0, halfX: 4.2, halfZ: 4.2, height: 20 });
 
-  // 6. Aso Rock Monolith Northeast Horizon
-  const asoRock = createAsoRockMonolith(materials);
-  asoRock.position.set(40, 0, -255);
+  // 6. Colossal Realistic Aso Rock Monolith Northeast Horizon
+  const asoRock = createRealisticAsoRock(materials, colliders);
   root.add(asoRock);
 
   // 7. Three Arms Zone & Civic Complexes
@@ -165,7 +136,7 @@ export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
   root.add(luxuryHotel);
 
   // 11. Millennium Park & Recreational Gardens (x: 0, z: 50)
-  const centralPark = createCentralParkRecreation(materials, colliders, 0, 50);
+  const centralPark = createMillenniumParkLandscape(materials, colliders, 0, 50);
   root.add(centralPark);
 
   // 12. Public Amenities & Local Trade
@@ -186,34 +157,18 @@ export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
   const airportTerminal = createAirportTerminalShuttle(materials, colliders, 90, 120);
   root.add(airportTerminal);
 
-  // 14. High-Performance Instanced Palm Trees & Solar Streetlights
-  const palmPositions: { x: number; y: number; z: number }[] = [];
-  const streetlightPositions: { x: number; y: number; z: number }[] = [];
+  // 14. Nigerian Savannah Vegetation System (Royal Palms, Fan Palms, Acacias, Flamboyants, Shrubs, Boulders)
+  const vegetationSystem = buildAbujaVegetationSystem(bounds);
+  root.add(vegetationSystem);
 
+  // Modern Solar Streetlights on Major Boulevard Median
+  const streetlightPositions: { x: number; y: number; z: number }[] = [];
   for (let zPos = -140; zPos <= 140; zPos += 20) {
     if (Math.abs(zPos) < 26) continue; // skip roundabout
-    // East and West Boulevard curbs
-    for (const xPos of [-16, 16]) {
-      palmPositions.push({ x: xPos, y: 0, z: zPos });
-    }
-    // Solar Streetlights on Median
     if (zPos % 40 === 0) {
       streetlightPositions.push({ x: 0, y: 0, z: zPos });
     }
   }
-
-  // East-West Avenue Palm Trees
-  for (let xPos = -120; xPos <= 120; xPos += 24) {
-    if (Math.abs(xPos) < 26) continue;
-    for (const zPos of [-14, 14]) {
-      palmPositions.push({ x: xPos, y: 0, z: zPos });
-    }
-  }
-
-  const palmInstances = createTropicalPalmTreeInstances(palmPositions);
-  palmInstances.userData.noMerge = true;
-  root.add(palmInstances);
-
   const streetlightInstances = createModernSolarStreetlightInstances(streetlightPositions, materials);
   streetlightInstances.userData.noMerge = true;
   root.add(streetlightInstances);

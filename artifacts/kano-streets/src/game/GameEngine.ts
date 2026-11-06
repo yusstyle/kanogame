@@ -24,6 +24,7 @@ import { createWorld } from "./world";
 import { createAbujaWorld } from "./abujaWorld";
 import { buildAbujaNavigationNetwork } from "./abujaNavigation";
 import { getAbujaDistrict } from "./abujaLandmarks";
+import { getAbujaElevation } from "./abujaLandscape";
 import { CITIES_REGISTRY, getCitySpec, type CityId, type TravelMethod } from "./cityRegistry";
 import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType, CareerPathChoice, PropertyId, InteriorId, FurnitureInstance, HomeNavInfo, PlayerHomeEntry, BusinessId, CurrencyType, CameraMode } from "./types";
 import { SocialSystem } from "./socialSystem";
@@ -2618,9 +2619,7 @@ export class GameEngine {
       return this.interiorManager.getSurfaceHeight(this.interiorManager.activeInterior, x, z);
     }
     if (this.currentCity === "abuja") {
-      if (Math.abs(x) <= 14 || Math.abs(z) <= 12) return 0.02;
-      if (Math.abs(x) <= 95 && Math.abs(z) <= 95) return 0.05;
-      return 0.03;
+      return getAbujaElevation(x, z);
     }
     if (Math.abs(x + 31) <= 10.5 && Math.abs(z - 31) <= 9) return 0.045;
     for (const road of ROAD_LAYOUT) {
