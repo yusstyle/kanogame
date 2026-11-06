@@ -4,11 +4,16 @@ export function buildAbujaNavigationNetwork(): NavigationNetwork {
   const trafficWaypoints = new Map<string, TrafficWaypoint>();
   const pedestrianWaypoints = new Map<string, PedestrianWaypoint>();
 
-  // 1. TRAFFIC NETWORK ALONG ABUJA BOULEVARDS
-  // Shehu Shagari Way (x = 0, z from -150 to 150)
-  // Direction +1 (Heading South, +Z): Drives on west lane (x = -8)
-  // Direction -1 (Heading North, -Z): Drives on east lane (x = +8)
-  const zSteps = [-150, -120, -90, -60, -30, 30, 60, 90, 120, 150];
+  // -------------------------------------------------------------
+  // 1. TRAFFIC NETWORK ACROSS EXPANDED ABUJA METROPOLIS (2,048m)
+  // -------------------------------------------------------------
+
+  // A. Shehu Shagari Way (Arterial 1, N-S at x = 0, z from -840 to 840)
+  const zSteps: number[] = [];
+  for (let z = -840; z <= 840; z += 60) {
+    if (Math.abs(z) === 0) continue; // Skip exact center (handled by roundabout)
+    zSteps.push(z);
+  }
 
   for (let i = 0; i < zSteps.length; i++) {
     const z = zSteps[i];
@@ -23,7 +28,7 @@ export function buildAbujaNavigationNetwork(): NavigationNetwork {
       direction: 1,
       roadCenter: 0,
       nextIds: nextSouth,
-      isIntersection: Math.abs(z) === 90,
+      isIntersection: Math.abs(z) === 450 || Math.abs(z) === 90,
     });
 
     // Northbound lane (x = +8)
@@ -37,14 +42,16 @@ export function buildAbujaNavigationNetwork(): NavigationNetwork {
       direction: -1,
       roadCenter: 0,
       nextIds: nextNorth,
-      isIntersection: Math.abs(z) === 90,
+      isIntersection: Math.abs(z) === 450 || Math.abs(z) === 90,
     });
   }
 
-  // Constitution Avenue (z = 0, x from -120 to 120)
-  // Direction +1 (Heading East, +X): Drives on south lane (z = +7)
-  // Direction -1 (Heading West, -X): Drives on north lane (z = -7)
-  const xSteps = [-120, -90, -60, -30, 30, 60, 90, 120];
+  // B. Constitution Avenue (Arterial 2, E-W at z = 0, x from -840 to 840)
+  const xSteps: number[] = [];
+  for (let x = -840; x <= 840; x += 60) {
+    if (Math.abs(x) === 0) continue;
+    xSteps.push(x);
+  }
 
   for (let i = 0; i < xSteps.length; i++) {
     const x = xSteps[i];
@@ -59,7 +66,7 @@ export function buildAbujaNavigationNetwork(): NavigationNetwork {
       direction: 1,
       roadCenter: 0,
       nextIds: nextEast,
-      isIntersection: Math.abs(x) === 90,
+      isIntersection: Math.abs(x) === 450 || Math.abs(x) === 90,
     });
 
     // Westbound lane (z = -7)
@@ -73,16 +80,15 @@ export function buildAbujaNavigationNetwork(): NavigationNetwork {
       direction: -1,
       roadCenter: 0,
       nextIds: nextWest,
-      isIntersection: Math.abs(x) === 90,
+      isIntersection: Math.abs(x) === 450 || Math.abs(x) === 90,
     });
   }
 
-  // Interconnect roundabout turns around Central Obelisk (x: 0, z: 0)
-  // Roundabout loop: radius 14m
+  // C. Central Roundabout turns around Central Obelisk (x: 0, z: 0)
   const roundaboutCount = 8;
   for (let r = 0; r < roundaboutCount; r++) {
     const a = (r / roundaboutCount) * Math.PI * 2;
-    const nextA = ((r + 1) % roundaboutCount);
+    const nextA = (r + 1) % roundaboutCount;
     const rbId = `abuja-roundabout-${r}`;
     trafficWaypoints.set(rbId, {
       id: rbId,
@@ -96,22 +102,91 @@ export function buildAbujaNavigationNetwork(): NavigationNetwork {
     });
   }
 
-  // Connect avenue entrances to roundabout
-  const southEntry = trafficWaypoints.get("abuja-shagari-south-4");
-  if (southEntry) southEntry.nextIds.push("abuja-roundabout-6");
-  const northEntry = trafficWaypoints.get("abuja-shagari-north-5");
-  if (northEntry) northEntry.nextIds.push("abuja-roundabout-2");
-  const eastEntry = trafficWaypoints.get("abuja-const-east-3");
-  if (eastEntry) eastEntry.nextIds.push("abuja-roundabout-0");
-  const westEntry = trafficWaypoints.get("abuja-const-west-4");
-  if (westEntry) westEntry.nextIds.push("abuja-roundabout-4");
+  // Interconnect avenues into roundabout near center
+  const southEntryIdx = zSteps.findIndex((z) => z === -60);
+  if (southEntryIdx >= 0) {
+    const southEntry = trafficWaypoints.get(`abuja-shagari-south-${southEntryIdx}`);
+    if (southEntry) southEntry.nextIds.push("abuja-roundabout-6");
+  }
+  const northEntryIdx = zSteps.findIndex((z) => z === 60);
+  if (northEntryIdx >= 0) {
+    const northEntry = trafficWaypoints.get(`abuja-shagari-north-${northEntryIdx}`);
+    if (northEntry) northEntry.nextIds.push("abuja-roundabout-2");
+  }
+  const eastEntryIdx = xSteps.findIndex((x) => x === -60);
+  if (eastEntryIdx >= 0) {
+    const eastEntry = trafficWaypoints.get(`abuja-const-east-${eastEntryIdx}`);
+    if (eastEntry) eastEntry.nextIds.push("abuja-roundabout-0");
+  }
+  const westEntryIdx = xSteps.findIndex((x) => x === 60);
+  if (westEntryIdx >= 0) {
+    const westEntry = trafficWaypoints.get(`abuja-const-west-${westEntryIdx}`);
+    if (westEntry) westEntry.nextIds.push("abuja-roundabout-4");
+  }
 
-  // 2. PEDESTRIAN WALKWAY NETWORK
+  // D. Outer West Arterial Corridor (x = -450, passing through Maitama, Wuse & Garki West)
+  const outerSteps = [-720, -540, -360, -180, 0, 180, 360, 540, 720];
+  for (let i = 0; i < outerSteps.length; i++) {
+    const z = outerSteps[i];
+    const sId = `abuja-outerwest-south-${i}`;
+    const nId = `abuja-outerwest-north-${i}`;
+    trafficWaypoints.set(sId, {
+      id: sId,
+      x: -456,
+      z,
+      axis: "z",
+      direction: 1,
+      roadCenter: -450,
+      nextIds: i < outerSteps.length - 1 ? [`abuja-outerwest-south-${i + 1}`] : [nId],
+      isIntersection: z === 0 || z === 450,
+    });
+    trafficWaypoints.set(nId, {
+      id: nId,
+      x: -444,
+      z,
+      axis: "z",
+      direction: -1,
+      roadCenter: -450,
+      nextIds: i > 0 ? [`abuja-outerwest-north-${i - 1}`] : [sId],
+      isIntersection: z === 0 || z === -450,
+    });
+  }
+
+  // E. Southern Airport Expressway (z = +450, passing through Garki & Highway Outskirts)
+  for (let i = 0; i < outerSteps.length; i++) {
+    const x = outerSteps[i];
+    const eId = `abuja-exp-east-${i}`;
+    const wId = `abuja-exp-west-${i}`;
+    trafficWaypoints.set(eId, {
+      id: eId,
+      x,
+      z: 456,
+      axis: "x",
+      direction: 1,
+      roadCenter: 450,
+      nextIds: i < outerSteps.length - 1 ? [`abuja-exp-east-${i + 1}`] : [wId],
+      isIntersection: x === 0 || x === -450,
+    });
+    trafficWaypoints.set(wId, {
+      id: wId,
+      x,
+      z: 444,
+      axis: "x",
+      direction: -1,
+      roadCenter: 450,
+      nextIds: i > 0 ? [`abuja-exp-west-${i - 1}`] : [eId],
+      isIntersection: x === 0 || x === 450,
+    });
+  }
+
+  // -------------------------------------------------------------
+  // 2. PEDESTRIAN WALKWAY NETWORK ACROSS DISTRICTS
+  // -------------------------------------------------------------
   // Sidewalks along Shehu Shagari Way
-  for (let pz = -140; pz <= 140; pz += 28) {
+  for (let pz = -600; pz <= 600; pz += 50) {
     const pEastId = `ped-abuja-east-${pz}`;
     const pWestId = `ped-abuja-west-${pz}`;
-    const nextZ = pz + 28 <= 140 ? pz + 28 : -140;
+    const nextZ = pz + 50 <= 600 ? pz + 50 : -600;
 
     pedestrianWaypoints.set(pEastId, {
       id: pEastId,
@@ -130,8 +205,31 @@ export function buildAbujaNavigationNetwork(): NavigationNetwork {
     });
   }
 
-  // Central Park paths and Mall plaza pedestrian points
-  const parkWaypoints = [
+  // Sidewalks along Constitution Avenue through Wuse & CBD
+  for (let px = -600; px <= 600; px += 60) {
+    const pNorthId = `ped-abuja-north-${px}`;
+    const pSouthId = `ped-abuja-south-${px}`;
+    const nextX = px + 60 <= 600 ? px + 60 : -600;
+
+    pedestrianWaypoints.set(pNorthId, {
+      id: pNorthId,
+      x: px,
+      z: -14,
+      area: "sidewalk",
+      nextIds: [`ped-abuja-north-${nextX}`],
+    });
+
+    pedestrianWaypoints.set(pSouthId, {
+      id: pSouthId,
+      x: px,
+      z: 14,
+      area: "sidewalk",
+      nextIds: [`ped-abuja-south-${nextX}`],
+    });
+  }
+
+  // Key District Plaza & Promenade Destinations
+  const districtWaypoints = [
     { id: "ped-park-gate", x: 0, z: 28 },
     { id: "ped-park-fountain-n", x: 0, z: 42 },
     { id: "ped-park-fountain-s", x: 0, z: 58 },
@@ -144,16 +242,25 @@ export function buildAbujaNavigationNetwork(): NavigationNetwork {
     { id: "ped-cbn-plaza", x: 75, z: -30 },
     { id: "ped-nnpc-bridge", x: 75, z: 40 },
     { id: "ped-three-arms", x: 0, z: -80 },
+    // Expanded District Destinations
+    { id: "ped-maitama-diplomatic", x: -450, z: -450 },
+    { id: "ped-maitama-hills", x: -350, z: -600 },
+    { id: "ped-wuse2-crescent", x: -450, z: 120 },
+    { id: "ped-wuse2-plaza", x: -380, z: 220 },
+    { id: "ped-garki-ministries", x: -120, z: 450 },
+    { id: "ped-garki-estates", x: 120, z: 450 },
+    { id: "ped-asokoro-terrace", x: 450, z: -180 },
+    { id: "ped-airport-expressway", x: 0, z: 450 },
   ];
 
-  parkWaypoints.forEach((pw, idx) => {
-    const nextIndex = (idx + 1) % parkWaypoints.length;
+  districtWaypoints.forEach((pw, idx) => {
+    const nextIndex = (idx + 1) % districtWaypoints.length;
     pedestrianWaypoints.set(pw.id, {
       id: pw.id,
       x: pw.x,
       z: pw.z,
       area: pw.id.includes("market") ? "market" : "sidewalk",
-      nextIds: [parkWaypoints[nextIndex].id],
+      nextIds: [districtWaypoints[nextIndex].id],
     });
   });
 
@@ -164,4 +271,3 @@ export function buildAbujaNavigationNetwork(): NavigationNetwork {
     pedestrianWaypointList: Array.from(pedestrianWaypoints.values()),
   };
 }
-

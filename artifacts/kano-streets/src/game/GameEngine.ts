@@ -25,6 +25,7 @@ import { createAbujaWorld } from "./abujaWorld";
 import { buildAbujaNavigationNetwork } from "./abujaNavigation";
 import { getAbujaDistrict } from "./abujaLandmarks";
 import { getAbujaElevation } from "./abujaLandscape";
+import type { AbujaStreamingManager } from "./abujaStreaming";
 import { CITIES_REGISTRY, getCitySpec, type CityId, type TravelMethod } from "./cityRegistry";
 import type { Collider, GameMode, GameScreen, GameSnapshot, GraphicsQuality, SocialContact, VehicleType, CareerPathChoice, PropertyId, InteriorId, FurnitureInstance, HomeNavInfo, PlayerHomeEntry, BusinessId, CurrencyType, CameraMode } from "./types";
 import { SocialSystem } from "./socialSystem";
@@ -196,6 +197,7 @@ export class GameEngine {
   private isEmpireModalOpen = false;
   private isSmartphoneOpen = false;
   private cameraMode: CameraMode = "third-person";
+  private abujaStreamingManager: AbujaStreamingManager | null = null;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -277,7 +279,9 @@ export class GameEngine {
     this.syncAllPlacedFurniture();
 
     if (this.currentCity === "abuja") {
-      this.world = createAbujaWorld(this.materials);
+      const abujaResult = createAbujaWorld(this.materials);
+      this.world = abujaResult;
+      this.abujaStreamingManager = abujaResult.streamingManager;
       this.navigation = buildAbujaNavigationNetwork();
     } else {
       this.world = createWorld(this.materials);
@@ -725,6 +729,9 @@ export class GameEngine {
   }
 
   private updateChunkCulling(force = false) {
+    if (this.currentCity === "abuja" && this.abujaStreamingManager) {
+      this.abujaStreamingManager.update(this.playerPosition, force);
+    }
     if (!this.staticBatches || this.staticBatches.length === 0) return;
     const center = this.playerPosition;
     if (!force && center.distanceToSquared(this.lastChunkCullPos) < 16) return;
@@ -749,6 +756,10 @@ export class GameEngine {
       const effectiveDistSq = Math.max(0, dSq - sphere.radius * sphere.radius);
       batch.visible = effectiveDistSq <= maxDistSq;
     }
+  }
+
+  public get streamingManager(): AbujaStreamingManager | null {
+    return this.abujaStreamingManager;
   }
 
   setGraphicsQuality(quality: GraphicsQuality) {
@@ -4084,10 +4095,13 @@ export class GameEngine {
     // Mount new city world
     this.currentCity = targetCity;
     if (targetCity === "abuja") {
-      this.world = createAbujaWorld(this.materials);
+      const abujaResult = createAbujaWorld(this.materials);
+      this.world = abujaResult;
+      this.abujaStreamingManager = abujaResult.streamingManager;
       this.navigation = buildAbujaNavigationNetwork();
     } else {
       this.world = createWorld(this.materials);
+      this.abujaStreamingManager = null;
       this.navigation = buildNavigationNetwork();
     }
 

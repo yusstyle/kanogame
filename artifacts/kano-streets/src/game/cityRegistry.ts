@@ -142,11 +142,13 @@ export const CITIES_REGISTRY: Record<CityId, CitySpec> = {
     },
     districts: [
       { id: "three-arms", name: "Three Arms Zone & Central District", category: "government", description: "Monumental National Assembly dome, Supreme Court, Central Bank Tower, and Aso Rock backdrop." },
-      { id: "cbd-monuments", name: "Central Business District & Monuments", category: "commercial", description: "Soaring National Mosque golden dome, National Christian Centre spire, and NNPC corporate twin towers." },
-      { id: "maitama", name: "Maitama & Asokoro Diplomatic Estates", category: "residential", description: "Ultra-luxury gated compounds, diplomatic residences, private swimming pools, and high-security villas." },
-      { id: "wuse-commercial", name: "Wuse 2 Commercial & Shopping Arcade", category: "commercial", description: "Grand Jabi shopping malls, 5-star hotel towers, Continental shawarma terraces, and cafes." },
+      { id: "cbd-monuments", name: "Central Business District & Financial Strip", category: "commercial", description: "Soaring National Mosque golden dome, National Christian Centre spire, and NNPC corporate twin towers." },
+      { id: "maitama", name: "Maitama Diplomatic Sector & Luxury Hills", category: "residential", description: "Ultra-luxury gated compounds, diplomatic embassies, private swimming pools, and high-security villas." },
+      { id: "wuse-commercial", name: "Wuse 1 & 2 Commercial & Shopping Arcade", category: "commercial", description: "Grand commercial shopping plazas, 5-star hotel towers, Continental shawarma terraces, and cafes." },
+      { id: "garki-administrative", name: "Garki 1 & 2 Administrative & Housing Sector", category: "government", description: "Federal ministry headquarters edifices, terraced residential estates, and bustling commercial markets." },
+      { id: "asokoro-hillside", name: "Asokoro Diplomatic Sector & Serpentine Heights", category: "residential", description: "Hillside luxury residences, presidential guest villas, and panoramic granite ridge views." },
       { id: "central-park", name: "Millennium Park & Recreational Gardens", category: "parks", description: "Lush botanical gardens, ornamental water fountains, paved jogging walkways, and gazebos." },
-      { id: "outskirts-expressway", name: "Federal Highway A2 & NNPC Mega Station", category: "industrial", description: "Multi-lane expressways, modern 8-pump NNPC Mega fuel station, and interstate toll gate to Kano." },
+      { id: "outskirts-expressway", name: "Federal Highway Transit Corridor & Airport Bypass", category: "industrial", description: "Multi-lane expressways, modern 8-pump NNPC Mega fuel station, and interstate toll gate to Kano." },
     ],
     terminals: [
       {

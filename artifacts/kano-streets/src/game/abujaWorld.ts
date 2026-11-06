@@ -6,6 +6,8 @@ import {
   createMillenniumParkLandscape,
 } from "./abujaLandscape";
 import { buildAbujaVegetationSystem } from "./abujaVegetation";
+import { AbujaStreamingManager } from "./abujaStreaming";
+import { buildStreamingChunk } from "./abujaDistrictsExpanded";
 import {
   createThreeArmsCivicComplex,
   createAbujaNationalMosque,
@@ -31,6 +33,7 @@ export interface AbujaWorldResult {
   staticBatches: THREE.Mesh[];
   skyMesh: THREE.Mesh;
   gateSlots: THREE.Group[];
+  streamingManager: AbujaStreamingManager;
 }
 
 export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
@@ -38,10 +41,10 @@ export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
   root.name = "AbujaWorldRoot";
   const colliders: Collider[] = [];
   const staticBatches: THREE.Mesh[] = [];
-  const bounds = 220;
+  const bounds = 1024; // Expanded 2,048m x 2,048m Metropolis Territory
 
-  // 1. Sky Dome tailored for Abuja (Crisp Slate/Teal Horizon)
-  const skyGeo = new THREE.SphereGeometry(380, 24, 16);
+  // 1. Sky Dome tailored for Abuja (Crisp Slate/Teal Horizon across 2,048m)
+  const skyGeo = new THREE.SphereGeometry(1800, 24, 16);
   const skyMat = new THREE.MeshBasicMaterial({
     color: "#c2d4cb",
     side: THREE.BackSide,
@@ -173,8 +176,21 @@ export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
   streetlightInstances.userData.noMerge = true;
   root.add(streetlightInstances);
 
-  // 15. Peripheral Boundaries & Security Fences
-  const boundaryThickness = 4;
+  // 15. Spatial World Streaming System (64 District Chunks across 2,048m x 2,048m)
+  const streamingManager = new AbujaStreamingManager();
+  for (let cx = -4; cx <= 3; cx++) {
+    for (let cz = -4; cz <= 3; cz++) {
+      const { type, name } = streamingManager.getDistrictClassification(cx, cz);
+      const chunk = buildStreamingChunk(cx, cz, streamingManager.chunkSize, type, name, materials);
+      streamingManager.registerChunk(chunk);
+      colliders.push(...chunk.colliders);
+    }
+  }
+  streamingManager.root.userData.noMerge = true;
+  root.add(streamingManager.root);
+
+  // 16. Peripheral Metropolis Boundaries & Security Checkpoints (at +/- 1,034m)
+  const boundaryThickness = 6;
   const boundPositions = [
     { x: 0, z: bounds + 10, w: bounds * 2, d: boundaryThickness },
     { x: 0, z: -bounds - 10, w: bounds * 2, d: boundaryThickness },
@@ -188,12 +204,12 @@ export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
       z: b.z,
       halfX: b.w * 0.5,
       halfZ: b.d * 0.5,
-      height: 12,
+      height: 16,
     });
   });
 
   // Batch static geometries into high-performance 64m chunks
   mergeStaticMeshesByCell(root, staticBatches);
 
-  return { root, colliders, bounds, staticBatches, skyMesh, gateSlots: [] };
+  return { root, colliders, bounds, staticBatches, skyMesh, gateSlots: [], streamingManager };
 }

@@ -33,9 +33,16 @@ export function getAbujaElevation(x: number, z: number): number {
   const distWuseRoad = Math.abs(z - 90);
   const distCivicRoad = Math.abs(z - (-90));
 
+  // Expanded District Arterials (N-S at -450 & +450, E-W at -450 & +450)
+  const distOuterWestRoad = Math.abs(x - (-450));
+  const distOuterEastRoad = Math.abs(x - 450);
+  const distOuterNorthRoad = Math.abs(z - (-450));
+  const distOuterSouthRoad = Math.abs(z - 450);
+
   // If inside any road / sidewalk corridor, keep flat
   if (distNS < 20 || distEW < 18) return 0.02;
   if (distMaitamaRoad < 13 || distCbdRoad < 14 || distWuseRoad < 13 || distCivicRoad < 14) return 0.02;
+  if (distOuterWestRoad < 15 || distOuterEastRoad < 15 || distOuterNorthRoad < 15 || distOuterSouthRoad < 15) return 0.02;
 
   // Toll plaza approach (z <= -140, |x| <= 26)
   if (z <= -140 && distNS < 28) return 0.02;
@@ -64,6 +71,10 @@ export function getAbujaElevation(x: number, z: number): number {
     Math.max(0, distCbdRoad - 14),
     Math.max(0, distWuseRoad - 13),
     Math.max(0, distCivicRoad - 14),
+    Math.max(0, distOuterWestRoad - 15),
+    Math.max(0, distOuterEastRoad - 15),
+    Math.max(0, distOuterNorthRoad - 15),
+    Math.max(0, distOuterSouthRoad - 15),
   );
   const ramp = Math.min(1.0, minCorridorDist / 18.0); // 0 at road edge, 1 at 18m away
   const blend = ramp * ramp * (3 - 2 * ramp); // smoothstep
@@ -100,8 +111,8 @@ export function getAbujaElevation(x: number, z: number): number {
  * Builds realistic rolling savannah terrain with procedural PBR micro-texture
  */
 export function buildRollingSavannahTerrain(bounds: number): THREE.Mesh {
-  const size = bounds * 2 + 120;
-  const segments = 120; // 120x120 smooth height grid
+  const size = Math.max(bounds * 2 + 120, 2200);
+  const segments = 128; // 128x128 smooth height grid across expanded territory
   const geo = new THREE.PlaneGeometry(size, size, segments, segments);
   geo.rotateX(-Math.PI / 2);
 
@@ -164,7 +175,7 @@ export function buildRollingSavannahTerrain(bounds: number): THREE.Mesh {
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(32, 32);
+  texture.repeat.set(64, 64);
 
   const mat = new THREE.MeshStandardMaterial({
     map: texture,
