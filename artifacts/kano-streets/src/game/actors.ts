@@ -581,7 +581,7 @@ export function createCarModel(
       });
     }
     model.rotation.y = Math.PI / 2;
-    model.position.set(0, 0.31, 0);
+    model.position.set(0, 0.02, 0);
     gltfBody = model;
     root.add(model);
   };

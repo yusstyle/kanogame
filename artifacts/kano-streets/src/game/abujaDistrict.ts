@@ -218,6 +218,21 @@ export const sharedMaterials = {
     roughness: 0.35,
     metalness: 0.8,
   }),
+  hazardYellow: new THREE.MeshStandardMaterial({
+    color: "#f1c40f",
+    roughness: 0.35,
+    metalness: 0.1,
+  }),
+  ledGreen: new THREE.MeshStandardMaterial({
+    color: "#2ecc71",
+    emissive: "#27ae60",
+    emissiveIntensity: 0.85,
+    roughness: 0.2,
+  }),
+  barrierRed: new THREE.MeshStandardMaterial({
+    color: "#c0392b",
+    roughness: 0.3,
+  }),
 };
 
 // Prebuilt shared geometries for InstancedMesh
@@ -759,21 +774,59 @@ export function createIntercityTollPlaza(
   root.position.set(x, 0, z);
   root.name = "IntercityTollPlaza";
 
-  // 4-Lane Toll Booth Canopy
-  addBox(root, sharedMaterials.tollBlue, 0, 6.5, 0, 36, 1.4, 12);
+  // 1. Structural Steel Gantry Canopy with Cantilevered Eaves
+  addBox(root, sharedMaterials.tollBlue, 0, 6.2, 0, 36, 1.2, 14);
+  addBox(root, sharedMaterials.hazardYellow, 0, 5.5, 0, 36.4, 0.25, 14.4); // Yellow safety fascia rim
 
-  // 5 Concrete Toll Island Booths
-  for (let bx = -14; bx <= 14; bx += 7) {
-    addBox(root, materials.concrete, bx, 0.3, 0, 1.8, 0.6, 14);
-    addBox(root, materials.white, bx, 2.2, 0, 1.4, 3.2, 3.2);
-    addBox(root, materials.glass, bx, 2.4, 0, 1.45, 1.4, 1.8);
+  // 2. 5 Reinforced Concrete Toll Island Booths
+  const islandX = [-14, -7, 0, 7, 14];
+  islandX.forEach((bx) => {
+    // Concrete island with beveled bullnoses
+    addBox(root, materials.concrete, bx, 0.2, 0, 1.8, 0.4, 15);
+    // Yellow & black hazard stripes on island noses
+    addBox(root, sharedMaterials.hazardYellow, bx, 0.22, 7.2, 1.84, 0.42, 0.6);
+    addBox(root, materials.black, bx, 0.23, 6.9, 1.85, 0.43, 0.2);
+    addBox(root, sharedMaterials.hazardYellow, bx, 0.22, -7.2, 1.84, 0.42, 0.6);
+    addBox(root, materials.black, bx, 0.23, -6.9, 1.85, 0.43, 0.2);
+
+    // Stainless steel safety protection bollards
+    for (const bz of [-7.0, 7.0]) {
+      addCylinder(root, materials.metal, bx, 0.7, bz, 0.14, 0.14, 1.0);
+    }
+
+    // Modern aluminum toll booth
+    addBox(root, sharedMaterials.whiteMarble, bx, 2.0, 0, 1.4, 2.8, 3.2);
+    addBox(root, sharedMaterials.glassBlue, bx, 2.3, 0, 1.45, 1.3, 1.9); // Tinted cashier window
+    addBox(root, materials.metal, bx, 1.5, 0, 1.5, 0.1, 2.2); // Service counter ledge
+
     colliders.push({ x: x + bx, z, halfX: 1.1, halfZ: 4.5, height: 6.5 });
-  }
+  });
 
-  // Large Overhead Route Sign
-  addBox(root, sharedMaterials.signGreen, 0, 8.5, -0.2, 28, 2.5, 0.4);
-  // Route Text Board Frame
-  addBox(root, materials.white, 0, 8.5, 0.1, 27.6, 2.1, 0.2);
+  // 3. 4 Lanes: Lane Clearance Indicators & Articulated Barrier Arms
+  const laneX = [-10.5, -3.5, 3.5, 10.5];
+  laneX.forEach((lx, idx) => {
+    // Overhead green LED lane status indicator
+    addBox(root, sharedMaterials.darkSpandrel, lx, 5.4, 6.2, 2.2, 0.6, 0.3);
+    addBox(root, sharedMaterials.ledGreen, lx, 5.4, 6.35, 1.6, 0.35, 0.05);
+
+    // Overhead lane designation board
+    addBox(root, sharedMaterials.tollBlue, lx, 5.85, 6.25, 2.8, 0.4, 0.1);
+
+    // Articulated red-and-white toll barrier arm (pivoted from island)
+    const islandPivotX = lx > 0 ? lx - 3.5 : lx + 3.5;
+    addCylinder(root, materials.metal, islandPivotX, 0.7, 1.5, 0.12, 0.12, 1.2);
+    const armLen = 4.8;
+    const armX = islandPivotX + (lx > 0 ? 2.4 : -2.4);
+    addBox(root, sharedMaterials.barrierRed, armX, 0.95, 1.5, armLen, 0.12, 0.12);
+    for (let st = -1.8; st <= 1.8; st += 0.9) {
+      addBox(root, sharedMaterials.whiteMarble, armX + st, 0.96, 1.5, 0.35, 0.13, 0.13);
+    }
+  });
+
+  // 4. Large Overhead Interstate Route Sign
+  addBox(root, sharedMaterials.signGreen, 0, 8.4, -0.2, 30, 2.4, 0.4);
+  addBox(root, materials.white, 0, 8.4, 0.05, 29.5, 2.1, 0.1);
+  addBox(root, sharedMaterials.signGreen, 0, 8.4, 0.12, 29.1, 1.8, 0.05);
 
   return root;
 }

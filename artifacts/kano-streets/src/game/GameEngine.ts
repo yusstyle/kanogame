@@ -460,8 +460,8 @@ export class GameEngine {
     sun.shadow.camera.bottom = -58;
     sun.shadow.camera.near = 1;
     sun.shadow.camera.far = 175;
-    sun.shadow.bias = -0.00032;
-    sun.shadow.normalBias = 0.024;
+    sun.shadow.bias = -0.00008;
+    sun.shadow.normalBias = 0.032;
     this.scene.add(sun);
     this.sunLight = sun;
 

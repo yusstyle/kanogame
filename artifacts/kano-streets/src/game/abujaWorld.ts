@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { buildAbujaInfrastructure } from "./abujaInfrastructure";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   createAsoRockMonolith,
@@ -37,33 +38,33 @@ export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
   const staticBatches: THREE.Mesh[] = [];
   const bounds = 220;
 
-  // Custom materials tailored for the Federal Capital Territory
+  // 1. Savannah Grass Terrain Base with Procedural Micro-Texture (Anti-Acne PBR)
+  const grassCanvas = document.createElement("canvas");
+  grassCanvas.width = grassCanvas.height = 256;
+  const gCtx = grassCanvas.getContext("2d")!;
+  gCtx.fillStyle = "#385e3f"; // Rich Nigerian Guinean forest-savannah green
+  gCtx.fillRect(0, 0, 256, 256);
+  let state = 719;
+  for (let i = 0; i < 5000; i++) {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    const r1 = state / 4294967296;
+    state = (state * 1664525 + 1013904223) >>> 0;
+    const r2 = state / 4294967296;
+    gCtx.fillStyle = r1 > 0.5 ? "#2a4830" : "#456e4c";
+    gCtx.fillRect(r1 * 256, r2 * 256, 1.4, 1.4);
+  }
+  const grassTexture = new THREE.CanvasTexture(grassCanvas);
+  grassTexture.colorSpace = THREE.SRGBColorSpace;
+  grassTexture.wrapS = grassTexture.wrapT = THREE.RepeatWrapping;
+  grassTexture.repeat.set(36, 36);
+
   const grassMat = new THREE.MeshStandardMaterial({
-    color: "#3a6344", // Lush Guinean forest-savannah green
-    roughness: 0.92,
+    map: grassTexture,
+    roughness: 0.90,
+    metalness: 0.02,
   });
 
-  const boulevardAsphalt = new THREE.MeshStandardMaterial({
-    color: "#232629",
-    roughness: 0.78,
-  });
-
-  const medianGreen = new THREE.MeshStandardMaterial({
-    color: "#2d5a36",
-    roughness: 0.9,
-  });
-
-  const kerbWhite = new THREE.MeshStandardMaterial({
-    color: "#eaecee",
-    roughness: 0.4,
-  });
-
-  const roadLineWhite = new THREE.MeshStandardMaterial({
-    color: "#fdfefe",
-    roughness: 0.3,
-  });
-
-  // 1. Sky Dome tailored for Abuja (Crisp Slate/Teal Horizon)
+  // Sky Dome tailored for Abuja (Crisp Slate/Teal Horizon)
   const skyGeo = new THREE.SphereGeometry(380, 24, 16);
   const skyMat = new THREE.MeshBasicMaterial({
     color: "#c2d4cb",
@@ -74,7 +75,7 @@ export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
   skyMesh.name = "AbujaSkyDome";
   root.add(skyMesh);
 
-  // 2. Expansive Terrain Base
+  // Expansive Terrain Base
   const terrainGeo = new THREE.PlaneGeometry(bounds * 2 + 100, bounds * 2 + 100);
   const terrainMesh = new THREE.Mesh(terrainGeo, grassMat);
   terrainMesh.rotation.x = -Math.PI / 2;
@@ -82,120 +83,41 @@ export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
   terrainMesh.receiveShadow = true;
   root.add(terrainMesh);
 
-  // 3. Multi-Lane Expressway Network
-  // Shehu Shagari Way (North-South Arterial: 28m wide, 8 lanes + median)
-  const nsRoad = new THREE.Mesh(new THREE.PlaneGeometry(28, bounds * 2), boulevardAsphalt);
-  nsRoad.rotation.x = -Math.PI / 2;
-  nsRoad.position.set(0, 0, 0);
-  nsRoad.receiveShadow = true;
-  root.add(nsRoad);
+  // 2. Integrated Master-Planned Infrastructure System
+  // (Realistic Asphalt PBR Roads, Continuous Pedestrian Sidewalks, Beveled Curbs,
+  // Stormwater Drainage Gutters, Laterite Soil Verges, Zebra Crossings, Roundabout Markings, and Non-Clipping Medians)
+  const infrastructure = buildAbujaInfrastructure(bounds);
+  root.add(infrastructure.group);
+  colliders.push(...infrastructure.colliders);
 
-  // Center Landscaped Median on N-S Highway
-  const nsMedian = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.25, bounds * 2), medianGreen);
-  nsMedian.position.set(0, 0.12, 0);
-  nsMedian.receiveShadow = true;
-  root.add(nsMedian);
-
-  // Constitution Avenue (East-West Arterial: 24m wide)
-  const ewRoad = new THREE.Mesh(new THREE.PlaneGeometry(bounds * 2, 24), boulevardAsphalt);
-  ewRoad.rotation.x = -Math.PI / 2;
-  ewRoad.position.set(0, 0, 0);
-  ewRoad.receiveShadow = true;
-  root.add(ewRoad);
-
-  // Center Median on E-W Highway
-  const ewMedian = new THREE.Mesh(new THREE.BoxGeometry(bounds * 2, 0.25, 2.2), medianGreen);
-  ewMedian.position.set(0, 0.12, 0);
-  ewMedian.receiveShadow = true;
-  root.add(ewMedian);
-
-  // Peripheral Secondary Avenues
-  // Maitama Boulevard (x = -90, running north-south)
-  const maitamaRoad = new THREE.Mesh(new THREE.PlaneGeometry(16, bounds * 1.6), boulevardAsphalt);
-  maitamaRoad.rotation.x = -Math.PI / 2;
-  maitamaRoad.position.set(-90, 0, 0);
-  maitamaRoad.receiveShadow = true;
-  root.add(maitamaRoad);
-
-  // CBD Herbert Macaulay Way (x = 90, running north-south)
-  const cbdRoad = new THREE.Mesh(new THREE.PlaneGeometry(18, bounds * 1.6), boulevardAsphalt);
-  cbdRoad.rotation.x = -Math.PI / 2;
-  cbdRoad.position.set(90, 0, 0);
-  cbdRoad.receiveShadow = true;
-  root.add(cbdRoad);
-
-  // Wuse 2 Commercial Link (z = 90, running east-west)
-  const wuseRoad = new THREE.Mesh(new THREE.PlaneGeometry(bounds * 1.6, 16), boulevardAsphalt);
-  wuseRoad.rotation.x = -Math.PI / 2;
-  wuseRoad.position.set(0, 0, 90);
-  wuseRoad.receiveShadow = true;
-  root.add(wuseRoad);
-
-  // Three Arms Civic Avenue (z = -90, running east-west)
-  const civicRoad = new THREE.Mesh(new THREE.PlaneGeometry(bounds * 1.6, 18), boulevardAsphalt);
-  civicRoad.rotation.x = -Math.PI / 2;
-  civicRoad.position.set(0, 0, -90);
-  civicRoad.receiveShadow = true;
-  root.add(civicRoad);
-
-  // 4. Central Monumental Roundabout (x: 0, z: 0)
-  const roundaboutRing = new THREE.Mesh(new THREE.CylinderGeometry(20, 20.2, 0.35, 32), kerbWhite);
-  roundaboutRing.position.set(0, 0.18, 0);
-  roundaboutRing.receiveShadow = true;
-  root.add(roundaboutRing);
-
-  const roundaboutLawn = new THREE.Mesh(new THREE.CylinderGeometry(18.5, 18.5, 0.45, 32), medianGreen);
-  roundaboutLawn.position.set(0, 0.22, 0);
-  roundaboutLawn.receiveShadow = true;
-  root.add(roundaboutLawn);
-
-  // Central Monumental Granite Obelisk & Water Basin
-  const obeliskBase = new THREE.Mesh(new THREE.BoxGeometry(6, 2, 6), materials.concrete);
-  obeliskBase.position.set(0, 1.2, 0);
+  // 3. Central Monumental Obelisk & Water Fountain Basin at (0, 0)
+  const obeliskBase = new THREE.Mesh(new THREE.BoxGeometry(7, 1.6, 7), materials.concrete);
+  obeliskBase.position.set(0, 0.9, 0);
   obeliskBase.castShadow = true;
+  obeliskBase.receiveShadow = true;
   root.add(obeliskBase);
 
+  // Fountain water basin around obelisk
+  const basinRing = new THREE.Mesh(new THREE.CylinderGeometry(8.5, 8.8, 0.8, 32), materials.concrete);
+  basinRing.position.set(0, 0.4, 0);
+  basinRing.receiveShadow = true;
+  root.add(basinRing);
+
+  const basinWater = new THREE.Mesh(new THREE.CylinderGeometry(8.2, 8.2, 0.6, 32), new THREE.MeshStandardMaterial({
+    color: "#0077b6",
+    roughness: 0.1,
+    metalness: 0.4,
+  }));
+  basinWater.position.set(0, 0.45, 0);
+  basinWater.receiveShadow = true;
+  root.add(basinWater);
+
   const obeliskSpire = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 1.8, 18, 4), materials.stone);
-  obeliskSpire.position.set(0, 11, 0);
+  obeliskSpire.position.set(0, 10.5, 0);
   obeliskSpire.rotation.y = Math.PI / 4;
   obeliskSpire.castShadow = true;
   root.add(obeliskSpire);
-  colliders.push({ x: 0, z: 0, halfX: 3.5, halfZ: 3.5, height: 20 });
-
-  // 5. Batched White Thermoplastic Lane Markings on Major Boulevards
-  const dashGeometries: THREE.BufferGeometry[] = [];
-  const rotMinusX = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
-
-  for (let lz = -bounds + 10; lz < bounds - 10; lz += 8) {
-    if (Math.abs(lz) < 24) continue; // skip central roundabout
-    for (const lx of [-8, 8]) {
-      const g = new THREE.PlaneGeometry(0.3, 4.5);
-      const m = new THREE.Matrix4().makeTranslation(lx, 0.02, lz).multiply(rotMinusX);
-      g.applyMatrix4(m);
-      dashGeometries.push(g);
-    }
-  }
-
-  for (let lx = -bounds + 10; lx < bounds - 10; lx += 8) {
-    if (Math.abs(lx) < 24) continue; // skip central roundabout
-    for (const lz of [-6.5, 6.5]) {
-      const g = new THREE.PlaneGeometry(4.5, 0.3);
-      const m = new THREE.Matrix4().makeTranslation(lx, 0.02, lz).multiply(rotMinusX);
-      g.applyMatrix4(m);
-      dashGeometries.push(g);
-    }
-  }
-
-  if (dashGeometries.length > 0) {
-    const mergedDashes = mergeGeometries(dashGeometries);
-    for (const g of dashGeometries) g.dispose();
-    const dashesMesh = new THREE.Mesh(mergedDashes, roadLineWhite);
-    dashesMesh.receiveShadow = true;
-    dashesMesh.castShadow = false;
-    dashesMesh.name = "AbujaBoulevardLaneMarkingsMerged";
-    dashesMesh.userData.noMerge = true;
-    root.add(dashesMesh);
-  }
+  colliders.push({ x: 0, z: 0, halfX: 4.2, halfZ: 4.2, height: 20 });
 
   // 6. Aso Rock Monolith Northeast Horizon
   const asoRock = createAsoRockMonolith(materials);
