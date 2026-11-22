@@ -1412,6 +1412,9 @@ test("Milestone 7: Environmental & Harmattan Weather System", () => {
   assert.equal(weather.cyclePreset(), "cool_night");
   assert.equal(weather.getPresetDisplayName(), "Cool Starlit Night");
 
+  assert.equal(weather.cyclePreset(), "rain");
+  assert.equal(weather.getPresetDisplayName(), "Tropical Rain");
+
   assert.equal(weather.cyclePreset(), "clear");
 
   // Apply Harmattan weather to scene

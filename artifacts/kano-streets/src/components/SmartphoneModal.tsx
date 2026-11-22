@@ -1415,6 +1415,7 @@ export default function SmartphoneModal({
                       <option value="performance">Performance</option>
                       <option value="balanced">Balanced</option>
                       <option value="quality">Quality</option>
+                      <option value="ultra">Ultra</option>
                     </select>
                   </div>
 

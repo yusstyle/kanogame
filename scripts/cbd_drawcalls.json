@@ -1,0 +1,638 @@
+{
+  "totalCalls": 400,
+  "mainCallsCount": 318,
+  "shadowCallsCount": 82,
+  "mainByGroup": {
+    "AbujaWorldRoot -> neighborhood-static-1:-2:1:1": 8,
+    "AbujaWorldRoot -> neighborhood-static-0:-2:1:1": 16,
+    "AbujaWorldRoot -> AbujaStreamingWorldRoot": 36,
+    "AbujaWorldRoot -> neighborhood-static-1:-3:1:1": 6,
+    "AbujaWorldRoot -> neighborhood-static-0:-3:1:1": 4,
+    "AbujaWorldRoot -> AbujaVegetationSystem": 22,
+    "traffic-system-root -> unnamed": 14,
+    "AbujaWorldRoot -> AbujaSkyDome": 2,
+    "AbujaWorldRoot -> AbujaRollingSavannahTerrain": 2,
+    "AbujaWorldRoot -> AbujaInfrastructureSystem": 14,
+    "AbujaWorldRoot -> neighborhood-static-0:-1:0:0": 2,
+    "AbujaWorldRoot -> RealisticAsoRockMonolith": 6,
+    "Scene -> Graphite_four-door_sedan": 184,
+    "WeatherParticleGroup -> unnamed": 1,
+    "AbujaWorldRoot -> ModernSolarStreetlightInstances": 1
+  },
+  "shadowByGroup": {
+    "AbujaWorldRoot -> AbujaInfrastructureSystem": 1,
+    "AbujaWorldRoot -> RealisticAsoRockMonolith": 2,
+    "AbujaWorldRoot -> AbujaVegetationSystem": 11,
+    "AbujaWorldRoot -> neighborhood-static-:0:0:1:1": 2,
+    "AbujaWorldRoot -> neighborhood-static-:0:0:1:0": 1,
+    "AbujaWorldRoot -> neighborhood-static-0:-2:1:1": 9,
+    "AbujaWorldRoot -> neighborhood-static-1:-2:1:1": 6,
+    "AbujaWorldRoot -> neighborhood-static-0:-1:1:1": 5,
+    "AbujaWorldRoot -> neighborhood-static-1:-1:1:1": 14,
+    "traffic-system-root -> unnamed": 31
+  },
+  "sampleMainCalls": [
+    {
+      "isShadow": false,
+      "objName": "neighborhood-static-1:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-1:-2:1:1",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 36
+    },
+    {
+      "isShadow": false,
+      "objName": "neighborhood-static-0:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-0:-2:1:1",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 60
+    },
+    {
+      "isShadow": false,
+      "objName": "neighborhood-static-1:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-1:-2:1:1",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 72
+    },
+    {
+      "isShadow": false,
+      "objName": "neighborhood-static-0:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-0:-2:1:1",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 244
+    },
+    {
+      "isShadow": false,
+      "objName": "neighborhood-static-0:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-0:-2:1:1",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 12
+    },
+    {
+      "isShadow": false,
+      "objName": "chunk_0_-2_Bld_granite",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaStreamingWorldRoot / ChunkGroup_chunk_0_-2 / chunk_0_-2_LOD0 / chunk_0_-2_Bld_granite",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 128
+    },
+    {
+      "isShadow": false,
+      "objName": "chunk_-1_-2_Bld_granite",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaStreamingWorldRoot / ChunkGroup_chunk_-1_-2 / chunk_-1_-2_LOD0 / chunk_-1_-2_Bld_granite",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 128
+    },
+    {
+      "isShadow": false,
+      "objName": "neighborhood-static-1:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-1:-2:1:1",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 60
+    },
+    {
+      "isShadow": false,
+      "objName": "neighborhood-static-0:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-0:-2:1:1",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 60
+    },
+    {
+      "isShadow": false,
+      "objName": "neighborhood-static-0:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-0:-2:1:1",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 376
+    },
+    {
+      "isShadow": false,
+      "objName": "neighborhood-static-0:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-0:-2:1:1",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 76
+    },
+    {
+      "isShadow": false,
+      "objName": "neighborhood-static-1:-3:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-1:-3:1:1",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 24
+    },
+    {
+      "isShadow": false,
+      "objName": "neighborhood-static-0:-3:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-0:-3:1:1",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 24
+    },
+    {
+      "isShadow": false,
+      "objName": "neighborhood-static-0:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-0:-2:1:1",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 12
+    },
+    {
+      "isShadow": false,
+      "objName": "neighborhood-static-1:-3:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-1:-3:1:1",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 24
+    },
+    {
+      "isShadow": false,
+      "objName": "neighborhood-static-1:-3:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-1:-3:1:1",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 24
+    },
+    {
+      "isShadow": false,
+      "objName": "neighborhood-static-0:-3:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-0:-3:1:1",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 24
+    },
+    {
+      "isShadow": false,
+      "objName": "RoyalPalmTrunkInstances",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / RoyalPalmTrunkInstances",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 256
+    },
+    {
+      "isShadow": false,
+      "objName": "RoyalPalmCrownInstances",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / RoyalPalmCrownInstances",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 576
+    },
+    {
+      "isShadow": false,
+      "objName": "FanPalmTrunkInstances",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / FanPalmTrunkInstances",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 168
+    },
+    {
+      "isShadow": false,
+      "objName": "FanPalmCrownInstances",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / FanPalmCrownInstances",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 1152
+    },
+    {
+      "isShadow": false,
+      "objName": "AcaciaTrunkInstances",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / AcaciaTrunkInstances",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 200
+    },
+    {
+      "isShadow": false,
+      "objName": "AcaciaCrownInstances",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / AcaciaCrownInstances",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 360
+    },
+    {
+      "isShadow": false,
+      "objName": "FlamboyantTrunkInstances",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / FlamboyantTrunkInstances",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 224
+    },
+    {
+      "isShadow": false,
+      "objName": "FlamboyantCrownInstances",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / FlamboyantCrownInstances",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 416
+    },
+    {
+      "isShadow": false,
+      "objName": "AbujaShrubs",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / AbujaShrubs",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 1080
+    },
+    {
+      "isShadow": false,
+      "objName": "AbujaBougainvillea",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / AbujaBougainvillea",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 1080
+    },
+    {
+      "isShadow": false,
+      "objName": "AbujaBoulders",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / AbujaBoulders",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 140
+    },
+    {
+      "isShadow": false,
+      "objName": "chunk_-2_-2_LOD1_Shell",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaStreamingWorldRoot / ChunkGroup_chunk_-2_-2 / chunk_-2_-2_LOD1 / chunk_-2_-2_LOD1_Shell",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 24
+    },
+    {
+      "isShadow": false,
+      "objName": "chunk_1_-2_LOD1_Shell",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaStreamingWorldRoot / ChunkGroup_chunk_1_-2 / chunk_1_-2_LOD1 / chunk_1_-2_LOD1_Shell",
+      "matName": "MeshStandardMaterial",
+      "matType": "MeshStandardMaterial",
+      "transparent": false,
+      "triangles": 24
+    }
+  ],
+  "sampleShadowCalls": [
+    {
+      "isShadow": true,
+      "objName": "AbujaCurbsBatched",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaInfrastructureSystem / AbujaCurbsBatched",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 720
+    },
+    {
+      "isShadow": true,
+      "objName": "AsoRockMassifMerged",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / RealisticAsoRockMonolith / AsoRockMassifMerged",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 1308
+    },
+    {
+      "isShadow": true,
+      "objName": "AsoRockBouldersMerged",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / RealisticAsoRockMonolith / AsoRockBouldersMerged",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 648
+    },
+    {
+      "isShadow": true,
+      "objName": "RoyalPalmTrunkInstances",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / RoyalPalmTrunkInstances",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 256
+    },
+    {
+      "isShadow": true,
+      "objName": "RoyalPalmCrownInstances",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / RoyalPalmCrownInstances",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 576
+    },
+    {
+      "isShadow": true,
+      "objName": "FanPalmTrunkInstances",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / FanPalmTrunkInstances",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 168
+    },
+    {
+      "isShadow": true,
+      "objName": "FanPalmCrownInstances",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / FanPalmCrownInstances",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 1152
+    },
+    {
+      "isShadow": true,
+      "objName": "AcaciaTrunkInstances",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / AcaciaTrunkInstances",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 200
+    },
+    {
+      "isShadow": true,
+      "objName": "AcaciaCrownInstances",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / AcaciaCrownInstances",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 360
+    },
+    {
+      "isShadow": true,
+      "objName": "FlamboyantTrunkInstances",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / FlamboyantTrunkInstances",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 224
+    },
+    {
+      "isShadow": true,
+      "objName": "FlamboyantCrownInstances",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / FlamboyantCrownInstances",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 416
+    },
+    {
+      "isShadow": true,
+      "objName": "AbujaShrubs",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / AbujaShrubs",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 1080
+    },
+    {
+      "isShadow": true,
+      "objName": "AbujaBougainvillea",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / AbujaBougainvillea",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 1080
+    },
+    {
+      "isShadow": true,
+      "objName": "AbujaBoulders",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / AbujaVegetationSystem / AbujaBoulders",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 140
+    },
+    {
+      "isShadow": true,
+      "objName": "neighborhood-static-:0:0:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-:0:0:1:1",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 140
+    },
+    {
+      "isShadow": true,
+      "objName": "neighborhood-static-:0:0:1:0",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-:0:0:1:0",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 16
+    },
+    {
+      "isShadow": true,
+      "objName": "neighborhood-static-0:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-0:-2:1:1",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 244
+    },
+    {
+      "isShadow": true,
+      "objName": "neighborhood-static-1:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-1:-2:1:1",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 60
+    },
+    {
+      "isShadow": true,
+      "objName": "neighborhood-static-0:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-0:-2:1:1",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 60
+    },
+    {
+      "isShadow": true,
+      "objName": "neighborhood-static-1:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-1:-2:1:1",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 72
+    },
+    {
+      "isShadow": true,
+      "objName": "neighborhood-static-0:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-0:-2:1:1",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 76
+    },
+    {
+      "isShadow": true,
+      "objName": "neighborhood-static-0:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-0:-2:1:1",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 60
+    },
+    {
+      "isShadow": true,
+      "objName": "neighborhood-static-1:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-1:-2:1:1",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 36
+    },
+    {
+      "isShadow": true,
+      "objName": "neighborhood-static-0:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-0:-2:1:1",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 376
+    },
+    {
+      "isShadow": true,
+      "objName": "neighborhood-static-0:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-0:-2:1:1",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 12
+    },
+    {
+      "isShadow": true,
+      "objName": "neighborhood-static-0:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-0:-2:1:1",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 12
+    },
+    {
+      "isShadow": true,
+      "objName": "neighborhood-static-1:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-1:-2:1:1",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 64
+    },
+    {
+      "isShadow": true,
+      "objName": "neighborhood-static-1:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-1:-2:1:1",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 24
+    },
+    {
+      "isShadow": true,
+      "objName": "neighborhood-static-1:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-1:-2:1:1",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 12
+    },
+    {
+      "isShadow": true,
+      "objName": "neighborhood-static-0:-2:1:1",
+      "objType": "Mesh",
+      "rootPath": "AbujaWorldRoot / neighborhood-static-0:-2:1:1",
+      "matName": "MeshDepthMaterial",
+      "matType": "MeshDepthMaterial",
+      "transparent": false,
+      "triangles": 64
+    }
+  ]
+}

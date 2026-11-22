@@ -1,3 +1,5 @@
+import { abujaPbrMaterials } from "./abujaMaterials";
+import { ABUJA_ASO_ROCK_POSITION } from "./abujaLandmarks";
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { Collider, GameMaterials } from "./types";
@@ -125,58 +127,77 @@ export function buildRollingSavannahTerrain(bounds: number): THREE.Mesh {
   }
   geo.computeVertexNormals();
 
-  // Savannah PBR Grass Texture with Laterite Earth Soil Bleed
+    // Savannah PBR Grass Texture with Laterite Earth Soil Bleed
+  // Photorealistic continuous gradients without discrete single-pixel flecks
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 512;
   const ctx = canvas.getContext("2d")!;
 
-  // Base lush savannah green
-  ctx.fillStyle = "#385e3f";
+  // Deep lush Nigerian savannah base
+  ctx.fillStyle = "#335436";
   ctx.fillRect(0, 0, 512, 512);
 
-  // Laterite reddish earth streaks & mineral speckles
   let seed = 49201;
   const rnd = () => {
     seed = (seed * 1664525 + 1013904223) >>> 0;
     return seed / 4294967296;
   };
 
-  // Organic grass clump mottling
-  for (let i = 0; i < 18000; i++) {
-    const rx = rnd() * 512;
-    const ry = rnd() * 512;
-    const rVal = rnd();
-    if (rVal < 0.35) {
-      ctx.fillStyle = "#2a4b32"; // Deep green shadow
-    } else if (rVal < 0.70) {
-      ctx.fillStyle = "#466f4d"; // Sunlit blade
-    } else if (rVal < 0.88) {
-      ctx.fillStyle = "#5c7948"; // Golden savannah dry blade
-    } else {
-      ctx.fillStyle = "#6d4734"; // Subsurface laterite soil fleck
-    }
-    ctx.fillRect(rx, ry, 1.8, 1.8);
-  }
-
-  // Broad laterite soil mottles
-  for (let i = 0; i < 40; i++) {
+  // Multi-tier continuous turf tone washes (broad organic radial gradients)
+  for (let i = 0; i < 90; i++) {
     const cx = rnd() * 512;
     const cy = rnd() * 512;
-    const rad = 15 + rnd() * 35;
-    const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, rad);
-    grad.addColorStop(0, "rgba(109, 71, 52, 0.18)");
-    grad.addColorStop(1, "rgba(56, 94, 63, 0)");
+    const rad = 20 + rnd() * 60;
+    const grad = ctx.createRadialGradient(cx, cy, 1, cx, cy, rad);
+    const rVal = rnd();
+    if (rVal < 0.4) {
+      grad.addColorStop(0, "rgba(35, 68, 38, 0.45)"); // Deep emerald shadow
+    } else if (rVal < 0.75) {
+      grad.addColorStop(0, "rgba(75, 115, 68, 0.40)"); // Sunlit savannah blade tone
+    } else {
+      grad.addColorStop(0, "rgba(95, 118, 62, 0.35)"); // Golden dry savannah blade
+    }
+    grad.addColorStop(1, "rgba(51, 84, 54, 0)");
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.arc(cx, cy, rad, 0, Math.PI * 2);
     ctx.fill();
   }
 
+  // Organic laterite reddish soil bleeds and gentle earth streaks
+  for (let i = 0; i < 35; i++) {
+    const cx = rnd() * 512;
+    const cy = rnd() * 512;
+    const rad = 15 + rnd() * 45;
+    const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, rad);
+    grad.addColorStop(0, "rgba(115, 75, 52, 0.28)");
+    grad.addColorStop(0.7, "rgba(95, 65, 45, 0.12)");
+    grad.addColorStop(1, "rgba(51, 84, 54, 0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Soft fine blade directionality (drawn as smooth linear brush strokes)
+  ctx.strokeStyle = "rgba(40, 80, 42, 0.08)";
+  ctx.lineWidth = 1.2;
+  for (let i = 0; i < 300; i++) {
+    const sx = rnd() * 512;
+    const sy = rnd() * 512;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx + 6 + rnd() * 12, sy + (rnd() - 0.5) * 4);
+    ctx.stroke();
+  }
+
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(64, 64);
-
+  texture.repeat.set(36, 36);
+  texture.anisotropy = 4;
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
   const mat = new THREE.MeshStandardMaterial({
     map: texture,
     roughness: 0.88,
@@ -199,7 +220,13 @@ export function buildRollingSavannahTerrain(bounds: number): THREE.Mesh {
 export function createRealisticAsoRock(materials: GameMaterials, colliders: Collider[]): THREE.Group {
   const root = new THREE.Group();
   root.name = "RealisticAsoRockMonolith";
-  root.position.set(40, 0, -255);
+  // Keep the escarpment behind the Three Arms skyline instead of putting the
+  // foreground camera almost against the rock face.
+  root.position.set(
+    ABUJA_ASO_ROCK_POSITION.x,
+    getAbujaElevation(ABUJA_ASO_ROCK_POSITION.x, ABUJA_ASO_ROCK_POSITION.z),
+    ABUJA_ASO_ROCK_POSITION.z,
+  );
 
   // Weathered Nigerian Granite PBR Material
   const graniteCanvas = document.createElement("canvas");
@@ -238,53 +265,62 @@ export function createRealisticAsoRock(materials: GameMaterials, colliders: Coll
   const graniteTex = new THREE.CanvasTexture(graniteCanvas);
   graniteTex.colorSpace = THREE.SRGBColorSpace;
   graniteTex.wrapS = graniteTex.wrapT = THREE.RepeatWrapping;
-  graniteTex.repeat.set(6, 4);
+  graniteTex.repeat.set(2, 1);
 
   const asoRockMat = new THREE.MeshStandardMaterial({
     map: graniteTex,
     roughness: 0.85,
-    metalness: 0.12,
-    flatShading: true,
+    metalness: 0.02,
+    flatShading: false,
   });
 
   const foothillMat = new THREE.MeshStandardMaterial({
-    color: "#415f3e", // Savannah vegetation covering foothills
-    roughness: 0.92,
+    color: "#354a32", // Natural tropical savannah hillside grass & granite soil
+    roughness: 0.95,
     metalness: 0.02,
-    flatShading: true,
+    flatShading: false,
   });
 
-  // 1. Core Inselberg Monolith Geometries (Batched)
+  // 1. Core Inselberg Monolith Geometries (Batched). A subdivided rock surface
+  // keeps the skyline rounded but gives the summit and shoulders natural breaks.
   const rockGeos: THREE.BufferGeometry[] = [];
 
-  // Main Central Massif (Colossal granite dome: 280m wide, 145m high, 150m deep)
-  const mainDome = new THREE.DodecahedronGeometry(75, 2);
-  mainDome.scale(1.9, 1.0, 1.1);
-  mainDome.translate(0, 72, 0);
+  // Main mass: a broad inselberg with a less spherical profile and irregular
+  // skyline. The deterministic displacement is baked once into the shared mesh.
+  const mainDome = new THREE.IcosahedronGeometry(1, 4);
+  const mainPos = mainDome.getAttribute("position");
+  for (let i = 0; i < mainPos.count; i++) {
+    const nx = mainPos.getX(i);
+    const ny = mainPos.getY(i);
+    const nz = mainPos.getZ(i);
+    const ridge = Math.sin(nx * 5.4 + nz * 2.1) * 0.035 + Math.sin(nz * 7.1 - nx * 1.7) * 0.025;
+    const crown = 1 - Math.max(0, ny) * 0.16;
+    const radial = (1 + ridge) * crown;
+    mainPos.setXYZ(i, nx * 137 * radial, 70 + ny * 76 * (1 + ridge * 0.7), nz * 105 * radial);
+  }
+  mainPos.needsUpdate = true;
+  mainDome.computeVertexNormals();
   rockGeos.push(mainDome);
 
-  // Western Escarpment Ridge (sheer dramatic face)
-  const westRidge = new THREE.DodecahedronGeometry(55, 2);
-  westRidge.scale(1.6, 1.15, 0.9);
-  westRidge.translate(-75, 58, 12);
+  // Lower shoulders create overlapping geological ridges instead of a single dome.
+  const westRidge = new THREE.IcosahedronGeometry(1, 3);
+  westRidge.scale(74, 62, 76);
+  westRidge.translate(-88, 47, 10);
+  westRidge.computeVertexNormals();
   rockGeos.push(westRidge);
 
-  // Eastern Shoulder & Secondary Summit
-  const eastSummit = new THREE.DodecahedronGeometry(60, 2);
-  eastSummit.scale(1.5, 0.95, 1.0);
-  eastSummit.translate(78, 62, -15);
+  const eastSummit = new THREE.IcosahedronGeometry(1, 3);
+  eastSummit.scale(72, 66, 78);
+  eastSummit.translate(82, 50, -16);
+  eastSummit.computeVertexNormals();
   rockGeos.push(eastSummit);
 
-  // Summit Pinnacle Dome (highest point of Aso Rock)
-  const summitDome = new THREE.DodecahedronGeometry(42, 2);
-  summitDome.scale(1.4, 0.8, 1.0);
-  summitDome.translate(-15, 125, -5);
+  // Offset summit shoulder breaks the rounded, single-peak outline.
+  const summitDome = new THREE.IcosahedronGeometry(1, 3);
+  summitDome.scale(58, 44, 54);
+  summitDome.translate(-20, 116, -7);
+  summitDome.computeVertexNormals();
   rockGeos.push(summitDome);
-
-  // Southern Facing Sheer Wall (facing National Assembly & City Center)
-  const southWall = new THREE.BoxGeometry(190, 80, 45);
-  southWall.translate(5, 42, 38);
-  rockGeos.push(southWall);
 
   const mergedRock = safeMergeGeometries(rockGeos);
   for (const g of rockGeos) g.dispose();
@@ -313,7 +349,7 @@ export function createRealisticAsoRock(materials: GameMaterials, colliders: Coll
   ];
 
   foothillOffsets.forEach((f) => {
-    const hill = new THREE.IcosahedronGeometry(1, 1);
+    const hill = new THREE.DodecahedronGeometry(1, 2);
     hill.scale(f.sx, f.sy, f.sz);
     hill.translate(f.x, f.sy * 0.45, f.z);
     foothillGeos.push(hill);
@@ -348,11 +384,11 @@ export function createRealisticAsoRock(materials: GameMaterials, colliders: Coll
 
   // Large perimeter collider to prevent player escaping map boundaries behind rock
   colliders.push({
-    x: 40,
-    z: -255,
-    halfX: 130,
-    halfZ: 85,
-    height: 160,
+    x: ABUJA_ASO_ROCK_POSITION.x,
+    z: ABUJA_ASO_ROCK_POSITION.z,
+    halfX: 170,
+    halfZ: 135,
+    height: 150,
   });
 
   return root;
@@ -378,7 +414,7 @@ export function createMillenniumParkLandscape(
 
   // 1. Manicured Italianate Lawn Base
   const lawnGeo = new THREE.BoxGeometry(parkW, 0.18, parkD);
-  const lawnMesh = new THREE.Mesh(lawnGeo, sharedMaterials.lawn);
+  const lawnMesh = new THREE.Mesh(lawnGeo, abujaPbrMaterials.estateLawn);
   lawnMesh.position.set(0, 0.09, 0);
   lawnMesh.receiveShadow = true;
   lawnMesh.userData.noMerge = true;
@@ -455,29 +491,9 @@ export function createMillenniumParkLandscape(
 
   colliders.push({ x, z, halfX: 11.5, halfZ: 11.5, height: 4 });
 
-  // 4. Botanical Flower Beds (Vibrant tropical floral displays)
-  const flowerBedCanvas = document.createElement("canvas");
-  flowerBedCanvas.width = flowerBedCanvas.height = 128;
-  const fCtx = flowerBedCanvas.getContext("2d")!;
-  fCtx.fillStyle = "#2d5232";
-  fCtx.fillRect(0, 0, 128, 128);
-  // Red, gold and purple bougainvillea / marigold blooms
-  const colors = ["#e74c3c", "#f39c12", "#9b59b6", "#e67e22", "#f1c40f"];
-  for (let i = 0; i < 450; i++) {
-    fCtx.fillStyle = colors[i % colors.length];
-    fCtx.beginPath();
-    fCtx.arc(Math.random() * 128, Math.random() * 128, 1.8, 0, Math.PI * 2);
-    fCtx.fill();
-  }
-  const flowerTex = new THREE.CanvasTexture(flowerBedCanvas);
-  flowerTex.wrapS = flowerTex.wrapT = THREE.RepeatWrapping;
-  flowerTex.repeat.set(4, 2);
-  const flowerMat = new THREE.MeshStandardMaterial({
-    map: flowerTex,
-    roughness: 0.8,
-  });
-
+  // 4. Botanical Flower Beds (Authentic Nigerian Tropical Displays)
   const bedGeos: THREE.BufferGeometry[] = [];
+  const curbGeos: THREE.BufferGeometry[] = [];
   const bedOffsets = [
     { x: -18, z: -18 },
     { x: 18, z: -18 },
@@ -487,18 +503,38 @@ export function createMillenniumParkLandscape(
     { x: 28, z: 0 },
   ];
   bedOffsets.forEach((b) => {
-    const bed = new THREE.BoxGeometry(8, 0.28, 5);
-    bed.translate(b.x, 0.22, b.z);
+    // Raised loamy soil bed with botanical flowers
+    const bed = new THREE.BoxGeometry(7.6, 0.28, 4.6);
+    bed.translate(b.x, 0.20, b.z);
     bedGeos.push(bed);
+
+    // Precast concrete border retaining curb frame
+    const curbN = new THREE.BoxGeometry(8.2, 0.22, 0.35);
+    curbN.translate(b.x, 0.21, b.z - 2.45);
+    const curbS = new THREE.BoxGeometry(8.2, 0.22, 0.35);
+    curbS.translate(b.x, 0.21, b.z + 2.45);
+    const curbW = new THREE.BoxGeometry(0.35, 0.22, 5.25);
+    curbW.translate(b.x - 3.95, 0.21, b.z);
+    const curbE = new THREE.BoxGeometry(0.35, 0.22, 5.25);
+    curbE.translate(b.x + 3.95, 0.21, b.z);
+    curbGeos.push(curbN, curbS, curbW, curbE);
   });
+
   const mergedBeds = safeMergeGeometries(bedGeos);
   for (const g of bedGeos) g.dispose();
-  const bedsMesh = new THREE.Mesh(mergedBeds, flowerMat);
+  const bedsMesh = new THREE.Mesh(mergedBeds, abujaPbrMaterials.botanicalFlowerBed);
   bedsMesh.name = "MillenniumParkFlowerBeds";
   bedsMesh.receiveShadow = true;
   bedsMesh.userData.noMerge = true;
   root.add(bedsMesh);
 
+  const mergedCurbs = safeMergeGeometries(curbGeos);
+  for (const g of curbGeos) g.dispose();
+  const flowerCurbMesh = new THREE.Mesh(mergedCurbs, materials.curb);
+  flowerCurbMesh.name = "MillenniumParkFlowerCurbs";
+  flowerCurbMesh.receiveShadow = true;
+  flowerCurbMesh.userData.noMerge = true;
+  root.add(flowerCurbMesh);
   // 5. Wooden Pergolas & Garden Pavilions
   for (const gz of [-24, 24]) {
     const pergola = new THREE.Group();

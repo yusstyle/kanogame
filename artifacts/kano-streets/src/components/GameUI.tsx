@@ -15,7 +15,7 @@ import { authService, type UserProfile } from '../game/authService';
 
 export type Screen = 'menu' | 'playing' | 'paused';
 export type Mode = 'on-foot' | 'driving';
-export type GraphicsQuality = 'performance' | 'balanced' | 'quality';
+export type GraphicsQuality = 'performance' | 'balanced' | 'quality' | 'ultra';
 
 export interface GameUIProps {
   screen: Screen;
@@ -397,7 +397,7 @@ export default function GameUI({
             onReset={onReset}
           />
           <header className="ks-hud-header">
-            <div className="ks-hud-brand"><BrandMark /><span>KANO <i>/</i> STREETS</span></div>
+            <div className="ks-hud-brand"><BrandMark /><span>{cityDisplayName.toUpperCase()} <i>/</i> STREETS</span></div>
             <div className="ks-hud-location"><span className="ks-live-dot" /> {location} <span className="ks-location-divider">/</span> FREE ROAM</div>
             <div className="ks-hud-time"><small>TIME</small> <strong>{timeString ?? "10:00"}</strong></div>
             {homeNavInfo && (
@@ -1139,7 +1139,7 @@ export default function GameUI({
             <button
               className="ks-quality-toggle"
               onClick={() => {
-                const order: GraphicsQuality[] = ['performance', 'balanced', 'quality'];
+                const order: GraphicsQuality[] = ['performance', 'balanced', 'quality', 'ultra'];
                 onQualityChange(order[(order.indexOf(graphicsQuality) + 1) % order.length]);
               }}
               aria-label={`Graphics quality: ${graphicsQuality}. Click to change`}

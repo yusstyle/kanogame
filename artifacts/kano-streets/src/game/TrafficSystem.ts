@@ -13,7 +13,7 @@ import {
 import type { ColliderIndex } from "./ColliderIndex";
 import type { NavigationNetwork, TrafficWaypoint } from "./navigation";
 import { getNextTrafficWaypoint } from "./navigation";
-import type { Collider, GameMaterials, GraphicsQuality } from "./types";
+import type { CityId, Collider, GameMaterials, GraphicsQuality } from "./types";
 
 export type AIVehicleType =
   | "sedan"
@@ -196,7 +196,7 @@ export class TrafficSystem {
     for (const v of this.vehicles) {
       if (v.type === "sedan" && "attachGLTFBody" in v.model) {
         const variant = CAR_COLOR_VARIANTS[this.vehicles.indexOf(v) % CAR_COLOR_VARIANTS.length];
-        (v.model as CarModel).attachGLTFBody(sedanGLTF, variant?.body || "#b0b5b8");
+        (v.model as CarModel).attachGLTFBody(sedanGLTF, variant?.body || "#b0b5b8", true);
       }
     }
     for (const pv of this.parkedVehicles) {
@@ -213,6 +213,7 @@ export class TrafficSystem {
     private readonly network: NavigationNetwork,
     private readonly colliderIndex: ColliderIndex,
     private readonly surfaceHeight: (x: number, z: number) => number = () => 0,
+    private readonly cityId: CityId = "kano",
   ) {
     this.root.name = "traffic-system-root";
     this.scene.add(this.root);
@@ -220,8 +221,10 @@ export class TrafficSystem {
     // 1. Build Physical 3D Traffic Light Signal Posts at Arterial Intersections
     this.buildTrafficSignalPosts();
 
-    // 2. Build Authentic Kano Parked Vehicles in Designated Roadside Bays
-    this.spawnParkedVehicles();
+    // 2. Build Authentic Kano Parked Vehicles in Designated Roadside Bays (Kano only)
+    if (this.cityId !== "abuja") {
+      this.spawnParkedVehicles();
+    }
 
     // 3. Spawn Active Traffic Fleet
     this.spawnFleet();
@@ -229,13 +232,16 @@ export class TrafficSystem {
 
   public setQuality(quality: GraphicsQuality) {
     this.quality = quality;
-    const targetCount = quality === "performance" ? 4 : quality === "balanced" ? 6 : 8;
+    const targetCount = quality === "performance" ? 4 : quality === "balanced" ? 6 : quality === "quality" ? 8 : 10;
 
-    const enableShadows = quality === "quality";
+    const enableShadows = quality === "quality" || quality === "ultra";
     this.vehicles.forEach((v) => {
       v.model.root.traverse((child) => {
         if (child instanceof THREE.Mesh) {
-          child.castShadow = enableShadows;
+          const nameLower = child.name.toLowerCase();
+          const normalizedName = nameLower.replace(/[\s-]+/g, "_");
+          const isCoreCaster = normalizedName.includes("body_shell") || normalizedName.includes("tyre") || normalizedName.includes("tire") || normalizedName.includes("cabin") || normalizedName.includes("chassis");
+          child.castShadow = enableShadows && isCoreCaster;
         }
       });
     });
@@ -550,7 +556,7 @@ export class TrafficSystem {
         case "sedan": {
           const car = createCarModel(this.materials, p.body!, p.accent!, p.plate);
           if (this.sedanGLTF) {
-            car.attachGLTFBody(this.sedanGLTF, p.body);
+            car.attachGLTFBody(this.sedanGLTF, p.body, true);
           }
           model = car;
           break;
@@ -709,7 +715,7 @@ export class TrafficSystem {
           const variant = CAR_COLOR_VARIANTS[this.vehicles.length % CAR_COLOR_VARIANTS.length];
           const car = createCarModel(this.materials, variant.body, variant.accent, variant.plate);
           if (this.sedanGLTF) {
-            car.attachGLTFBody(this.sedanGLTF, variant.body);
+            car.attachGLTFBody(this.sedanGLTF, variant.body, true);
           }
           model = car;
           break;
@@ -811,12 +817,45 @@ export class TrafficSystem {
       speedMult = 0.85; // Quieter night streets
     }
 
+    // Distance-based visibility culling for parked vehicles
+    for (let pIdx = 0; pIdx < this.parkedVehicles.length; pIdx++) {
+      const pv = this.parkedVehicles[pIdx];
+      const pDist = pv.position.distanceTo(playerPosition);
+      pv.model.root.visible = pDist <= 90;
+      if (pv.model.root.visible && "setLODLevel" in pv.model && typeof (pv.model as any).setLODLevel === "function") {
+        (pv.model as any).setLODLevel(pDist < 35 ? 1 : 2);
+      }
+    }
+    for (let sIdx = 0; sIdx < this.signalPosts.length; sIdx++) {
+      this.signalPosts[sIdx].group.visible = this.signalPosts[sIdx].group.position.distanceTo(playerPosition) <= 90;
+    }
+
     for (let i = 0; i < this.vehicles.length; i += 1) {
       const v = this.vehicles[i];
       const distToPlayer = v.position.distanceTo(playerPosition);
 
-      if (distToPlayer > 105) {
+      v.model.root.visible = distToPlayer <= 90;
+      if (v.model.root.visible && "setLODLevel" in v.model && typeof (v.model as any).setLODLevel === "function") {
+        (v.model as any).setLODLevel(distToPlayer < 35 ? 1 : 2);
+      }
+      if (distToPlayer > 240) {
         continue;
+      }
+
+      // Distance culling for dynamic vehicle shadows (shadows beyond 38m are imperceptible)
+      const shouldCastShadow = distToPlayer <= 38 && this.quality === 'quality';
+      if (v.model.root.userData.lastShadowState !== shouldCastShadow) {
+        v.model.root.userData.lastShadowState = shouldCastShadow;
+        v.model.root.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            if (shouldCastShadow) {
+              const nl = child.name.toLowerCase();
+              child.castShadow = nl.includes("body_shell") || nl.includes("sculpted_tyre") || nl.includes("chassis") || nl.includes("body") || nl.includes("procedural");
+            } else {
+              child.castShadow = false;
+            }
+          }
+        });
       }
 
       // Distance-based update frequency LOD

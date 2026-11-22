@@ -89,7 +89,7 @@ export function getRecommendedGraphicsQuality(): GraphicsQuality {
   try {
     if (typeof localStorage !== "undefined") {
       const saved = localStorage.getItem("kano_streets_graphics_quality");
-      if (saved && (saved === "performance" || saved === "balanced" || saved === "quality")) {
+      if (saved && (saved === "performance" || saved === "balanced" || saved === "quality" || saved === "ultra")) {
         return saved as GraphicsQuality;
       }
     }

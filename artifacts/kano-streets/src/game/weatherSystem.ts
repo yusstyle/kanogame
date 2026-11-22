@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-export type WeatherPreset = "clear" | "harmattan" | "sunset_glow" | "cool_night";
+export type WeatherPreset = "clear" | "harmattan" | "sunset_glow" | "cool_night" | "rain";
 
 export interface WeatherConfig {
   preset: WeatherPreset;
@@ -29,10 +29,10 @@ export const WEATHER_CONFIGS: Record<WeatherPreset, WeatherConfig> = {
     fogNear: 50,
     fogFar: 245,
     sunColor: "#fff8ed",
-    sunIntensity: 2.85,
+    sunIntensity: 1.55,
     hemiSkyColor: "#c2d7e9",
     hemiGroundColor: "#8e6542",
-    hemiIntensity: 0.95,
+    hemiIntensity: 0.65,
     particleCount: 80,
     particleOpacity: 0.12,
     particleSize: 0.28,
@@ -75,19 +75,36 @@ export const WEATHER_CONFIGS: Record<WeatherPreset, WeatherConfig> = {
   cool_night: {
     preset: "cool_night",
     displayName: "Cool Starlit Night",
-    skyColor: "#0b1424",
-    fogColor: "#0b1424",
-    fogNear: 28,
-    fogFar: 180,
-    sunColor: "#4f729d",
-    sunIntensity: 0.42,
-    hemiSkyColor: "#15243d",
-    hemiGroundColor: "#101924",
-    hemiIntensity: 0.45,
-    particleCount: 60,
-    particleOpacity: 0.15,
-    particleSize: 0.25,
+    skyColor: "#0f1d32",
+    fogColor: "#0f1d32",
+    fogNear: 40,
+    fogFar: 260,
+    sunColor: "#8eaed8",
+    sunIntensity: 0.85,
+    hemiSkyColor: "#223554",
+    hemiGroundColor: "#1d2925",
+    hemiIntensity: 0.82,
+    particleCount: 20,
+    particleOpacity: 0.08,
+    particleSize: 0.18,
     windSpeed: { x: 0.3, y: -0.02, z: 0.4 },
+  },
+  rain: {
+    preset: "rain",
+    displayName: "Tropical Rain",
+    skyColor: "#5f7180",
+    fogColor: "#82909a",
+    fogNear: 34,
+    fogFar: 190,
+    sunColor: "#aebac2",
+    sunIntensity: 0.72,
+    hemiSkyColor: "#9aabb8",
+    hemiGroundColor: "#50604f",
+    hemiIntensity: 0.58,
+    particleCount: 320,
+    particleOpacity: 0.46,
+    particleSize: 0.11,
+    windSpeed: { x: 1.1, y: -7.2, z: 1.4 },
   },
 };
 
@@ -111,14 +128,19 @@ export class WeatherSystem {
   private readonly colSun = new THREE.Color();
   private readonly colHemiSky = new THREE.Color();
   private readonly colHemiGround = new THREE.Color();
-  private readonly tmpNightSky = new THREE.Color("#0b1424");
-  private readonly tmpNightSun = new THREE.Color("#4a6890");
+  private readonly tmpNightSky = new THREE.Color("#0f1d32");
+  private readonly tmpNightSun = new THREE.Color("#8eaed8");
   private readonly tmpDawnSky = new THREE.Color("#df9c72");
   private readonly tmpDawnFog = new THREE.Color("#d28d63");
   private readonly tmpDawnSun = new THREE.Color("#ffd49c");
   private readonly tmpSunsetSky = new THREE.Color("#df8855");
   private readonly tmpSunsetFog = new THREE.Color("#d97843");
   private readonly tmpSunsetSun = new THREE.Color("#ff9033");
+  private currentCity: string = "kano";
+
+  public setCity(city: string) {
+    this.currentCity = city;
+  }
 
   constructor(initialPreset: WeatherPreset = "clear") {
     this.currentPreset = initialPreset;
@@ -176,7 +198,7 @@ export class WeatherSystem {
   }
 
   public cyclePreset(): WeatherPreset {
-    const sequence: WeatherPreset[] = ["clear", "harmattan", "sunset_glow", "cool_night"];
+    const sequence: WeatherPreset[] = ["clear", "harmattan", "sunset_glow", "cool_night", "rain"];
     const currentIndex = sequence.indexOf(this.currentPreset);
     const nextIndex = (currentIndex + 1) % sequence.length;
     this.setPreset(sequence[nextIndex]);
@@ -197,6 +219,8 @@ export class WeatherSystem {
       this.particleMaterial.color.set("#d98a58");
     } else if (preset === "cool_night") {
       this.particleMaterial.color.set("#4e637e");
+    } else if (preset === "rain") {
+      this.particleMaterial.color.set("#a9c1cf");
     } else {
       this.particleMaterial.color.set("#c9ae87");
     }
@@ -257,15 +281,25 @@ export class WeatherSystem {
     const isDay = hourOfDay >= 6 && hourOfDay <= 18;
     const diurnalFactor = isDay ? Math.sin(((hourOfDay - 6) / 12) * Math.PI) : 0.08;
 
-    let effectiveSunIntensity = config.sunIntensity * (0.35 + 0.65 * diurnalFactor);
-    let effectiveHemiIntensity = config.hemiIntensity * (0.45 + 0.55 * diurnalFactor);
+    const baseSunIntensity = this.currentCity === "abuja" ? 1.55 : config.sunIntensity;
+    const baseHemiIntensity = this.currentCity === "abuja" ? 0.65 : config.hemiIntensity;
+    let effectiveSunIntensity = baseSunIntensity * (0.35 + 0.65 * diurnalFactor);
+    let effectiveHemiIntensity = baseHemiIntensity * (0.45 + 0.55 * diurnalFactor);
 
-    // Initialize with base config colors
-    this.colSky.set(config.skyColor);
-    this.colFog.set(config.fogColor);
-    this.colSun.set(config.sunColor);
-    this.colHemiSky.set(config.hemiSkyColor);
-    this.colHemiGround.set(config.hemiGroundColor);
+    // Initialize with base config colors (city-aware)
+    if (this.currentCity === "abuja" && this.currentPreset === "clear") {
+      this.colSky.set("#2068a8"); // Deep tropical zenith blue
+      this.colFog.set("#b4cae0"); // Soft atmospheric horizon blue-gray (NOT beige)
+      this.colSun.set("#fff7ee");
+      this.colHemiSky.set("#427cb0");
+      this.colHemiGround.set("#44543e");
+    } else {
+      this.colSky.set(config.skyColor);
+      this.colFog.set(config.fogColor);
+      this.colSun.set(config.sunColor);
+      this.colHemiSky.set(config.hemiSkyColor);
+      this.colHemiGround.set(config.hemiGroundColor);
+    }
 
     if (this.currentPreset === "clear" || this.currentPreset === "harmattan") {
       if (hourOfDay >= 5.0 && hourOfDay < 6.8) {
@@ -278,9 +312,9 @@ export class WeatherSystem {
           this.colSun.copy(this.tmpNightSun).lerp(this.tmpDawnSun, t);
         } else {
           const t = (dawnRatio - 0.5) * 2.0;
-          const targetSky = new THREE.Color(config.skyColor);
-          const targetFog = new THREE.Color(config.fogColor);
-          const targetSun = new THREE.Color(config.sunColor);
+          const targetSky = this.currentCity === "abuja" ? new THREE.Color("#2068a8") : new THREE.Color(config.skyColor);
+          const targetFog = this.currentCity === "abuja" ? new THREE.Color("#b4cae0") : new THREE.Color(config.fogColor);
+          const targetSun = this.currentCity === "abuja" ? new THREE.Color("#fff7ee") : new THREE.Color(config.sunColor);
           this.colSky.copy(this.tmpDawnSky).lerp(targetSky, t);
           this.colFog.copy(this.tmpDawnFog).lerp(targetFog, t);
           this.colSun.copy(this.tmpDawnSun).lerp(targetSun, t);
@@ -307,8 +341,8 @@ export class WeatherSystem {
         this.colSky.copy(this.tmpNightSky);
         this.colFog.copy(this.tmpNightSky);
         this.colSun.copy(this.tmpNightSun);
-        effectiveSunIntensity = 0.42;
-        effectiveHemiIntensity = 0.45;
+        effectiveSunIntensity = 0.85;
+        effectiveHemiIntensity = 0.82;
       }
     }
 
@@ -320,8 +354,13 @@ export class WeatherSystem {
 
     if (scene.fog && scene.fog instanceof THREE.Fog) {
       scene.fog.color.copy(this.colFog);
-      scene.fog.near = config.fogNear;
-      scene.fog.far = config.fogFar;
+      if (this.currentCity === "abuja") {
+        scene.fog.near = 180;
+        scene.fog.far = 650;
+      } else {
+        scene.fog.near = config.fogNear;
+        scene.fog.far = config.fogFar;
+      }
     }
 
     if (sunLight) {
@@ -341,7 +380,7 @@ export class WeatherSystem {
         bounceLight.intensity = 0.3 * diurnalFactor;
       } else {
         bounceLight.color.set("#223348");
-        bounceLight.intensity = 0.06;
+        bounceLight.intensity = 0.22;
       }
     }
   }

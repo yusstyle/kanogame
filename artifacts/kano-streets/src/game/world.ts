@@ -20,11 +20,68 @@ import {
 } from "./modernDistrict";
 import { createIndustrialDistrict } from "./industrialDistrict";
 import { createHistoricDistrict } from "./historicDistrict";
+import { markWorldResourceShared } from "./worldResourceLifecycle";
 import type { BuildingKind, Collider, GameMaterials } from "./types";
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
 const unitCylinder = new THREE.CylinderGeometry(0.5, 0.5, 1, 10);
-const canopyGeometry = new THREE.SphereGeometry(1, 12, 9);
+const branchGeometry = new THREE.CylinderGeometry(0.065, 0.17, 1, 6);
+const rootMoundGeometry = new THREE.SphereGeometry(1, 12, 8);
+
+function createCanopyGeometry(seed: number) {
+  const geometry = new THREE.SphereGeometry(1, 14, 9);
+  const positions = geometry.getAttribute("position");
+  for (let index = 0; index < positions.count; index += 1) {
+    const x = positions.getX(index);
+    const y = positions.getY(index);
+    const z = positions.getZ(index);
+    const wave = Math.sin(x * 7.3 + seed) * Math.cos(z * 6.1 - seed) * 0.055;
+    const direction = new THREE.Vector3(x, y, z).normalize();
+    positions.setXYZ(index, x + direction.x * wave, y + direction.y * wave, z + direction.z * wave);
+  }
+  positions.needsUpdate = true;
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function createPalmFrondGeometry() {
+  const vertices: number[] = [];
+  const addTriangle = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3) => {
+    vertices.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+    vertices.push(c.x, c.y, c.z, b.x, b.y, b.z, a.x, a.y, a.z);
+  };
+
+  for (let pair = 0; pair < 18; pair += 1) {
+    const t = (pair + 1) / 19;
+    const y = t * 3.1;
+    const leafletWidth = 0.12 + Math.sin(t * Math.PI) * 0.68;
+    for (const side of [-1, 1]) {
+      const base = new THREE.Vector3(0, y, 0);
+      const inner = new THREE.Vector3(side * leafletWidth * 0.58, y + 0.14, 0);
+      const tip = new THREE.Vector3(side * leafletWidth, y + 0.38, 0);
+      const outer = new THREE.Vector3(side * leafletWidth * 0.64, y + 0.23, 0);
+      addTriangle(base, inner, tip);
+      addTriangle(base, tip, outer);
+    }
+  }
+
+  const rachisLeft = new THREE.Vector3(-0.035, 0, 0);
+  const rachisRight = new THREE.Vector3(0.035, 0, 0);
+  const rachisTopLeft = new THREE.Vector3(-0.012, 3.18, 0);
+  const rachisTopRight = new THREE.Vector3(0.012, 3.18, 0);
+  addTriangle(rachisLeft, rachisRight, rachisTopRight);
+  addTriangle(rachisLeft, rachisTopRight, rachisTopLeft);
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+const canopyGeometries = [createCanopyGeometry(3), createCanopyGeometry(11), createCanopyGeometry(23)];
+const palmFrondGeometry = createPalmFrondGeometry();
+[unitBox, unitCylinder, branchGeometry, rootMoundGeometry, palmFrondGeometry, ...canopyGeometries]
+  .forEach(markWorldResourceShared);
 
 function addBox(
   parent: THREE.Object3D,
@@ -146,38 +203,55 @@ function makeTree(
     for (let i = 0; i < 7; i += 1) {
       const angle = (Math.PI * 2 * i) / 7;
       const frond = new THREE.Mesh(
-        new THREE.ConeGeometry(0.27, 3.1, 5, 1, false),
+        palmFrondGeometry,
         i % 2 ? materials.foliage : materials.foliageLight,
       );
-      frond.position.set(Math.sin(angle) * 0.65, 4.14, Math.cos(angle) * 0.65);
-      frond.rotation.z = Math.cos(angle) * 0.72;
-      frond.rotation.x = Math.sin(angle) * 0.72;
-      frond.rotation.y = angle;
+      const direction = new THREE.Vector3(Math.sin(angle) * 0.86, -0.5, Math.cos(angle) * 0.86).normalize();
+      frond.position.set(0, 4.05, 0);
+      frond.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
       frond.castShadow = true;
       tree.add(frond);
     }
   } else {
+    for (let i = 0; i < 4; i += 1) {
+      const angle = (Math.PI * 2 * i) / 4 + 0.28;
+      const branch = new THREE.Mesh(branchGeometry, materials.bark);
+      const direction = new THREE.Vector3(Math.sin(angle) * 1.55, 1.5, Math.cos(angle) * 1.55);
+      const start = new THREE.Vector3(0, 2.35, 0);
+      branch.position.copy(start).addScaledVector(direction, 0.5);
+      branch.scale.y = direction.length();
+      branch.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+      branch.castShadow = true;
+      branch.receiveShadow = true;
+      tree.add(branch);
+    }
+
+    const treeVariant = Math.abs(Math.floor(x * 13 + z * 7)) % canopyGeometries.length;
     const crownPositions: [number, number, number, number][] = [
-      [0, 4.5, 0, 2.15],
-      [-1.05, 4.15, 0.18, 1.34],
-      [0.96, 4.18, -0.08, 1.42],
-      [0.08, 4.38, 0.95, 1.3],
-      [-0.18, 4.2, -0.88, 1.33],
+      [0, 4.62, 0, 2.18],
+      [-1.18, 4.42, 0.2, 1.34],
+      [1.12, 4.4, -0.16, 1.42],
+      [0.12, 4.48, 0.96, 1.28],
+      [-0.16, 4.36, -0.92, 1.3],
     ];
     crownPositions.forEach(([cx, cy, cz, radius], i) => {
       const canopy = new THREE.Mesh(
-        canopyGeometry,
+        canopyGeometries[(treeVariant + i) % canopyGeometries.length],
         i % 2 ? materials.foliageLight : materials.foliage,
       );
       canopy.position.set(cx, cy, cz);
-      canopy.scale.set(radius, radius * 0.78, radius);
+      canopy.scale.set(radius, radius * 0.58, radius * 0.9);
       canopy.castShadow = true;
       canopy.receiveShadow = true;
       tree.add(canopy);
     });
   }
 
-  addBox(tree, materials.ochre, 0, 0.1, 0, 1.15, 0.2, 1.15, false);
+  const rootMound = new THREE.Mesh(rootMoundGeometry, materials.clay);
+  rootMound.position.y = 0.12;
+  rootMound.scale.set(0.92, 0.13, 0.78);
+  rootMound.receiveShadow = true;
+  tree.add(rootMound);
   return { x, z, halfX: 0.48 * scale, halfZ: 0.48 * scale, height: (palm ? 7.5 : 6.4) * scale };
 }
 

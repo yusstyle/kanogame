@@ -36,6 +36,62 @@ export interface AbujaWorldResult {
   streamingManager: AbujaStreamingManager;
 }
 
+export function createAbujaSkyTexture(): THREE.Texture {
+  if (typeof document === "undefined") {
+    return new THREE.Texture();
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return new THREE.Texture();
+
+  // Natural tropical sky vertical atmospheric gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, 512);
+  grad.addColorStop(0.0, "#0f4a86"); // Tropical deep azure zenith
+  grad.addColorStop(0.3, "#1e68a8"); // Upper sky
+  grad.addColorStop(0.55, "#4289bf"); // Mid sky
+  grad.addColorStop(0.78, "#8bbce2"); // Lower atmospheric scattering
+  grad.addColorStop(0.92, "#bfd6e8"); // Soft luminous horizon
+  grad.addColorStop(0.98, "#dad3c5"); // Warm savannah horizon dust
+  grad.addColorStop(1.0, "#9e917d");  // Ground horizon wash
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 512, 512);
+
+  // Subtle solar glow and corona
+  const sunX = 360;
+  const sunY = 140;
+  const sunGrad = ctx.createRadialGradient(sunX, sunY, 4, sunX, sunY, 180);
+  sunGrad.addColorStop(0.0, "rgba(255, 255, 245, 0.95)");
+  sunGrad.addColorStop(0.08, "rgba(255, 245, 215, 0.75)");
+  sunGrad.addColorStop(0.35, "rgba(255, 225, 175, 0.25)");
+  sunGrad.addColorStop(0.7, "rgba(255, 215, 160, 0.08)");
+  sunGrad.addColorStop(1.0, "rgba(255, 215, 160, 0.0)");
+  ctx.fillStyle = sunGrad;
+  ctx.fillRect(0, 0, 512, 512);
+
+  // Soft atmospheric cumulus clouds near horizon
+  ctx.fillStyle = "rgba(255, 255, 255, 0.28)";
+  const cloudBands = [
+    { y: 340, w: 90, h: 14, count: 6 },
+    { y: 380, w: 120, h: 18, count: 5 },
+    { y: 415, w: 140, h: 20, count: 5 },
+  ];
+  for (const band of cloudBands) {
+    for (let c = 0; c < band.count; c++) {
+      const cx = (c * (512 / band.count) + (band.y % 40) * 3) % 512;
+      ctx.beginPath();
+      ctx.ellipse(cx, band.y, band.w * 0.5, band.h * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  return texture;
+}
+
 export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
   const root = new THREE.Group();
   root.name = "AbujaWorldRoot";
@@ -43,12 +99,13 @@ export function createAbujaWorld(materials: GameMaterials): AbujaWorldResult {
   const staticBatches: THREE.Mesh[] = [];
   const bounds = 1024; // Expanded 2,048m x 2,048m Metropolis Territory
 
-  // 1. Sky Dome tailored for Abuja (Crisp Slate/Teal Horizon across 2,048m)
+  // 1. Sky Dome tailored for Abuja (Atmospheric tropical sky with visible horizon)
   const skyGeo = new THREE.SphereGeometry(1800, 24, 16);
   const skyMat = new THREE.MeshBasicMaterial({
-    color: "#c2d4cb",
+    map: createAbujaSkyTexture(),
     side: THREE.BackSide,
     depthWrite: false,
+    fog: false,
   });
   const skyMesh = new THREE.Mesh(skyGeo, skyMat);
   skyMesh.name = "AbujaSkyDome";

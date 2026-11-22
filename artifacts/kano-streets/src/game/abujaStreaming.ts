@@ -84,11 +84,11 @@ export class AbujaStreamingManager {
       return { type: "maitama_luxury", name: "Maitama Hills & Embassy Enclave" };
     }
     // West: Wuse 1 & Wuse 2 Commercial Corridor
-    if (cx <= -1 && cz === 1) {
-      return { type: "wuse_commercial", name: "Wuse 2 Commercial & Shopping Arcade" };
-    }
     if (cx <= -2 && cz === 1) {
       return { type: "wuse_commercial", name: "Wuse 1 Markets & Plazas" };
+    }
+    if (cx <= -1 && cz === 1) {
+      return { type: "wuse_commercial", name: "Wuse 2 Commercial & Shopping Arcade" };
     }
     // Southwest & South: Garki Administrative & Residential Districts
     if (cz >= 1 && (cx === 0 || cx === -1)) {
@@ -126,8 +126,8 @@ export class AbujaStreamingManager {
     const pz = playerPosition.z;
 
     // Distances squared for high-performance threshold comparison on integrated GPUs
-    const nearDistSq = 220 * 220;
-    const midDistSq = 450 * 450;
+    const nearDistSq = 175 * 175; // 30,625
+    const midDistSq = 400 * 400;  // 160,000
 
     for (const chunk of this.chunks.values()) {
       // Clamped closest point on chunk AABB to player for accurate distance calculation
@@ -137,10 +137,8 @@ export class AbujaStreamingManager {
       const dz = pz - closestZ;
       const distSq = dx * dx + dz * dz;
 
-      // Central core chunks (preserving existing landmarks) are always kept active
-      const isCentral = chunk.districtType === "central_core";
-
-      if (distSq <= nearDistSq || isCentral) {
+      // Central core landmarks are standalone in AbujaWorldRoot, so streaming chunks follow standard distance LOD
+      if (distSq <= nearDistSq) {
         // LOD 0: Near detail
         chunk.group.visible = true;
         chunk.lod0Group.visible = true;

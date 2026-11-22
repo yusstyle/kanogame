@@ -30,6 +30,14 @@ describe("Milestone 16 Phase 4: Secure Cloud Save API & Concurrency Tests", () =
     propertyRenovations: { "unit-2b": 1 },
     ownedVehicles: ["veh_sedan"],
     unlockedVehicleSkins: ["skin_sedan_stock"],
+    highwaySecurity: {
+      version: 1,
+      reputation: 0,
+      nextIncidentNumber: 1,
+      activeIncident: null,
+      incidentHistory: [],
+      zoneCooldowns: {},
+    },
     dayCount: 5,
     vehicleUpgrade: { engineStage: 1, paintColor: "#334155", suspensionUpgraded: false },
     savedAt: 1730000000000,
@@ -147,6 +155,7 @@ describe("Milestone 16 Phase 4: Secure Cloud Save API & Concurrency Tests", () =
       const data = (await res.json()) as any;
       assert.equal(data.save.revision, 1);
       assert.equal(data.save.payload.cash, 50000);
+      assert.deepEqual(data.save.payload.highwaySecurity, validPayload.highwaySecurity);
       assert.ok(data.save.checksum);
     });
 

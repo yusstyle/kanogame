@@ -1,9 +1,11 @@
 import * as THREE from "three";
 import { makeSignMaterial } from "./materials";
 import type { Collider, GameMaterials, PlotAsset } from "./types";
+import { markWorldResourceShared } from "./worldResourceLifecycle";
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
 const unitCyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
+[unitBox, unitCyl].forEach(markWorldResourceShared);
 
 function addBox(
   parent: THREE.Object3D,

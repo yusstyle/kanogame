@@ -21,7 +21,17 @@ export const ALLOWED_WEATHER = [
   "harmattan",
   "sunset_glow",
   "cool_night",
+  "rain",
 ] as const;
+const HighwayIncidentLocationSchema = z
+  .object({
+    cityId: z.enum(["kano", "abuja", "lagos", "jos", "kaduna"]),
+    district: z.string().max(64),
+    road: z.string().max(96),
+    x: z.number().finite(),
+    z: z.number().finite(),
+  })
+  .strict();
 
 export const MAX_PAYLOAD_BYTES = 500 * 1024; // 500 KB explicit limit
 
@@ -159,6 +169,59 @@ export const SaveDataSchema = z
     dailyAtmWithdrawn: z.number().finite().min(0).max(1_000_000).optional(),
     lastAtmWithdrawalDay: z.number().int().min(1).max(100_000).optional(),
     hasSeenOnboarding: z.boolean().optional(),
+    highwaySecurity: z
+      .object({
+        version: z.literal(1),
+        reputation: z.number().int().min(0).max(1_000_000),
+        nextIncidentNumber: z.number().int().min(1).max(1_000_000),
+        activeIncident: z
+          .object({
+            id: z.string().max(64),
+            zoneId: z.string().max(64),
+            stage: z.enum(["encounter", "reported", "investigating", "rescue_ready", "rescued", "cooldown"]),
+            missingPerson: z
+              .object({
+                id: z.string().max(64),
+                name: z.string().max(64),
+                role: z.literal("passenger"),
+              })
+              .strict(),
+            lastKnownLocation: HighwayIncidentLocationSchema,
+            cluesFound: z.array(z.string().max(64)).max(16),
+            policeStatus: z.enum(["not_reported", "unavailable"]),
+            cooldownRemainingSeconds: z.number().finite().min(0).max(10),
+          })
+          .strict()
+          .nullable(),
+        incidentHistory: z
+          .array(
+            z
+              .object({
+                id: z.string().max(64),
+                missingPersonName: z.string().max(64),
+                zoneId: z.string().max(64),
+                outcome: z.literal("rescued"),
+                policeStatus: z.enum(["not_reported", "unavailable"]),
+                lastKnownLocation: HighwayIncidentLocationSchema,
+                rewardCash: z.number().finite().min(0).max(1_000_000),
+                reputationGain: z.number().finite().min(0).max(1_000_000),
+              })
+              .strict(),
+          )
+          .max(12),
+        zoneCooldowns: z
+          .record(
+            z.string().max(64),
+            z
+              .object({
+                remainingSeconds: z.number().finite().min(0).max(180),
+                requiresExit: z.boolean(),
+              })
+              .strict(),
+          ),
+      })
+      .strict()
+      .optional(),
     savedAt: z.number().finite().min(0),
   })
   .strict(); // Disallows unexpected root keys

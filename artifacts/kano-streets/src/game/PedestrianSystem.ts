@@ -8,7 +8,7 @@ import { loadHumanoidCharacter } from "./assetManifest";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import type { ColliderIndex } from "./ColliderIndex";
 import type { NavigationNetwork, PedestrianWaypoint } from "./navigation";
-import type { GameMaterials, GraphicsQuality } from "./types";
+import type { CityId, GameMaterials, GraphicsQuality } from "./types";
 import { isValidSeatNearby, findNearestValidSeat, type ValidSeat } from "./seats";
 
 export type PedestrianState = "walking" | "idle" | "vendor" | "talking" | "visiting" | "sitting";
@@ -399,6 +399,7 @@ export class PedestrianSystem {
     private readonly network: NavigationNetwork,
     private readonly colliderIndex: ColliderIndex,
     private readonly surfaceHeight: (x: number, z: number) => number = () => 0,
+    private readonly cityId: CityId = "kano",
   ) {
     this.root.name = "pedestrian-system-root";
     this.scene.add(this.root);
@@ -411,13 +412,15 @@ export class PedestrianSystem {
 
   public setQuality(quality: GraphicsQuality) {
     this.quality = quality;
-    const targetCount = quality === "performance" ? 12 : quality === "balanced" ? 18 : 24;
+    const targetCount = quality === "performance" ? 12 : quality === "balanced" ? 18 : quality === "quality" ? 24 : 28;
 
-    const enableShadows = quality === "quality";
+    const enableShadows = quality === "quality" || quality === "ultra";
     this.pedestrians.forEach((p) => {
       p.model.root.traverse((child) => {
         if (child instanceof THREE.Mesh) {
-          child.castShadow = enableShadows;
+          const nl = child.name.toLowerCase();
+          const isMicro = child.name.startsWith("h_") || nl.includes("eye") || nl.includes("gland") || nl.includes("teeth");
+          child.castShadow = enableShadows && !isMicro;
         }
       });
     });
@@ -481,10 +484,12 @@ export class PedestrianSystem {
   }
 
   private spawnCrowd() {
-    this.spawnMarketVendors();
-    this.spawnIndustrialWorkers();
-    this.spawnHistoricCharacters();
-    this.spawnDakaliElders();
+    if (this.cityId !== "abuja") {
+      this.spawnMarketVendors();
+      this.spawnIndustrialWorkers();
+      this.spawnHistoricCharacters();
+      this.spawnDakaliElders();
+    }
     const initialWalkerCount = this.quality === "performance" ? 2 : this.quality === "balanced" ? 4 : 8;
     this.spawnAdditionalWalkers(initialWalkerCount);
   }
@@ -961,8 +966,27 @@ export class PedestrianSystem {
       const p = this.pedestrians[i];
       const distToPlayer = p.position.distanceTo(playerPosition);
 
-      if (distToPlayer > 85) {
+      if (distToPlayer > 65) {
+        p.model.root.visible = false;
         continue;
+      }
+      p.model.root.visible = true;
+
+      // Distance culling for dynamic pedestrian shadows (shadows beyond 30m are imperceptible)
+      const shouldCastShadow = distToPlayer <= 30 && this.quality === 'quality';
+      if (p.model.root.userData.lastShadowState !== shouldCastShadow) {
+        p.model.root.userData.lastShadowState = shouldCastShadow;
+        p.model.root.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            if (shouldCastShadow) {
+              const nl = child.name.toLowerCase();
+              const isMicro = child.name.startsWith("h_") || nl.includes("eye") || nl.includes("gland") || nl.includes("teeth");
+              child.castShadow = !isMicro;
+            } else {
+              child.castShadow = false;
+            }
+          }
+        });
       }
 
       // Milestone 7: Distance-based LOD update frequency

@@ -1,10 +1,13 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { makeSignMaterial } from "./materials";
+import { markWorldResourceShared } from "./worldResourceLifecycle";
 import type { BuildingKind, Collider, GameMaterials, PlotAsset } from "./types";
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
 const roundCylinder = new THREE.CylinderGeometry(1, 1, 1, 12);
+markWorldResourceShared(unitBox);
+markWorldResourceShared(roundCylinder);
 const texturedBoxGeometryCache = new Map<string, THREE.BufferGeometry>();
 
 function getTexturedBoxGeometry(width: number, height: number, depth: number, tileSize: number) {
@@ -39,7 +42,7 @@ function getTexturedBoxGeometry(width: number, height: number, depth: number, ti
   });
   uv.needsUpdate = true;
   texturedBoxGeometryCache.set(key, geometry);
-  return geometry;
+  return markWorldResourceShared(geometry);
 }
 
 function addArchFrame(
@@ -134,6 +137,9 @@ function getSharedGateGeometries() {
   for (const p of ochreParts) p.dispose();
 
   cachedGateDarkTrimGeom = makeBoxPartGeom(0, 0.04, 0.01, 2.1, 0.12, 0.68);
+
+  [cachedGateMetalGeom, cachedGateTrimGeom, cachedGateOchreGeom, cachedGateDarkTrimGeom]
+    .forEach((geometry) => geometry && markWorldResourceShared(geometry));
 
   return {
     metal: cachedGateMetalGeom,

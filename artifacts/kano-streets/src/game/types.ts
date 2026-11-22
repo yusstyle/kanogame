@@ -22,7 +22,7 @@ export type BuildingKind =
   | "gaming"
   | "plaza";
 
-export type GraphicsQuality = "performance" | "balanced" | "quality";
+export type GraphicsQuality = "performance" | "balanced" | "quality" | "ultra";
 
 export type CityId = "kano" | "abuja" | "lagos" | "jos" | "kaduna";
 

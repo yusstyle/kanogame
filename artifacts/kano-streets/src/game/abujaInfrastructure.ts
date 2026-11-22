@@ -1,3 +1,5 @@
+import { abujaPbrMaterials } from "./abujaMaterials";
+import { markWorldResourceShared } from "./worldResourceLifecycle";
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { Collider } from "./types";
@@ -38,7 +40,7 @@ export function getAbujaInfrastructureMaterials() {
   const aspCanvas = document.createElement("canvas");
   aspCanvas.width = aspCanvas.height = 512;
   const aspCtx = aspCanvas.getContext("2d")!;
-  aspCtx.fillStyle = "#222528";
+  aspCtx.fillStyle = "#1a1c1e";
   aspCtx.fillRect(0, 0, 512, 512);
 
   const randAsp = seededRandom(409);
@@ -82,15 +84,15 @@ export function getAbujaInfrastructureMaterials() {
     map: asphaltTex,
     bumpMap: asphaltBump,
     bumpScale: 0.015,
-    roughness: 0.82,
-    metalness: 0.06,
+    roughness: 0.90,
+    metalness: 0.02,
   });
 
   // 2. Modern Sidewalk Interlocking Paver Texture
   const sideCanvas = document.createElement("canvas");
   sideCanvas.width = sideCanvas.height = 512;
   const sideCtx = sideCanvas.getContext("2d")!;
-  sideCtx.fillStyle = "#c2c6cb";
+  sideCtx.fillStyle = "#74787d";
   sideCtx.fillRect(0, 0, 512, 512);
 
   // Paver grid (64x32 px per tile)
@@ -100,8 +102,8 @@ export function getAbujaInfrastructureMaterials() {
   for (let y = 0; y < 512; y += tileH) {
     const xOffset = ((y / tileH) % 2) * (tileW / 2);
     for (let x = -tileW; x < 512 + tileW; x += tileW) {
-      const shade = 185 + Math.floor(randTile() * 25);
-      sideCtx.fillStyle = `rgb(${shade}, ${shade + 2}, ${shade + 4})`;
+      const shade = 118 + Math.floor(randTile() * 18);
+      sideCtx.fillStyle = `rgb(${shade}, ${shade + 2}, ${shade + 3})`;
       sideCtx.fillRect(x + xOffset + 1.5, y + 1.5, tileW - 3, tileH - 3);
 
       // Fine granite speckle inside each paver
@@ -117,7 +119,7 @@ export function getAbujaInfrastructureMaterials() {
     }
   }
   // Grout joint lines
-  sideCtx.strokeStyle = "#72777d";
+  sideCtx.strokeStyle = "#383c40";
   sideCtx.lineWidth = 1.8;
   for (let y = 0; y <= 512; y += tileH) {
     sideCtx.beginPath();
@@ -134,8 +136,8 @@ export function getAbujaInfrastructureMaterials() {
 
   cachedSidewalkMat = new THREE.MeshStandardMaterial({
     map: sidewalkTex,
-    roughness: 0.72,
-    metalness: 0.05,
+    roughness: 0.88,
+    metalness: 0.02,
   });
 
   // 3. Precast Concrete Curb Texture
@@ -143,10 +145,10 @@ export function getAbujaInfrastructureMaterials() {
   curbCanvas.width = 256;
   curbCanvas.height = 256;
   const curbCtx = curbCanvas.getContext("2d")!;
-  curbCtx.fillStyle = "#dce0e3";
+  curbCtx.fillStyle = "#8a8f94";
   curbCtx.fillRect(0, 0, 256, 256);
   // Curb section joints every 64px
-  curbCtx.strokeStyle = "#9da2a6";
+  curbCtx.strokeStyle = "#4a4e52";
   curbCtx.lineWidth = 2;
   for (let y = 0; y <= 256; y += 64) {
     curbCtx.beginPath();
@@ -161,33 +163,47 @@ export function getAbujaInfrastructureMaterials() {
 
   cachedCurbMat = new THREE.MeshStandardMaterial({
     map: curbTex,
-    roughness: 0.58,
-    metalness: 0.08,
+    roughness: 0.85,
+    metalness: 0.02,
   });
 
   // 4. Natural Laterite Soil / Compacted Gravel Verge Transition
+  // Smooth continuous gradient blending without sharp random point noise
   const vergeCanvas = document.createElement("canvas");
   vergeCanvas.width = vergeCanvas.height = 256;
   const vergeCtx = vergeCanvas.getContext("2d")!;
-  vergeCtx.fillStyle = "#6e4a36";
+  vergeCtx.fillStyle = "#634330"; // Warm laterite base
   vergeCtx.fillRect(0, 0, 256, 256);
-  const randVerge = seededRandom(613);
-  for (let i = 0; i < 4000; i++) {
-    const sz = 0.8 + randVerge() * 2.2;
-    vergeCtx.fillStyle = randVerge() > 0.5 ? "#8c5d43" : "#513626";
-    vergeCtx.fillRect(randVerge() * 256, randVerge() * 256, sz, sz);
+  let randVergeSeed = 613;
+  const randVerge = () => {
+    randVergeSeed = (randVergeSeed * 1664525 + 1013904223) >>> 0;
+    return randVergeSeed / 4294967296;
+  };
+  // Soft blended gravel washes
+  for (let i = 0; i < 45; i++) {
+    const cx = randVerge() * 256;
+    const cy = randVerge() * 256;
+    const rad = 8 + randVerge() * 24;
+    const grad = vergeCtx.createRadialGradient(cx, cy, 1, cx, cy, rad);
+    grad.addColorStop(0, randVerge() > 0.5 ? "rgba(142, 95, 68, 0.35)" : "rgba(75, 48, 32, 0.35)");
+    grad.addColorStop(1, "rgba(99, 67, 48, 0)");
+    vergeCtx.fillStyle = grad;
+    vergeCtx.beginPath();
+    vergeCtx.arc(cx, cy, rad, 0, Math.PI * 2);
+    vergeCtx.fill();
   }
   const vergeTex = new THREE.CanvasTexture(vergeCanvas);
   vergeTex.colorSpace = THREE.SRGBColorSpace;
   vergeTex.wrapS = vergeTex.wrapT = THREE.RepeatWrapping;
   vergeTex.repeat.set(2, 24);
+  vergeTex.anisotropy = 4;
+  vergeTex.generateMipmaps = true;
 
   cachedVergeMat = new THREE.MeshStandardMaterial({
     map: vergeTex,
     roughness: 0.95,
     metalness: 0.02,
   });
-
   // 5. Thermoplastic Road Markings (White & Yellow)
   cachedWhiteMarkingMat = new THREE.MeshStandardMaterial({
     color: "#fcfdfe",
@@ -207,6 +223,16 @@ export function getAbujaInfrastructureMaterials() {
     roughness: 0.42,
     metalness: 0.75,
   });
+
+  [
+    cachedAsphaltMat,
+    cachedSidewalkMat,
+    cachedCurbMat,
+    cachedVergeMat,
+    cachedWhiteMarkingMat,
+    cachedYellowMarkingMat,
+    cachedGutterMat,
+  ].forEach((material) => material && markWorldResourceShared(material));
 
   return {
     asphalt: cachedAsphaltMat,
@@ -281,29 +307,31 @@ export function buildAbujaInfrastructure(bounds = 220): InfrastructureResult {
   // Shehu Shagari Way (North-South: 28m wide, x from -14 to +14)
   // Split into North segment (z: -bounds to -22) and South segment (z: +22 to +bounds)
   const nLen = bounds - 22;
-  addPlane(roadGeometries, 0, 0.01, -22 - nLen / 2, 28, nLen);
-  addPlane(roadGeometries, 0, 0.01, 22 + nLen / 2, 28, nLen);
+  // The terrain is held at y=0.02 along road corridors. Keep asphalt above it
+  // so the grass base cannot z-fight with or cover the carriageway.
+  addPlane(roadGeometries, 0, 0.04, -22 - nLen / 2, 28, nLen);
+  addPlane(roadGeometries, 0, 0.04, 22 + nLen / 2, 28, nLen);
 
   // Constitution Avenue (East-West: 24m wide, z from -12 to +12)
   // Split into West segment (x: -bounds to -22) and East segment (x: +22 to +bounds)
-  addPlane(roadGeometries, -22 - nLen / 2, 0.01, 0, nLen, 24);
-  addPlane(roadGeometries, 22 + nLen / 2, 0.01, 0, nLen, 24);
+  addPlane(roadGeometries, -22 - nLen / 2, 0.04, 0, nLen, 24);
+  addPlane(roadGeometries, 22 + nLen / 2, 0.04, 0, nLen, 24);
 
   // Central Roundabout Circulating Carriageway (outer ring: r=20 to r=34)
   const roundaboutRoad = new THREE.RingGeometry(20, 34, 48);
   roundaboutRoad.applyMatrix4(rotMinusX);
-  roundaboutRoad.translate(0, 0.01, 0);
+  roundaboutRoad.translate(0, 0.04, 0);
   roadGeometries.push(roundaboutRoad);
 
   // Secondary Avenues
   // Maitama Boulevard (x = -90, width 16, z: -bounds to +bounds)
-  addPlane(roadGeometries, -90, 0.01, 0, 16, bounds * 1.6);
+  addPlane(roadGeometries, -90, 0.04, 0, 16, bounds * 1.6);
   // CBD Herbert Macaulay Way (x = 90, width 18, z: -bounds to +bounds)
-  addPlane(roadGeometries, 90, 0.01, 0, 18, bounds * 1.6);
+  addPlane(roadGeometries, 90, 0.04, 0, 18, bounds * 1.6);
   // Wuse 2 Commercial Link (z = 90, width 16, x: -bounds to +bounds)
-  addPlane(roadGeometries, 0, 0.01, 90, bounds * 1.6, 16);
+  addPlane(roadGeometries, 0, 0.04, 90, bounds * 1.6, 16);
   // Three Arms Civic Avenue (z = -90, width 18, x: -bounds to +bounds)
-  addPlane(roadGeometries, 0, 0.01, -90, bounds * 1.6, 18);
+  addPlane(roadGeometries, 0, 0.04, -90, bounds * 1.6, 18);
 
   // =============================================================
   // 2. CONTINUOUS PEDESTRIAN SIDEWALKS & BEVELED CURBS
@@ -358,6 +386,42 @@ export function buildAbujaInfrastructure(bounds = 220): InfrastructureResult {
   const roundInnerCurb = new THREE.CylinderGeometry(20.0, 20.4, 0.35, 48);
   roundInnerCurb.translate(0, 0.175, 0);
   curbGeometries.push(roundInnerCurb);
+  // Central Roundabout Inner Landscaped Park Island (r: 8.5 to 20)
+  // Eliminates bare terrain inside the roundabout and creates a manicured civic monument garden
+  const rbLawnGeo = new THREE.RingGeometry(8.5, 18.2, 48);
+  rbLawnGeo.applyMatrix4(rotMinusX);
+  rbLawnGeo.translate(0, 0.178, 0);
+  const rbLawnMesh = new THREE.Mesh(rbLawnGeo, abujaPbrMaterials.estateLawn);
+  rbLawnMesh.name = "AbujaRoundaboutInnerLawn";
+  rbLawnMesh.receiveShadow = true;
+  rbLawnMesh.userData.noMerge = true;
+  group.add(rbLawnMesh);
+
+  // Outer walking perimeter ring inside the curb (r: 18.2 to 20.0)
+  const rbWalkGeo = new THREE.RingGeometry(18.2, 20.0, 48);
+  rbWalkGeo.applyMatrix4(rotMinusX);
+  rbWalkGeo.translate(0, 0.185, 0);
+  sidewalkGeometries.push(rbWalkGeo);
+
+  // Concentric ornamental botanical flower bed ring (r: 12.2 to 14.8)
+  const rbFlowerGeo = new THREE.RingGeometry(12.2, 14.8, 48);
+  rbFlowerGeo.applyMatrix4(rotMinusX);
+  rbFlowerGeo.translate(0, 0.21, 0);
+  const rbFlowerMesh = new THREE.Mesh(rbFlowerGeo, abujaPbrMaterials.botanicalFlowerBed);
+  rbFlowerMesh.name = "AbujaRoundaboutFlowerBed";
+  rbFlowerMesh.receiveShadow = true;
+  rbFlowerMesh.userData.noMerge = true;
+  group.add(rbFlowerMesh);
+
+  // Raised precast curb edging along flower bed ring
+  const rbFlowerCurbIn = new THREE.RingGeometry(11.95, 12.2, 48);
+  rbFlowerCurbIn.applyMatrix4(rotMinusX);
+  rbFlowerCurbIn.translate(0, 0.22, 0);
+  curbGeometries.push(rbFlowerCurbIn);
+  const rbFlowerCurbOut = new THREE.RingGeometry(14.8, 15.05, 48);
+  rbFlowerCurbOut.applyMatrix4(rotMinusX);
+  rbFlowerCurbOut.translate(0, 0.22, 0);
+  curbGeometries.push(rbFlowerCurbOut);
 
   // Secondary Avenues Sidewalks & Curbs
   // Maitama Boulevard (x = -90)
@@ -403,8 +467,8 @@ export function buildAbujaInfrastructure(bounds = 220): InfrastructureResult {
   // =============================================================
   // Medians cleanly stop before the central roundabout (at z = ±26) and secondary junctions
   const medianGreenMat = new THREE.MeshStandardMaterial({
-    color: "#285834",
-    roughness: 0.88,
+    color: "#3b5438",
+    roughness: 0.92,
   });
 
   // North Median: z from -bounds to -26, breaking for Civic Ave at z = -90
@@ -455,11 +519,11 @@ export function buildAbujaInfrastructure(bounds = 220): InfrastructureResult {
     const len = Math.abs(lzSeg.end - lzSeg.start);
     const midZ = (lzSeg.start + lzSeg.end) / 2;
     // Outer edge lines on Shehu Shagari Way (x = -13.6 and +13.6)
-    addPlane(whiteMarkingGeos, -13.55, 0.025, midZ, 0.22, len);
-    addPlane(whiteMarkingGeos, 13.55, 0.025, midZ, 0.22, len);
+    addPlane(whiteMarkingGeos, -13.55, 0.055, midZ, 0.22, len);
+    addPlane(whiteMarkingGeos, 13.55, 0.055, midZ, 0.22, len);
     // Inner median solid edge lines (x = -1.45 and +1.45)
-    addPlane(yellowMarkingGeos, -1.45, 0.025, midZ, 0.2, len);
-    addPlane(yellowMarkingGeos, 1.45, 0.025, midZ, 0.2, len);
+    addPlane(yellowMarkingGeos, -1.45, 0.055, midZ, 0.2, len);
+    addPlane(yellowMarkingGeos, 1.45, 0.055, midZ, 0.2, len);
   }
 
   for (const lxSeg of [
@@ -469,11 +533,11 @@ export function buildAbujaInfrastructure(bounds = 220): InfrastructureResult {
     const len = Math.abs(lxSeg.end - lxSeg.start);
     const midX = (lxSeg.start + lxSeg.end) / 2;
     // Outer edge lines on Constitution Ave (z = -11.6 and +11.6)
-    addPlane(whiteMarkingGeos, midX, 0.025, -11.55, len, 0.22);
-    addPlane(whiteMarkingGeos, midX, 0.025, 11.55, len, 0.22);
+    addPlane(whiteMarkingGeos, midX, 0.055, -11.55, len, 0.22);
+    addPlane(whiteMarkingGeos, midX, 0.055, 11.55, len, 0.22);
     // Inner median lines
-    addPlane(yellowMarkingGeos, midX, 0.025, -1.35, len, 0.2);
-    addPlane(yellowMarkingGeos, midX, 0.025, 1.35, len, 0.2);
+    addPlane(yellowMarkingGeos, midX, 0.055, -1.35, len, 0.2);
+    addPlane(yellowMarkingGeos, midX, 0.055, 1.35, len, 0.2);
   }
 
   // 5B. Dashed Lane Dividers (0.2m × 3.5m dashes spaced 6.5m)
@@ -481,14 +545,14 @@ export function buildAbujaInfrastructure(bounds = 220): InfrastructureResult {
     if (Math.abs(lz) < 24) continue; // skip roundabout
     // 4 lanes per carriageway: dividers at x = -9.5, -5.5 and +5.5, +9.5
     for (const lx of [-9.5, -5.5, 5.5, 9.5]) {
-      addPlane(whiteMarkingGeos, lx, 0.025, lz, 0.2, 3.8);
+      addPlane(whiteMarkingGeos, lx, 0.055, lz, 0.2, 3.8);
     }
   }
 
   for (let lx = -bounds + 12; lx < bounds - 12; lx += 7) {
     if (Math.abs(lx) < 24) continue;
     for (const lz of [-7.5, -4.0, 4.0, 7.5]) {
-      addPlane(whiteMarkingGeos, lx, 0.025, lz, 3.8, 0.2);
+      addPlane(whiteMarkingGeos, lx, 0.055, lz, 3.8, 0.2);
     }
   }
 
@@ -499,7 +563,7 @@ export function buildAbujaInfrastructure(bounds = 220): InfrastructureResult {
     const stripeCount = Math.floor(width / 1.1);
     for (let s = 0; s < stripeCount; s++) {
       const sx = xMin + 0.5 + s * 1.1;
-      addPlane(whiteMarkingGeos, sx, 0.028, cz, 0.5, 3.6);
+      addPlane(whiteMarkingGeos, sx, 0.055, cz, 0.5, 3.6);
     }
   }
 
@@ -508,7 +572,7 @@ export function buildAbujaInfrastructure(bounds = 220): InfrastructureResult {
     const stripeCount = Math.floor(length / 1.1);
     for (let s = 0; s < stripeCount; s++) {
       const sz = zMin + 0.5 + s * 1.1;
-      addPlane(whiteMarkingGeos, cx, 0.028, sz, 3.6, 0.5);
+      addPlane(whiteMarkingGeos, cx, 0.055, sz, 3.6, 0.5);
     }
   }
 
@@ -547,7 +611,7 @@ export function buildAbujaInfrastructure(bounds = 220): InfrastructureResult {
     { x: 21.5, z: -6.0, rot: -Math.PI / 2 },
   ]) {
     for (let t = -3; t <= 3; t += 1.2) {
-      addPlane(whiteMarkingGeos, entryPos.x + t, 0.028, entryPos.z, 0.6, 0.7);
+      addPlane(whiteMarkingGeos, entryPos.x + t, 0.055, entryPos.z, 0.6, 0.7);
     }
   }
 

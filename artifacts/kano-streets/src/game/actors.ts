@@ -1,8 +1,10 @@
 import * as THREE from "three";
+import { markWorldResourceShared } from "./worldResourceLifecycle";
 import { makeSignMaterial } from "./materials";
 import type { GameMaterials } from "./types";
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
+markWorldResourceShared(unitBox);
 
 function addBox(
   parent: THREE.Object3D,
@@ -308,7 +310,14 @@ export function createPedestrianModel(
 
       characterGroup.traverse((child) => {
         if (child instanceof THREE.Mesh) {
-          child.castShadow = true;
+          const nl = child.name.toLowerCase();
+          if (nl.includes("teeth") || nl.includes("gland")) {
+            child.visible = false;
+            child.castShadow = false;
+            return;
+          }
+          const isMicro = child.name.startsWith("h_") || nl.includes("eye");
+          child.castShadow = !isMicro;
           child.receiveShadow = true;
         }
       });
@@ -355,7 +364,8 @@ export type CarModel = {
   proceduralBody: THREE.Group;
   gltfBody?: THREE.Group;
   wheelRig: "procedural" | "asset";
-  attachGLTFBody: (gltf: THREE.Group, colorHex?: string) => void;
+  attachGLTFBody: (gltf: THREE.Group, colorHex?: string, isTraffic?: boolean) => void;
+  setLODLevel?: (level: 0 | 1 | 2) => void;
 };
 
 export type KekeModel = {
@@ -488,14 +498,15 @@ export function createCarModel(
 
       const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.24, 16), rubber);
       wheel.rotation.z = Math.PI / 2;
-      wheel.castShadow = true;
+      wheel.userData.noShadow = true;
+      wheel.castShadow = false;
       wheel.receiveShadow = true;
       steeringPivot.add(wheel);
 
       const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.255, 12), rim);
       hub.rotation.z = Math.PI / 2;
       hub.position.x = x > 0 ? -0.01 : 0.01;
-      hub.castShadow = true;
+      hub.userData.noShadow = true; hub.castShadow = false;
       steeringPivot.add(hub);
 
       for (let spoke = 0; spoke < 6; spoke += 1) {
@@ -506,7 +517,7 @@ export function createCarModel(
         );
         spokeMesh.position.set(hub.position.x * 1.1, Math.sin(angle) * 0.09, Math.cos(angle) * 0.09);
         spokeMesh.rotation.x = angle;
-        steeringPivot.add(spokeMesh);
+        spokeMesh.userData.noShadow = true; spokeMesh.castShadow = false; steeringPivot.add(spokeMesh);
       }
 
       wheels.push(steeringPivot);
@@ -530,7 +541,23 @@ export function createCarModel(
 
   let gltfBody: THREE.Group | undefined;
 
-  const attachGLTFBody = (gltf: THREE.Group, colorHex?: string) => {
+  const setLODLevel = (level: 0 | 1 | 2) => {
+    if (!gltfBody) return;
+    if (gltfBody.userData.currentLOD === level) return;
+    gltfBody.userData.currentLOD = level;
+    const isTraffic = !!gltfBody.userData.isTraffic;
+    gltfBody.traverse((child) => {
+      if (child instanceof THREE.Mesh && typeof child.userData.lodMinLevel === "number") {
+        if (isTraffic) {
+          child.visible = level >= 2 ? child.userData.lodMinLevel >= 2 : child.userData.lodMinLevel >= 1;
+        } else {
+          child.visible = child.userData.lodMinLevel >= level;
+        }
+      }
+    });
+  };
+
+  const attachGLTFBody = (gltf: THREE.Group, colorHex?: string, isTraffic = false) => {
     if (gltfBody) {
       root.remove(gltfBody);
     }
@@ -539,17 +566,57 @@ export function createCarModel(
       pivot.visible = false;
     });
     const model = gltf.clone(true);
+    model.userData.isTraffic = isTraffic;
     model.traverse((child) => {
       if (child instanceof THREE.Mesh) {
         const nameLower = child.name.toLowerCase();
+        const normalizedName = nameLower.replace(/[\s-]+/g, "_");
+        child.userData = child.userData || {};
+
+        // LOD Hierarchy for 180+ submesh sedan model:
+        // LOD 2 (Far >= 35m): Core silhouette only (2 body shells + 4 tires) -> 6 visible meshes
+        // LOD 1 (Near traffic < 35m): Primary exterior; player driving stays at full LOD 0.
+        // LOD 0 (Near < 18m / Driving): Full detail including interior, trim, seats, consoles
+        const isCoreSilhouette =
+          normalizedName.includes("body_shell") ||
+          normalizedName.includes("sculpted_tyre") ||
+          normalizedName.includes("sculpted_tire");
+        const isPrimaryExterior = isCoreSilhouette || (
+          nameLower.includes("rim") ||
+          nameLower.includes("glass") ||
+          nameLower.includes("windshield") ||
+          nameLower.includes("bumper") ||
+          nameLower.includes("roof") ||
+          nameLower.includes("hood") ||
+          nameLower.includes("lamp") ||
+          nameLower.includes("lens") ||
+          nameLower.includes("mirror")
+        );
+
+        if (isCoreSilhouette) {
+          child.userData.lodMinLevel = 2; // Always visible in LOD 0, 1, 2
+        } else if (isPrimaryExterior) {
+          child.userData.lodMinLevel = 1; // Visible in LOD 0, 1
+        } else {
+          child.userData.lodMinLevel = 0; // Visible only in LOD 0
+        }
+
+        // Traffic vehicles only ever require LOD 1 (exterior without micro-internals)
+        if (isTraffic && child.userData.lodMinLevel < 1) {
+          child.visible = false;
+          child.castShadow = false;
+          return;
+        }
+
+        // Only body shell and tires cast directional sunlight shadows
+        child.castShadow = isCoreSilhouette;
+
         if (
           nameLower.includes("headrest") ||
           nameLower.includes("seat_back") ||
           nameLower.includes("seat_cushion")
         ) {
-          child.userData = child.userData || {};
           child.userData.isSeatMesh = true;
-          // In graphite-four-door-sedan.glb, front seats and headrests:
           if (
             child.name.startsWith("Adjustable_headrest") ||
             child.name.startsWith("Contoured_seat_back") ||
@@ -584,6 +651,7 @@ export function createCarModel(
     model.position.set(0, 0.02, 0);
     gltfBody = model;
     root.add(model);
+    setLODLevel(isTraffic ? 1 : 0);
   };
 
   return {
@@ -596,6 +664,7 @@ export function createCarModel(
     },
     wheelRig: "procedural",
     attachGLTFBody,
+    setLODLevel,
   };
 }
 
@@ -689,7 +758,7 @@ export function createKekeModel(
 
   const frontWheel = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.16, 16), rubber);
   frontWheel.rotation.z = Math.PI / 2;
-  frontWheel.castShadow = true;
+  frontWheel.userData.noShadow = true; frontWheel.castShadow = false;
   frontWheel.receiveShadow = true;
   frontFork.add(frontWheel);
 
@@ -709,7 +778,7 @@ export function createKekeModel(
 
     const rWheel = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.16, 16), rubber);
     rWheel.rotation.z = Math.PI / 2;
-    rWheel.castShadow = true;
+    rWheel.userData.noShadow = true; rWheel.castShadow = false;
     rWheel.receiveShadow = true;
     rearWheelGroup.add(rWheel);
 
@@ -784,7 +853,7 @@ export function createMotorcycleModel(
   );
   rearWheel.rotation.y = Math.PI / 2;
   rearWheel.position.set(0, 0.28, -0.68);
-  rearWheel.castShadow = true;
+  rearWheel.userData.noShadow = true; rearWheel.castShadow = false;
   root.add(rearWheel);
   addCyl(root, chromeMat, 0, 0.28, -0.68, 0.12, 0.12, 0.06);
 
@@ -804,7 +873,7 @@ export function createMotorcycleModel(
     rubberMat,
   );
   frontWheel.rotation.y = Math.PI / 2;
-  frontWheel.castShadow = true;
+  frontWheel.userData.noShadow = true; frontWheel.castShadow = false;
   frontFork.add(frontWheel);
 
   // Handlebars
@@ -922,7 +991,7 @@ export function createDeliveryVanModel(
 
     const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.24, 16), rubber);
     tire.rotation.z = Math.PI / 2;
-    tire.castShadow = true;
+    tire.userData.noShadow = true; tire.castShadow = false;
     pivot.add(tire);
 
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.25, 12), steelRim);
@@ -1033,7 +1102,7 @@ export function createPickupTruckModel(
 
     const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.40, 0.40, 0.28, 16), rubber);
     tire.rotation.z = Math.PI / 2;
-    tire.castShadow = true;
+    tire.userData.noShadow = true; tire.castShadow = false;
     pivot.add(tire);
 
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.29, 12), alloyRim);
@@ -1145,7 +1214,7 @@ export function createMinibusModel(
 
     const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.37, 0.37, 0.25, 16), rubber);
     tire.rotation.z = Math.PI / 2;
-    tire.castShadow = true;
+    tire.userData.noShadow = true; tire.castShadow = false;
     pivot.add(tire);
 
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.26, 12), busRim);
@@ -1255,7 +1324,7 @@ export function createFreightTruckModel(
 
     const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.28, 16), rubber);
     tire.rotation.z = Math.PI / 2;
-    tire.castShadow = true;
+    tire.userData.noShadow = true; tire.castShadow = false;
     pivot.add(tire);
 
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.29, 12), truckRim);
@@ -1278,7 +1347,7 @@ export function createFreightTruckModel(
         const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.22, 16), rubber);
         tire.rotation.z = Math.PI / 2;
         tire.position.x = dx;
-        tire.castShadow = true;
+        tire.userData.noShadow = true; tire.castShadow = false;
         pivot.add(tire);
       }
 

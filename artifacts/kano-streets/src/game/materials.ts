@@ -864,6 +864,10 @@ export function createKanoEnvironmentMap(
   return texture;
 }
 
+export function createAbujaEnvironmentMap(): THREE.Texture {
+  return createKanoEnvironmentMap("#6799bd", "#c9c0a7", "#604b38");
+}
+
 export function createMaterials(): GameMaterials {
   const plasterMap = noiseTexture("#b49a72", "#f0d9a5", 4600, 42, [2, 2]);
   const clayMap = noiseTexture("#a77950", "#e2b27a", 3900, 87, [2, 2]);

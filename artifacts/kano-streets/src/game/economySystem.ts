@@ -18,6 +18,7 @@ import type {
   DailyFinancialStatement,
   MonthlyFinancialSummary,
 } from "./types";
+import type { HighwaySecuritySave } from "./HighwaySecuritySystem";
 import { getFurnitureCatalogItem } from "./furnitureCatalogue";
 import {
   BUSINESS_TIERS,
@@ -62,7 +63,7 @@ export interface SaveData {
   completedMissions?: string[];
   careerEarnings?: number;
   storyProgress?: StoryProgressData;
-  weatherPreset?: string;
+  weatherPreset?: "clear" | "harmattan" | "sunset_glow" | "cool_night" | "rain";
   audioMuted?: boolean;
   furnitureInventory?: FurnitureInstance[];
   selectedHomePropertyId?: PropertyId | null;
@@ -81,6 +82,7 @@ export interface SaveData {
   consequencesHistory?: import("./consequenceSystem").ConsequenceRecord[];
   currentCity?: import("./cityRegistry").CityId;
   cityPositions?: Partial<Record<import("./cityRegistry").CityId, { x: number; y: number; z: number; yaw: number }>>;
+  highwaySecurity?: HighwaySecuritySave;
   savedAt: number;
 }
 
@@ -1402,7 +1404,7 @@ export class EconomySystem {
     completedMissions?: string[],
     careerEarnings?: number,
     storyProgress?: StoryProgressData,
-    weatherPreset?: string,
+    weatherPreset?: "clear" | "harmattan" | "sunset_glow" | "cool_night" | "rain",
     audioMuted?: boolean,
     selectedHomePropertyId?: PropertyId | null,
     needs?: { hunger: number; energy: number; hygiene: number },
@@ -1415,6 +1417,7 @@ export class EconomySystem {
     },
     currentCity?: import("./cityRegistry").CityId,
     cityPositions?: Partial<Record<import("./cityRegistry").CityId, { x: number; y: number; z: number; yaw: number }>>,
+    highwaySecurity?: HighwaySecuritySave,
   ): boolean {
     if (typeof window === "undefined" || !window.localStorage) return false;
     try {
@@ -1498,6 +1501,7 @@ export class EconomySystem {
         consequencesHistory: consequencesData?.consequencesHistory,
         currentCity,
         cityPositions,
+        highwaySecurity,
         savedAt: Date.now(),
       };
       window.localStorage.setItem("kano_streets_save_v1", JSON.stringify(data));

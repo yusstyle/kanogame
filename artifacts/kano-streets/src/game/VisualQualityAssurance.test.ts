@@ -302,7 +302,7 @@ test("Phase 6.1 QA: Performance Measurements & Quality Presets Scaling", () => {
 
   try {
     const internal = engine as any;
-    const presets: GraphicsQuality[] = ["performance", "balanced", "quality"];
+    const presets: GraphicsQuality[] = ["performance", "balanced", "quality", "ultra"];
 
     const measurements: Record<string, {
       pixelRatioCap: number;

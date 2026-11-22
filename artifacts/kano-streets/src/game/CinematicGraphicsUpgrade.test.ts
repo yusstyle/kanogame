@@ -1,8 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { createMaterials, createKanoEnvironmentMap } from "./materials";
-import { GameEngine } from "./GameEngine";
 
 function installBrowserStubs() {
   const context = {
@@ -14,11 +12,23 @@ function installBrowserStubs() {
     textAlign: "center",
     textBaseline: "middle",
     fillRect() {},
+    clearRect() {},
     fillText() {},
     beginPath() {},
     moveTo() {},
     lineTo() {},
+    bezierCurveTo() {},
     stroke() {},
+    strokeRect() {},
+    closePath() {},
+    fill() {},
+    arc() {},
+    ellipse() {},
+    quadraticCurveTo() {},
+    save() {},
+    restore() {},
+    rotate() {},
+    translate() {},
     createLinearGradient() {
       return { addColorStop() {} };
     },
@@ -45,12 +55,19 @@ function installBrowserStubs() {
     addEventListener() {},
     removeEventListener() {},
   };
+  const storage = new Map<string, string>();
+  const fakeStorage = {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => storage.set(key, value),
+    removeItem: (key: string) => storage.delete(key),
+  };
   class FakeResizeObserver {
     observe() {}
     disconnect() {}
   }
   Object.defineProperty(globalThis, "document", { configurable: true, value: fakeDocument });
   Object.defineProperty(globalThis, "window", { configurable: true, value: fakeWindow });
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: fakeStorage });
   Object.defineProperty(globalThis, "ResizeObserver", { configurable: true, value: FakeResizeObserver });
   Object.defineProperty(globalThis, "requestAnimationFrame", { configurable: true, value: () => 1 });
   Object.defineProperty(globalThis, "cancelAnimationFrame", { configurable: true, value: () => {} });
@@ -85,8 +102,9 @@ function installBrowserStubs() {
   };
 }
 
-test("Phase 6 Graphics: Environment Map & Image-Based Lighting (IBL) Initialization", () => {
+test("Phase 6 Graphics: Environment Map & Image-Based Lighting (IBL) Initialization", async () => {
   const { canvas, rendererFactory } = installBrowserStubs();
+  const { GameEngine } = await import("./GameEngine");
   const engine = new GameEngine(
     canvas,
     { onSnapshot: () => {}, onPause: () => {} },
@@ -106,8 +124,9 @@ test("Phase 6 Graphics: Environment Map & Image-Based Lighting (IBL) Initializat
   }
 });
 
-test("Phase 6 Graphics: Procedural Normal Maps on Architectural & Infrastructure Surfaces", () => {
+test("Phase 6 Graphics: Procedural Normal Maps on Architectural & Infrastructure Surfaces", async () => {
   installBrowserStubs();
+  const { createMaterials } = await import("./materials");
   const materials = createMaterials();
 
   assert.ok(materials.asphalt, "Asphalt material exists");
@@ -129,8 +148,9 @@ test("Phase 6 Graphics: Procedural Normal Maps on Architectural & Infrastructure
   assert.ok(materials.glass.roughness <= 0.15, "Glass has smooth specular surface for sky reflections");
 });
 
-test("Phase 6 Graphics: Dual-Tone Hemisphere & Sahelian Directional Diurnal Lighting", () => {
+test("Phase 6 Graphics: Dual-Tone Hemisphere & Sahelian Directional Diurnal Lighting", async () => {
   const { canvas, rendererFactory } = installBrowserStubs();
+  const { GameEngine } = await import("./GameEngine");
   const engine = new GameEngine(
     canvas,
     { onSnapshot: () => {}, onPause: () => {} },
@@ -171,8 +191,9 @@ test("Phase 6 Graphics: Dual-Tone Hemisphere & Sahelian Directional Diurnal Ligh
   }
 });
 
-test("Phase 6 Graphics: Weather Preset Atmosphere & Dynamic Sky Transitions", () => {
+test("Phase 6 Graphics: Weather Preset Atmosphere & Dynamic Sky Transitions", async () => {
   const { canvas, rendererFactory } = installBrowserStubs();
+  const { GameEngine } = await import("./GameEngine");
   const engine = new GameEngine(
     canvas,
     { onSnapshot: () => {}, onPause: () => {} },
@@ -206,8 +227,41 @@ test("Phase 6 Graphics: Weather Preset Atmosphere & Dynamic Sky Transitions", ()
   }
 });
 
-test("Phase 6 Graphics: Ground Contact Shadows on Vehicle Chassis", () => {
+test("Phase A Stage 2: Rain produces damp road materials and bounded puddles", async () => {
   const { canvas, rendererFactory } = installBrowserStubs();
+  const { GameEngine } = await import("./GameEngine");
+  const engine = new GameEngine(
+    canvas,
+    { onSnapshot: () => {}, onPause: () => {} },
+    rendererFactory,
+  );
+
+  try {
+    const internal = engine as any;
+    internal.weatherSystem.setPreset("rain");
+    internal.updateLighting();
+
+    assert.equal(internal.weatherSystem.getPreset(), "rain");
+    assert.equal(internal.rainPuddleGroup.visible, true);
+    assert.equal(internal.rainPuddleGroup.children.length, 6);
+    assert.ok(internal.materials.asphalt.roughness < 0.90);
+
+    for (let frame = 0; frame < 60; frame += 1) internal.updateLighting();
+    assert.ok(internal.materials.asphalt.roughness < 0.42, "rain should ease the asphalt to its wet roughness");
+    assert.ok(internal.materials.asphalt.metalness > 0.15, "rain should ease the asphalt to its wet reflectance");
+
+    internal.weatherSystem.setPreset("clear");
+    for (let frame = 0; frame < 60; frame += 1) internal.updateLighting();
+    assert.equal(internal.rainPuddleGroup.visible, false);
+    assert.ok(internal.materials.asphalt.roughness > 0.89, "dry asphalt should recover without a permanent wet sheen");
+  } finally {
+    engine.dispose();
+  }
+});
+
+test("Phase 6 Graphics: Ground Contact Shadows on Vehicle Chassis", async () => {
+  const { canvas, rendererFactory } = installBrowserStubs();
+  const { GameEngine } = await import("./GameEngine");
   const engine = new GameEngine(
     canvas,
     { onSnapshot: () => {}, onPause: () => {} },
@@ -225,9 +279,25 @@ test("Phase 6 Graphics: Ground Contact Shadows on Vehicle Chassis", () => {
         }
       }
     });
+
     assert.ok(foundShadowPlane, "Sedan has ground contact shadow plane beneath chassis");
   } finally {
     engine.dispose();
   }
+});
+
+test("Phase A Stage 2.1: Abuja mid-distance building shells retain facade windows", async () => {
+  installBrowserStubs();
+  const [{ createMaterials }, { buildStreamingChunk }] = await Promise.all([
+    import("./materials"),
+    import("./abujaDistrictsExpanded"),
+  ]);
+  const materials = createMaterials();
+  const chunk = buildStreamingChunk(0, 0, 256, "wuse_commercial", "Wuse Commercial", materials);
+  const windows = chunk.lod1Group.getObjectByName("chunk_0_0_LOD1_FacadeWindows");
+
+  assert.ok(windows instanceof THREE.InstancedMesh, "facade windows should share one instanced draw");
+  assert.ok(windows.count > 0, "eligible building shells should receive visible window panels");
+  assert.equal(windows.castShadow, false, "mid-distance facade detail should not add shadow-map work");
 });
 

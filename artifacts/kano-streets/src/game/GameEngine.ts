@@ -16,10 +16,13 @@ import { loadGLTFModel, loadHumanoidCharacter } from "./assetManifest";
 import { BuildingInteriorManager } from "./BuildingInteriors";
 import { ColliderIndex } from "./ColliderIndex";
 import { getDistrict, getDistrictLabel, ROAD_LAYOUT, WORLD_BOUNDS_NORTH } from "./layout";
-import { createMaterials, createKanoEnvironmentMap } from "./materials";
+import { createAbujaEnvironmentMap, createMaterials, createKanoEnvironmentMap } from "./materials";
+import { collectMaterialResources, collectObjectResources, disposeWorldResources } from "./worldResourceLifecycle";
 import { buildNavigationNetwork, type NavigationNetwork } from "./navigation";
 import { PedestrianSystem } from "./PedestrianSystem";
 import { TrafficSystem } from "./TrafficSystem";
+import { HighwaySecuritySystem } from "./HighwaySecuritySystem";
+import { HighwayEncounterScene } from "./HighwayEncounterScene";
 import { createWorld } from "./world";
 import { createAbujaWorld } from "./abujaWorld";
 import { buildAbujaNavigationNetwork } from "./abujaNavigation";
@@ -35,6 +38,7 @@ import { MissionSystem } from "./missionSystem";
 import { StorySystem } from "./storySystem";
 import { WeatherSystem, type WeatherPreset } from "./weatherSystem";
 import { AudioSystem } from "./audioSystem";
+import { getAbujaInfrastructureMaterials } from "./abujaInfrastructure";
 import { detectDeviceCapability } from "./deviceDetection";
 import { getPropertyByEntrance, getPropertyRegistryEntry } from "./propertyRegistry";
 import { LifeSimulationSystem } from "./lifeSimulation";
@@ -87,17 +91,22 @@ export class GameEngine {
   private navigation: NavigationNetwork;
   private trafficSystem: TrafficSystem;
   private pedestrianSystem: PedestrianSystem;
+  private readonly highwaySecurity: HighwaySecuritySystem;
+  private readonly highwayEncounterScene: HighwayEncounterScene;
   private readonly keys = new Set<string>();
   private readonly lookMatrix = new THREE.Matrix4();
   private readonly desiredCameraQuaternion = new THREE.Quaternion();
   private readonly callbacks: GameEngineCallbacks;
   private sunLight: THREE.DirectionalLight | null = null;
   private bounceLight: THREE.DirectionalLight | null = null;
+  private readonly rainPuddleGroup = new THREE.Group();
   private vehicleChassisPitch = 0;
   private vehicleChassisRoll = 0;
   private hemiLight: THREE.HemisphereLight | null = null;
   private vehicleHeadlight: THREE.SpotLight | null = null;
   private readonly weatherSystem: WeatherSystem;
+  private cityEnvironmentMap: THREE.Texture | null = null;
+  private sedanGLTFAsset: THREE.Group | null = null;
   private readonly audioSystem: AudioSystem;
   private graphicsQuality: GraphicsQuality = "balanced";
   private readonly resizeObserver: ResizeObserver;
@@ -128,6 +137,8 @@ export class GameEngine {
   private deviceCapability = detectDeviceCapability();
   private lastSnapshotAt = 0;
   private statusMessage: string | null = null;
+  private transientWelcomeMessage: string | null = null;
+  private transientWelcomeExpiresAt = 0;
   private playerPosition = PLAYER_START.clone();
   private playerVerticalVelocity = 0;
   private playerGrounded = true;
@@ -221,19 +232,18 @@ export class GameEngine {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, initialPixelRatioCap));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.12;
+    this.renderer.toneMappingExposure = 0.98;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    this.scene.background = new THREE.Color("#dcd4c3");
-    this.scene.fog = new THREE.Fog("#dcd4c3", 42, 230);
+    this.scene.background = new THREE.Color("#2068a8");
+    this.scene.fog = new THREE.Fog("#b4cae0", 180, 650);
 
     this.weatherSystem = new WeatherSystem("clear");
     this.scene.add(this.weatherSystem.particleGroup);
 
     this.audioSystem = new AudioSystem(false, 0.65);
 
-    this.scene.environment = createKanoEnvironmentMap();
     this.materials = createMaterials();
     this.interiorManager = new BuildingInteriorManager(this.materials);
     this.scene.add(this.interiorManager.root);
@@ -249,7 +259,7 @@ export class GameEngine {
       if (saved.storyProgress) {
         this.storySystem.loadProgress(saved.storyProgress);
       }
-      if (saved.weatherPreset && ["clear", "harmattan", "sunset_glow", "cool_night"].includes(saved.weatherPreset)) {
+      if (saved.weatherPreset && ["clear", "harmattan", "sunset_glow", "cool_night", "rain"].includes(saved.weatherPreset)) {
         this.weatherSystem.setPreset(saved.weatherPreset as WeatherPreset);
       }
       if (typeof saved.audioMuted === "boolean") {
@@ -274,6 +284,8 @@ export class GameEngine {
     if (saved?.cityPositions) {
       Object.assign(this.cityPositions, saved.cityPositions);
     }
+    this.weatherSystem.setCity(this.currentCity);
+    this.applyCityEnvironment(this.currentCity);
 
     this.economy.resolveSelectedHome(this.hasApartmentRental);
     this.syncAllPlacedFurniture();
@@ -290,11 +302,7 @@ export class GameEngine {
 
     const initialCitySpec = getCitySpec(this.currentCity);
     this.scene.background = new THREE.Color(initialCitySpec.skyColor);
-    const initialFogFar = this.graphicsQuality === "performance"
-      ? 90
-      : (this.deviceCapability?.isMobile || this.deviceCapability?.isIntegratedGpu || this.graphicsQuality === "balanced")
-        ? 110
-        : initialCitySpec.fogFar;
+    const initialFogFar = this.getFogFar(this.currentCity);
     this.scene.fog = new THREE.Fog(initialCitySpec.fogColor, initialCitySpec.fogNear, initialFogFar);
 
     this.staticBatches = this.world.staticBatches || [];
@@ -306,12 +314,15 @@ export class GameEngine {
     this.scene.add(this.suyaSmokeGroup);
     this.initSuyaVisuals();
     this.addLighting();
+    this.initializeRainPuddles();
+    this.scene.add(this.rainPuddleGroup);
     this.trafficSystem = new TrafficSystem(
       this.scene,
       this.materials,
       this.navigation,
       this.colliderIndex,
       (x, z) => this.surfaceHeight(x, z),
+      this.currentCity,
     );
     this.trafficSystem.onCitation = (fine, reason) => {
       if (this.trafficFine === 0) {
@@ -326,6 +337,13 @@ export class GameEngine {
       this.materials,
       this.navigation,
       this.colliderIndex,
+      (x, z) => this.surfaceHeight(x, z),
+      this.currentCity,
+    );
+    this.highwaySecurity = new HighwaySecuritySystem(saved?.highwaySecurity);
+    this.highwayEncounterScene = new HighwayEncounterScene(
+      this.scene,
+      this.materials,
       (x, z) => this.surfaceHeight(x, z),
     );
 
@@ -450,12 +468,43 @@ export class GameEngine {
     this.animationFrame = requestAnimationFrame(this.animate);
   }
 
+  private initializeRainPuddles(): void {
+    this.rainPuddleGroup.name = "RainPuddleGroup";
+    const puddleGeometry = new THREE.CircleGeometry(1, 20);
+    puddleGeometry.rotateX(-Math.PI / 2);
+    const puddleMaterial = new THREE.MeshPhysicalMaterial({
+      color: "#61727a",
+      roughness: 0.18,
+      metalness: 0.18,
+      transparent: true,
+      opacity: 0.28,
+      depthWrite: false,
+    });
+    const offsets = [
+      [-8.0, 4.0, 2.6, 1.15],
+      [7.2, -5.5, 2.1, 0.82],
+      [-3.5, -11.0, 1.7, 1.05],
+      [11.5, 8.0, 2.2, 0.72],
+      [-12.0, -2.0, 1.4, 0.88],
+      [2.0, 13.0, 1.9, 0.76],
+    ];
+    offsets.forEach(([x, z, scaleX, scaleZ], index) => {
+      const puddle = new THREE.Mesh(puddleGeometry.clone(), puddleMaterial.clone());
+      puddle.name = `RainPuddle:${index + 1}`;
+      puddle.position.set(x, 0.07, z);
+      puddle.scale.set(scaleX, 1, scaleZ);
+      puddle.visible = false;
+      puddle.receiveShadow = true;
+      this.rainPuddleGroup.add(puddle);
+    });
+  }
+
   private addLighting() {
-    const hemi = new THREE.HemisphereLight("#d8e8f2", "#7a5e42", 1.45);
+    const hemi = new THREE.HemisphereLight("#c6def5", "#586352", 0.65);
     this.scene.add(hemi);
     this.hemiLight = hemi;
 
-    const sun = new THREE.DirectionalLight("#fff8ed", 2.85);
+    const sun = new THREE.DirectionalLight("#fff8ee", 1.55);
     sun.position.set(-44, 62, -34);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
@@ -470,7 +519,7 @@ export class GameEngine {
     this.scene.add(sun);
     this.sunLight = sun;
 
-    const bounce = new THREE.DirectionalLight("#a3c0d4", 0.55);
+    const bounce = new THREE.DirectionalLight("#9ec0db", 0.18);
     bounce.position.set(52, 28, 40);
     this.scene.add(bounce);
     this.bounceLight = bounce;
@@ -489,6 +538,53 @@ export class GameEngine {
 
     this.weatherSystem.applyToScene(this.scene, this.sunLight, this.hemiLight, hour, isInterior);
 
+    const isRaining = this.weatherSystem.getPreset() === "rain";
+    const wetRoadRoughness = isRaining ? 0.38 : 0.90;
+    const wetRoadMetalness = isRaining ? 0.18 : 0.02;
+    this.materials.asphalt.roughness = THREE.MathUtils.lerp(
+      this.materials.asphalt.roughness,
+      wetRoadRoughness,
+      0.08,
+    );
+    this.materials.asphalt.metalness = THREE.MathUtils.lerp(
+      this.materials.asphalt.metalness,
+      wetRoadMetalness,
+      0.08,
+    );
+    this.materials.asphaltPatch.roughness = THREE.MathUtils.lerp(
+      this.materials.asphaltPatch.roughness,
+      isRaining ? 0.42 : 0.99,
+      0.08,
+    );
+    const abujaRoadMaterials = getAbujaInfrastructureMaterials();
+    abujaRoadMaterials.asphalt.roughness = THREE.MathUtils.lerp(
+      abujaRoadMaterials.asphalt.roughness,
+      wetRoadRoughness,
+      0.08,
+    );
+    abujaRoadMaterials.asphalt.metalness = THREE.MathUtils.lerp(
+      abujaRoadMaterials.asphalt.metalness,
+      wetRoadMetalness,
+      0.08,
+    );
+    abujaRoadMaterials.sidewalk.roughness = THREE.MathUtils.lerp(
+      abujaRoadMaterials.sidewalk.roughness,
+      isRaining ? 0.46 : 0.88,
+      0.08,
+    );
+
+    const puddleCenter = this.mode === "driving"
+      ? this.getActiveVehiclePosition()
+      : this.playerPosition;
+    this.rainPuddleGroup.visible = isRaining && !isInterior;
+    this.rainPuddleGroup.position.set(puddleCenter.x, 0, puddleCenter.z);
+    this.rainPuddleGroup.children.forEach((puddle) => {
+      if (!(puddle instanceof THREE.Mesh)) return;
+      const worldX = puddleCenter.x + puddle.position.x;
+      const worldZ = puddleCenter.z + puddle.position.z;
+      puddle.position.y = this.surfaceHeight(worldX, worldZ) + 0.065;
+    });
+
     // Diurnal street lantern & interior window glow
     const isNightOrTwilight = hour <= 6.8 || hour >= 17.6;
     let headlightIntensity = 0;
@@ -506,7 +602,7 @@ export class GameEngine {
       if (hour >= 11 && hour <= 15) {
         this.bounceLight.intensity = Math.max(0.2, (this.sunLight.intensity || 2.5) * 0.22);
       } else if (isNightOrTwilight) {
-        this.bounceLight.intensity = 0.05;
+        this.bounceLight.intensity = 0.22;
       } else {
         this.bounceLight.intensity = 0.35;
       }
@@ -583,7 +679,9 @@ export class GameEngine {
     try {
       const sedanGLTF = await loadGLTFModel("/assets/graphite-four-door-sedan.glb");
       if (sedanGLTF && this.running) {
+        this.sedanGLTFAsset = sedanGLTF;
         this.car.attachGLTFBody(sedanGLTF);
+        this.trafficSystem.upgradeWithSedanGLTF(sedanGLTF);
       }
     } catch (e) {
       console.warn("[Asset] Failed to load sedan GLB model, procedural fallback active:", e);
@@ -732,8 +830,38 @@ export class GameEngine {
     if (this.currentCity === "abuja" && this.abujaStreamingManager) {
       this.abujaStreamingManager.update(this.playerPosition, force);
     }
-    if (!this.staticBatches || this.staticBatches.length === 0) return;
+
+    // Distance-based visibility culling for stationary player vehicles
     const center = this.playerPosition;
+    const vehCullDist = 110;
+    if (this.car?.root) {
+      const distToCar = this.carPosition.distanceTo(center);
+      const isCarVisible = (this.mode === "driving" && this.activeVehicle === "sedan") || distToCar <= vehCullDist;
+      this.car.root.visible = isCarVisible;
+      if (isCarVisible && this.car.setLODLevel) {
+        const isNear = (this.mode === "driving" && this.activeVehicle === "sedan") || distToCar < 18;
+        const isMid = distToCar < 55;
+        const lod: 0 | 1 | 2 = isNear ? 0 : isMid ? 1 : 2;
+        this.car.setLODLevel(lod);
+      }
+    }
+    if (this.keke?.root) {
+      this.keke.root.visible = (this.mode === "driving" && this.activeVehicle === "keke") || this.kekePosition.distanceTo(center) <= vehCullDist;
+    }
+    if (this.van?.root) {
+      this.van.root.visible = (this.mode === "driving" && this.activeVehicle === "van") || this.vanPosition.distanceTo(center) <= vehCullDist;
+    }
+    if (this.pickup?.root) {
+      this.pickup.root.visible = (this.mode === "driving" && this.activeVehicle === "pickup") || this.pickupPosition.distanceTo(center) <= vehCullDist;
+    }
+    if (this.minibus?.root) {
+      this.minibus.root.visible = (this.mode === "driving" && this.activeVehicle === "minibus") || this.minibusPosition.distanceTo(center) <= vehCullDist;
+    }
+    if (this.truck?.root) {
+      this.truck.root.visible = (this.mode === "driving" && this.activeVehicle === "truck") || this.truckPosition.distanceTo(center) <= vehCullDist;
+    }
+
+    if (!this.staticBatches || this.staticBatches.length === 0) return;
     if (!force && center.distanceToSquared(this.lastChunkCullPos) < 16) return;
     this.lastChunkCullPos.copy(center);
 
@@ -755,6 +883,10 @@ export class GameEngine {
       const dSq = dx * dx + dz * dz;
       const effectiveDistSq = Math.max(0, dSq - sphere.radius * sphere.radius);
       batch.visible = effectiveDistSq <= maxDistSq;
+      if (batch.userData.initialCastShadow === undefined) {
+        batch.userData.initialCastShadow = batch.castShadow;
+      }
+      batch.castShadow = batch.visible && batch.userData.initialCastShadow && effectiveDistSq <= 3600;
     }
   }
 
@@ -775,19 +907,19 @@ export class GameEngine {
     let shadowBounds: number;
 
     if (isMobile) {
-      pixelRatioCap = quality === "performance" ? 0.85 : quality === "quality" ? 1.15 : 1.0;
-      shadowSize = quality === "quality" ? 1024 : 512;
-      shadowBounds = quality === "quality" ? 36 : 28;
+      pixelRatioCap = quality === "performance" ? 0.85 : quality === "quality" || quality === "ultra" ? 1.15 : 1.0;
+      shadowSize = quality === "quality" || quality === "ultra" ? 1024 : 512;
+      shadowBounds = quality === "quality" || quality === "ultra" ? 36 : 28;
     } else if (isIntegrated) {
       // Integrated GPU (Intel UHD/Iris, AMD APU) - cap DPR and tighten shadow bounds to eliminate fill bottleneck
-      pixelRatioCap = quality === "performance" ? 1.0 : quality === "quality" ? 1.2 : 1.05;
-      shadowSize = quality === "quality" ? 1024 : 512;
-      shadowBounds = quality === "quality" ? 40 : 32;
+      pixelRatioCap = quality === "performance" ? 1.0 : quality === "quality" || quality === "ultra" ? 1.2 : 1.05;
+      shadowSize = quality === "quality" || quality === "ultra" ? 1024 : 512;
+      shadowBounds = quality === "quality" || quality === "ultra" ? 40 : 32;
     } else {
       // Discrete Dedicated GPU (NVIDIA / AMD Radeon RX)
-      pixelRatioCap = quality === "performance" ? 1.0 : quality === "quality" ? 1.65 : 1.25;
-      shadowSize = quality === "quality" ? 2048 : quality === "balanced" ? 1024 : 512;
-      shadowBounds = quality === "quality" ? 56 : 42;
+      pixelRatioCap = quality === "performance" ? 1.0 : quality === "ultra" ? 1.8 : quality === "quality" ? 1.65 : 1.25;
+      shadowSize = quality === "ultra" ? 2048 : quality === "quality" ? 2048 : quality === "balanced" ? 1024 : 512;
+      shadowBounds = quality === "ultra" ? 64 : quality === "quality" ? 56 : 42;
     }
 
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, pixelRatioCap));
@@ -806,17 +938,41 @@ export class GameEngine {
     }
 
     if (this.scene.fog && this.scene.fog instanceof THREE.Fog) {
-      const citySpec = getCitySpec(this.currentCity);
-      const fogFar = quality === "performance"
-        ? 90
-        : (isMobile || isIntegrated || quality === "balanced")
-          ? 110
-          : citySpec.fogFar;
-      this.scene.fog.far = fogFar;
+      this.scene.fog.far = this.getFogFar(this.currentCity, quality);
     }
 
     this.updateChunkCulling(true);
     this.resize();
+  }
+
+  private getFogFar(cityId: CityId, quality = this.graphicsQuality): number {
+    if (quality === "performance") return cityId === "abuja" ? 280 : 90;
+    if (this.deviceCapability?.isMobile || this.deviceCapability?.isIntegratedGpu || quality === "balanced") {
+      return cityId === "abuja" ? 420 : 110;
+    }
+    return getCitySpec(cityId).fogFar;
+  }
+
+  private applyCityEnvironment(cityId: CityId): void {
+    const nextEnvironment = cityId === "abuja"
+      ? createAbujaEnvironmentMap()
+      : createKanoEnvironmentMap();
+    const previousEnvironment = this.cityEnvironmentMap;
+    this.cityEnvironmentMap = nextEnvironment;
+    this.scene.environment = nextEnvironment;
+    if (previousEnvironment && previousEnvironment !== nextEnvironment) {
+      previousEnvironment.dispose();
+    }
+  }
+
+  private releaseWorldResources(root: THREE.Object3D): void {
+    this.scene.remove(root);
+    const protectedResources = new Set<object>();
+    collectObjectResources(this.scene, protectedResources);
+    for (const resource of Object.values(this.materials)) {
+      if (resource instanceof THREE.Material) collectMaterialResources(resource, protectedResources);
+    }
+    disposeWorldResources(root, protectedResources);
   }
 
   reset() {
@@ -879,6 +1035,18 @@ export class GameEngine {
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
     this.trafficSystem.dispose();
     this.pedestrianSystem.dispose();
+    this.highwayEncounterScene.dispose();
+    this.scene.remove(this.rainPuddleGroup);
+    this.rainPuddleGroup.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return;
+      object.geometry.dispose();
+      if (object.material instanceof THREE.Material) {
+        object.material.dispose();
+      }
+    });
+    if (this.world?.root) this.releaseWorldResources(this.world.root);
+    this.cityEnvironmentMap?.dispose();
+    this.cityEnvironmentMap = null;
     this.renderer.dispose();
   }
 
@@ -994,6 +1162,17 @@ export class GameEngine {
 
     // 1. Check Mission Checkpoint Interaction (active mission step - works on foot or in vehicle)
     const activeTarget = this.mode === "driving" ? this.getActiveVehiclePosition() : this.playerPosition;
+    const securityEvent = this.highwaySecurity.interactAt(this.currentCity, activeTarget);
+    if (securityEvent) {
+      this.statusMessage = securityEvent.message;
+      if (securityEvent.rewardCash) {
+        this.cash += securityEvent.rewardCash;
+      }
+      this.saveGame();
+      this.pushSnapshot(true);
+      return;
+    }
+
     const activeMission = this.missionSystem.getActiveMission();
     const stageBefore = activeMission?.currentStageIndex;
     const missionInter = this.missionSystem.checkMissionInteraction(activeTarget);
@@ -1030,7 +1209,7 @@ export class GameEngine {
     if (this.mode === "driving") {
       // Check repair bay at Arewa Heavy Vehicle Repairs (-38, 0, -135)
       const vehPos = this.getActiveVehiclePosition();
-      if (vehPos.distanceTo(new THREE.Vector3(-38, 0, -135)) <= 7.0) {
+      if (this.currentCity === "kano" && vehPos.distanceTo(new THREE.Vector3(-38, 0, -135)) <= 7.0) {
         const quote = this.consequenceSystem.getRepairQuote(this.activeVehicle);
         if (quote.needsRepair) {
           if (this.cash >= quote.cost) {
@@ -1705,6 +1884,29 @@ export class GameEngine {
         : null;
 
       const centerPos = activeVehPos ?? this.playerPosition;
+      const securityEvent = this.highwaySecurity.update(this.currentCity, centerPos, dt);
+      if (securityEvent) {
+        this.statusMessage = securityEvent.message;
+        this.saveGame();
+        this.pushSnapshot(true);
+      }
+      this.highwayEncounterScene.update(
+        this.currentCity,
+        centerPos,
+        this.highwaySecurity.getIncident(),
+        dt,
+      );
+      if (
+        this.mode === "driving" &&
+        this.highwaySecurity.shouldStopVehicle(
+          this.currentCity,
+          centerPos,
+          this.getActiveVehicleSpeed(),
+          this.getActiveVehicleYaw(),
+        )
+      ) {
+        this.setActiveVehicleSpeed(0);
+      }
       this.weatherSystem.update(dt, centerPos);
 
       const activeSpeed = this.mode === "driving" ? this.getActiveVehicleSpeed() : 0;
@@ -1747,6 +1949,9 @@ export class GameEngine {
       }
     }
     const isIndoors = Boolean(this.interiorManager.activeInterior);
+    if (this.interiorManager.root.visible !== isIndoors) {
+      this.interiorManager.root.visible = isIndoors;
+    }
     if (this.world?.root && this.world.root.visible === isIndoors) {
       this.world.root.visible = !isIndoors;
       if (this.trafficSystem?.root) this.trafficSystem.root.visible = !isIndoors;
@@ -1757,6 +1962,13 @@ export class GameEngine {
     this.updateLighting();
     this.updateCamera(dt);
     this.renderer.render(this.scene, this.camera);
+    if (this.transientWelcomeMessage && now >= this.transientWelcomeExpiresAt) {
+      if (this.statusMessage === this.transientWelcomeMessage) {
+        this.statusMessage = null;
+      }
+      this.transientWelcomeMessage = null;
+      this.transientWelcomeExpiresAt = 0;
+    }
     this.pushSnapshot(false);
     this.animationFrame = requestAnimationFrame(this.animate);
   };
@@ -2086,6 +2298,17 @@ export class GameEngine {
       case "minibus": return this.minibusSpeed;
       case "truck": return this.truckSpeed;
       default: return this.carSpeed;
+    }
+  }
+
+  private setActiveVehicleSpeed(speed: number): void {
+    switch (this.activeVehicle) {
+      case "keke": this.kekeSpeed = speed; break;
+      case "van": this.vanSpeed = speed; break;
+      case "pickup": this.pickupSpeed = speed; break;
+      case "minibus": this.minibusSpeed = speed; break;
+      case "truck": this.truckSpeed = speed; break;
+      default: this.carSpeed = speed;
     }
   }
 
@@ -3014,26 +3237,31 @@ export class GameEngine {
     let interactionPrompt: string | null = null;
     if (this.mode === "driving") {
       const activeVehPos = this.getActiveVehiclePosition();
-      const missionInter = this.missionSystem.checkMissionInteraction(activeVehPos);
-      if (missionInter) {
-        interactionPrompt = missionInter.prompt;
-      } else if (activeVehPos.distanceTo(new THREE.Vector3(-38, 0, -135)) <= 7.0) {
-        const quote = this.consequenceSystem.getRepairQuote(this.activeVehicle);
-        if (quote.needsRepair) {
-          interactionPrompt = `Repair ${this.activeVehicle} at Master Garba's (₦${quote.cost.toLocaleString()}${quote.discount > 0 ? " - 20% Trade Disc." : ""})`;
-        } else {
-          interactionPrompt = "Arewa Heavy Repairs (Pristine Condition) - Press [E] to Exit";
-        }
+      const securityPrompt = this.highwaySecurity.getInteractionPrompt(this.currentCity, activeVehPos);
+      if (securityPrompt) {
+        interactionPrompt = securityPrompt;
       } else {
-        const exitLabels: Record<VehicleType, string> = {
-          sedan: "Exit Sedan",
-          keke: "Exit Keke Napep",
-          van: "Exit Delivery Van",
-          pickup: "Exit Pickup Truck",
-          minibus: "Exit Passenger Minibus",
-          truck: "Exit Freight Truck",
-        };
-        interactionPrompt = exitLabels[this.activeVehicle] ?? "Exit Vehicle";
+        const missionInter = this.missionSystem.checkMissionInteraction(activeVehPos);
+        if (missionInter) {
+          interactionPrompt = missionInter.prompt;
+        } else if (activeVehPos.distanceTo(new THREE.Vector3(-38, 0, -135)) <= 7.0) {
+          const quote = this.consequenceSystem.getRepairQuote(this.activeVehicle);
+          if (quote.needsRepair) {
+            interactionPrompt = `Repair ${this.activeVehicle} at Master Garba's (₦${quote.cost.toLocaleString()}${quote.discount > 0 ? " - 20% Trade Disc." : ""})`;
+          } else {
+            interactionPrompt = "Arewa Heavy Repairs (Pristine Condition) - Press [E] to Exit";
+          }
+        } else {
+          const exitLabels: Record<VehicleType, string> = {
+            sedan: "Exit Sedan",
+            keke: "Exit Keke Napep",
+            van: "Exit Delivery Van",
+            pickup: "Exit Pickup Truck",
+            minibus: "Exit Passenger Minibus",
+            truck: "Exit Freight Truck",
+          };
+          interactionPrompt = exitLabels[this.activeVehicle] ?? "Exit Vehicle";
+        }
       }
     } else if (this.interiorManager.activeInterior) {
       const activeZone = this.interiorManager.getActiveZone();
@@ -3061,6 +3289,8 @@ export class GameEngine {
         }
       }
     } else {
+      interactionPrompt = this.highwaySecurity.getInteractionPrompt(this.currentCity, this.playerPosition);
+
       // Intercity Travel Terminal Prompts
       if (!interactionPrompt) {
         if (this.currentCity === "kano") {
@@ -3070,7 +3300,7 @@ export class GameEngine {
             interactionPrompt = "Mallam Aminu Kano Airport: Press [E] to Fly to Abuja (₦35,000)";
           }
         } else if (this.currentCity === "abuja") {
-          if (this.playerPosition.distanceTo(new THREE.Vector3(0, 0, -160)) <= 14.0) {
+          if (this.playerPosition.distanceTo(new THREE.Vector3(0, 0, -160)) <= 16.0) {
             interactionPrompt = "Highway A2 Toll Gate: Press [E] to Drive to Kano (420 km)";
           } else if (this.playerPosition.distanceTo(new THREE.Vector3(90, 0, 120)) <= 9.0) {
             interactionPrompt = "Nnamdi Azikiwe Airport: Press [E] to Fly to Kano (₦35,000)";
@@ -3080,7 +3310,7 @@ export class GameEngine {
 
       // 1. Check Mission Checkpoint Interaction on foot
       const missionInter = this.missionSystem.checkMissionInteraction(this.playerPosition);
-      if (missionInter) {
+      if (!interactionPrompt && missionInter) {
         interactionPrompt = missionInter.prompt;
       }
 
@@ -3250,9 +3480,10 @@ export class GameEngine {
       featuredContact = this.socialSystem.getContact(this.featuredContactId) ?? null;
     }
 
-    const activeMissionInfo = this.missionSystem.getActiveMissionSnapshot(
-      this.mode === "driving" ? this.getActiveVehiclePosition() : this.playerPosition,
-    );
+    const missionPosition = this.mode === "driving" ? this.getActiveVehiclePosition() : this.playerPosition;
+    const activeMissionInfo =
+      this.highwaySecurity.getActiveMissionSnapshot(this.currentCity, missionPosition) ??
+      this.missionSystem.getActiveMissionSnapshot(missionPosition);
 
     this.callbacks.onSnapshot({
       mode: this.mode,
@@ -3653,6 +3884,7 @@ export class GameEngine {
       this.consequenceSystem.serialize(),
       this.currentCity,
       this.cityPositions,
+      this.highwaySecurity.serialize(),
     );
   }
 
@@ -3667,6 +3899,9 @@ export class GameEngine {
   public setWeatherPreset(preset: WeatherPreset): void {
     this.weatherSystem.setPreset(preset);
     const isIndoors = Boolean(this.interiorManager.activeInterior);
+    if (this.interiorManager.root.visible !== isIndoors) {
+      this.interiorManager.root.visible = isIndoors;
+    }
     if (this.world?.root && this.world.root.visible === isIndoors) {
       this.world.root.visible = !isIndoors;
       if (this.trafficSystem?.root) this.trafficSystem.root.visible = !isIndoors;
@@ -3683,6 +3918,9 @@ export class GameEngine {
     const next = this.weatherSystem.cyclePreset();
     this.statusMessage = `Atmosphere: ${this.weatherSystem.getPresetDisplayName(next)}`;
     const isIndoors = Boolean(this.interiorManager.activeInterior);
+    if (this.interiorManager.root.visible !== isIndoors) {
+      this.interiorManager.root.visible = isIndoors;
+    }
     if (this.world?.root && this.world.root.visible === isIndoors) {
       this.world.root.visible = !isIndoors;
       if (this.trafficSystem?.root) this.trafficSystem.root.visible = !isIndoors;
@@ -4068,6 +4306,7 @@ export class GameEngine {
     if (this.interiorManager.activeInterior) {
       this.interiorManager.activeInterior = null;
     }
+    this.highwayEncounterScene.deactivate();
 
     // Record previous city position
     this.cityPositions[this.currentCity] = {
@@ -4083,10 +4322,7 @@ export class GameEngine {
 
     // Unload previous city world
     if (this.world?.root) {
-      this.scene.remove(this.world.root);
-      for (const batch of this.staticBatches) {
-        batch.geometry.dispose();
-      }
+      this.releaseWorldResources(this.world.root);
       this.staticBatches = [];
     }
     this.trafficSystem?.dispose();
@@ -4110,12 +4346,10 @@ export class GameEngine {
     this.scene.add(this.world.root);
 
     // Update scene fog, sky, and light to match target city
+    this.weatherSystem.setCity(targetCity);
+    this.applyCityEnvironment(targetCity);
     this.scene.background = new THREE.Color(targetSpec.skyColor);
-    const travelFogFar = this.graphicsQuality === "performance"
-      ? 90
-      : (this.deviceCapability?.isMobile || this.deviceCapability?.isIntegratedGpu || this.graphicsQuality === "balanced")
-        ? 110
-        : targetSpec.fogFar;
+    const travelFogFar = this.getFogFar(targetCity);
     this.scene.fog = new THREE.Fog(targetSpec.fogColor, targetSpec.fogNear, travelFogFar);
     if (this.sunLight) {
       this.sunLight.color.set(targetSpec.sunColor);
@@ -4129,7 +4363,11 @@ export class GameEngine {
       this.navigation,
       this.colliderIndex,
       (x, z) => this.surfaceHeight(x, z),
+      this.currentCity,
     );
+    if (this.sedanGLTFAsset) {
+      this.trafficSystem.upgradeWithSedanGLTF(this.sedanGLTFAsset);
+    }
     this.trafficSystem.onCitation = (fine, reason) => {
       if (this.trafficFine === 0) {
         this.trafficFine = fine;
@@ -4144,6 +4382,7 @@ export class GameEngine {
       this.navigation,
       this.colliderIndex,
       (x, z) => this.surfaceHeight(x, z),
+      this.currentCity,
     );
     this.trafficSystem.setQuality(this.graphicsQuality);
     this.pedestrianSystem.setQuality(this.graphicsQuality);
@@ -4182,6 +4421,8 @@ export class GameEngine {
     this.statusMessage = targetCity === "abuja"
       ? "Welcome to Abuja! Federal Capital Territory · Centre of Unity"
       : "Welcome back to Kano! Ancient Commercial Emporium";
+    this.transientWelcomeMessage = this.statusMessage;
+    this.transientWelcomeExpiresAt = performance.now() / 1000 + 5;
     this.pushSnapshot(true);
     return true;
   }

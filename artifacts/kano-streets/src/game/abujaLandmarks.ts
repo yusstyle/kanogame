@@ -1,12 +1,15 @@
 import type { LandmarkLocation } from "./landmarks";
 
+export const ABUJA_ASO_ROCK_POSITION = { x: 40, z: -520 } as const;
+export const ABUJA_ASO_ROCK_NORTHERN_BOUNDARY_Z = -256;
+
 export const ABUJA_LANDMARKS: LandmarkLocation[] = [
   {
     id: "aso-rock",
     name: "Aso Rock Granitic Monolith Lookout",
-    district: "THREE ARMS ZONE",
-    x: 40,
-    z: -220,
+    district: "ASO ROCK RANGES & KATAMPE HILLS",
+    x: ABUJA_ASO_ROCK_POSITION.x,
+    z: ABUJA_ASO_ROCK_POSITION.z,
     category: "civic",
     description: "Towering 400-meter ancient granite inselberg monolith overlooking the presidential and civic zone.",
   },
@@ -139,6 +142,16 @@ export const ABUJA_LANDMARKS: LandmarkLocation[] = [
 ];
 
 export function getAbujaDistrict(x: number, z: number): string {
+  // Match the streaming grid: Wuse occupies chunk row cz = 1 (z: [256, 512)).
+  // Wuse 1 is the more westerly cx <= -2 area; Wuse 2 is the next chunk west
+  // of the core (cx = -1), as defined by AbujaStreamingManager.
+  const chunkSize = 256;
+  const chunkX = Math.floor(x / chunkSize);
+  const chunkZ = Math.floor(z / chunkSize);
+  if (chunkZ === 1 && chunkX <= -2) return "WUSE 1 MARKETS & PLAZAS";
+  if (chunkZ === 1 && chunkX === -1) return "WUSE 2 COMMERCIAL & SHOPPING ARCADE";
+
+  if (z < ABUJA_ASO_ROCK_NORTHERN_BOUNDARY_Z) return "ASO ROCK RANGES & KATAMPE HILLS";
   if (z <= -140) return "HIGHWAY A2 · KANO EXPRESSWAY GATEWAY";
   if (z <= -70) return "THREE ARMS ZONE · GOVERNMENT & CIVIC";
   if (x < -30 && z < 60) return "MAITAMA & ASOKORO DIPLOMATIC ESTATES";

@@ -1,0 +1,35 @@
+{
+  "totalCalls": 119,
+  "mainCallsCount": 56,
+  "shadowCallsCount": 63,
+  "mainByGroup": {
+    "AbujaWorldRoot -> AbujaStreamingWorldRoot": 27,
+    "AbujaWorldRoot -> neighborhood-static--1:1:1:1": 8,
+    "AbujaWorldRoot -> neighborhood-static--1:2:1:1": 2,
+    "AbujaWorldRoot -> MillenniumParkLandscape": 2,
+    "AbujaWorldRoot -> AbujaVegetationSystem": 6,
+    "AbujaWorldRoot -> AbujaSkyDome": 1,
+    "AbujaWorldRoot -> AbujaRollingSavannahTerrain": 1,
+    "AbujaWorldRoot -> AbujaInfrastructureSystem": 7,
+    "WeatherParticleGroup -> unnamed": 1,
+    "AbujaWorldRoot -> ModernSolarStreetlightInstances": 1
+  },
+  "shadowByGroup": {
+    "AbujaWorldRoot -> AbujaInfrastructureSystem": 1,
+    "AbujaWorldRoot -> NnpcMegaFuelStation": 1,
+    "AbujaWorldRoot -> AbujaVegetationSystem": 8,
+    "AbujaWorldRoot -> neighborhood-static-:0:0:1:1": 2,
+    "AbujaWorldRoot -> neighborhood-static--1:0:1:1": 9,
+    "AbujaWorldRoot -> neighborhood-static--1:1:1:1": 12,
+    "AbujaWorldRoot -> neighborhood-static--2:1:1:1": 2,
+    "AbujaWorldRoot -> neighborhood-static--1:2:1:1": 11,
+    "AbujaWorldRoot -> neighborhood-static-:0:0:1:0": 2,
+    "AbujaWorldRoot -> neighborhood-static--1:0:1:0": 1,
+    "AbujaWorldRoot -> neighborhood-static--1:1:1:0": 1,
+    "AbujaWorldRoot -> neighborhood-static-:0:1:1:0": 1,
+    "AbujaWorldRoot -> neighborhood-static-:0:1:1:1": 4,
+    "traffic-system-root -> unnamed": 2,
+    "pedestrian-system-root -> Scene": 6
+  },
+  "triangles": 601144
+}
